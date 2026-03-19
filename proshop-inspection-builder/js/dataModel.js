@@ -106,14 +106,24 @@ export function recompute(row, globals) {
       isNote: true,
       dimTag: raw.dimTag || '',
       drawingSpec: raw.drawingSpec || '',
-      specUnit1: '',
-      specUnit2: '',
-      specUnit3: '',
-      nominal: '',
-      tolerance: '',
+      outDrawingSpec: raw.drawingSpec || '',
+      inputSpec: raw.drawingSpec || '',
+      specUnit1: raw.specUnit1 || '',
+      specUnit2: raw.specUnit2 || '',
+      specUnit3: raw.specUnit3 || '',
+      outNominal: '',
+      outTolerance: '',
+      inputTolerance: raw.tolerance || '',
       pinGage: '',
       platingAnnotation: '',
-      export: {},
+      platingMode: 'none',
+      status: user.status,
+      ipc: user.ipc,
+      inspectionEquipment: user.inspectionEquipment,
+      inspectionFrequency: user.inspectionFrequency,
+      includeOps: { ...user.includeOps },
+      original: { nominal: 0, tolPlus: 0, tolMinus: 0 },
+      output: { nominal: 0, tolPlus: 0, tolMinus: 0 },
     };
     return row;
   }
@@ -172,10 +182,15 @@ export function recompute(row, globals) {
   }
 
   // ── Step 5: Unit conversion ────────────────────────────
-  // TODO: Implement unit conversion when display/export units differ from import
+  if (globals.exportUnits && globals.exportUnits !== globals.importUnits) {
+    nominal = convertUnits(nominal, globals.importUnits, globals.exportUnits);
+    tolPlus = convertUnits(tolPlus, globals.importUnits, globals.exportUnits);
+    tolMinus = convertUnits(tolMinus, globals.importUnits, globals.exportUnits);
+  }
 
   // ── Step 6: Precision formatting ───────────────────────
-  const precision = globals.importUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+  const outputUnits = globals.exportUnits || globals.importUnits;
+  const precision = outputUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
   const nominalStr = formatPrecision(nominal, precision);
   const tolStr = formatPrecision(tolPlus, precision);
 
@@ -255,12 +270,17 @@ export function getExportData(row, opNumber, globals) {
   const isOp2000 = opNumber === 2000;
   const prefix = globals.opPrefixes[opNumber] || '';
 
+  // Zero-pad dim tag to 2 digits if numeric
+  const dimTagStr = /^\d+$/.test(computed.dimTag)
+    ? computed.dimTag.padStart(2, '0')
+    : computed.dimTag;
+
   if (computed.isNote) {
     // Notes export with drawing spec text only
     return {
       'Internal Part #': '',
       'Op #': opNumber,
-      'Dim Tag #': `${prefix}${computed.dimTag}`,
+      'Dim Tag #': `${prefix}${dimTagStr}`,
       'Ref Loc': raw.refLoc || '',
       'Char Dsg': '',
       'Spec Unit 1': '',
@@ -281,7 +301,7 @@ export function getExportData(row, opNumber, globals) {
     return {
       'Internal Part #': '',
       'Op #': 2000,
-      'Dim Tag #': `${prefix}${computed.dimTag}`,
+      'Dim Tag #': `${prefix}${dimTagStr}`,
       'Ref Loc': raw.refLoc || '',
       'Char Dsg': raw.charDsg || '',
       'Spec Unit 1': raw.specUnit1 || '',
@@ -301,7 +321,7 @@ export function getExportData(row, opNumber, globals) {
   return {
     'Internal Part #': '',
     'Op #': opNumber,
-    'Dim Tag #': `${prefix}${computed.dimTag}`,
+    'Dim Tag #': `${prefix}${dimTagStr}`,
     'Ref Loc': raw.refLoc || '',
     'Char Dsg': '',
     'Spec Unit 1': computed.specUnit1,

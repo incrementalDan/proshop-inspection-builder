@@ -86,6 +86,9 @@ export function renderTable(rows) {
     // Row click → select + open sidebar
     tr.addEventListener('click', () => selectRow(row.id));
 
+    // Inline editing for editable cells
+    setupInlineEditing(tr, row);
+
     tbody.appendChild(tr);
   }
 }
@@ -403,6 +406,51 @@ function setupTableHeaderClicks() {
       // Re-render with current data
       const state = getAppState();
       if (state) renderTable(state.rows);
+    });
+  });
+}
+
+// ── Inline Editing ────────────────────────────────────
+
+function setupInlineEditing(tr, row) {
+  if (row.computed.isNote) return;
+
+  const editableCells = tr.querySelectorAll('td.editable');
+  editableCells.forEach(td => {
+    td.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      if (td.querySelector('input')) return; // Already editing
+
+      const originalValue = td.textContent;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = originalValue;
+      td.textContent = '';
+      td.appendChild(input);
+      input.focus();
+      input.select();
+
+      const commit = () => {
+        const newValue = input.value.trim();
+        td.textContent = newValue || originalValue;
+
+        // Determine which field was edited
+        if (td.classList.contains('col-drawspec')) {
+          onRowUserChange(row.id, { overrides: { ...row.user.overrides, outDrawingSpec: newValue || null } });
+        } else if (td.classList.contains('col-outtol')) {
+          onRowUserChange(row.id, { overrides: { ...row.user.overrides, outTolerance: newValue || null } });
+        } else if (td.classList.contains('col-pingage')) {
+          onRowUserChange(row.id, { overrides: { ...row.user.overrides, pinGageValue: newValue || null } });
+        }
+      };
+
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (ke) => {
+        if (ke.key === 'Enter') input.blur();
+        if (ke.key === 'Escape') {
+          td.textContent = originalValue;
+        }
+      });
     });
   });
 }

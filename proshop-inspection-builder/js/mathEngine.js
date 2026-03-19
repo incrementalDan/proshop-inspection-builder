@@ -111,7 +111,11 @@ export function convertUnits(value, fromUnit, toUnit) {
  */
 export function formatPrecision(value, decimalPlaces) {
   if (typeof value !== 'number' || isNaN(value)) return '';
-  return value.toFixed(decimalPlaces);
+  const str = value.toFixed(decimalPlaces);
+  // Remove leading zero for values between -1 and 1 (ProShop convention)
+  if (str.startsWith('0.')) return str.slice(1);
+  if (str.startsWith('-0.')) return '-' + str.slice(2);
+  return str;
 }
 
 /**

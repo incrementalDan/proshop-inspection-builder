@@ -107,9 +107,10 @@ export function runMathTests(log) {
 
   assert('4 decimal places', formatPrecision(1.23456, 4) === '1.2346');
   assert('3 decimal places', formatPrecision(1.23456, 3) === '1.235');
-  assert('0 value', formatPrecision(0, 4) === '0.0000');
+  assert('0 value', formatPrecision(0, 4) === '.0000');
   assert('NaN returns empty string', formatPrecision(NaN, 4) === '');
-  assert('Negative number', formatPrecision(-0.123, 3) === '-0.123');
+  assert('Negative number', formatPrecision(-0.123, 3) === '-.123');
+  assert('Values < 1 drop leading zero', formatPrecision(0.5, 4) === '.5000');
 
   // ── Pin Gage ─────────────────────────────────────────────
 
