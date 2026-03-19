@@ -9,6 +9,8 @@
  * This module only provides pure math functions.
  */
 
+window.PSB = window.PSB || {};
+
 // ── Conversion constants ──────────────────────────────────
 const MM_PER_INCH = 25.4;
 
@@ -27,7 +29,7 @@ const MM_PER_INCH = 25.4;
  * @param {number} tolMinus — negative tolerance (always positive number, represents magnitude)
  * @returns {{ nominal: number, tolSymmetric: number }}
  */
-export function centerNominal(nominal, tolPlus, tolMinus) {
+function centerNominal(nominal, tolPlus, tolMinus) {
   if (tolPlus === tolMinus) {
     // Already symmetric
     return { nominal, tolSymmetric: tolPlus };
@@ -54,16 +56,12 @@ export function centerNominal(nominal, tolPlus, tolMinus) {
  *   -1xE: add 1× plating to nominal
  *   -2xE: add 2× plating to nominal
  *
- * Wait — let me re-read the spec carefully:
- *   Mode: Internal  Effect = subtract plating
- *   Mode: External  Effect = add plating
- *
  * @param {number} nominal — current nominal value
  * @param {number} platingThickness — plating thickness (positive number)
  * @param {string} mode — '+1xI', '+2xI', '-1xE', '-2xE'
  * @returns {number} adjusted nominal
  */
-export function applyPlating(nominal, platingThickness, mode) {
+function applyPlating(nominal, platingThickness, mode) {
   switch (mode) {
     case '+1xI':
       return nominal - (1 * platingThickness);
@@ -86,7 +84,7 @@ export function applyPlating(nominal, platingThickness, mode) {
  * @param {'mm'|'inch'} toUnit
  * @returns {number}
  */
-export function convertUnits(value, fromUnit, toUnit) {
+function convertUnits(value, fromUnit, toUnit) {
   if (fromUnit === toUnit) return value;
 
   if (fromUnit === 'mm' && toUnit === 'inch') {
@@ -103,13 +101,13 @@ export function convertUnits(value, fromUnit, toUnit) {
 
 /**
  * Format a number to a specific number of decimal places.
- * Removes trailing zeros if they exceed the original precision intent.
+ * Removes leading zero for values between -1 and 1 (ProShop convention).
  *
  * @param {number} value
  * @param {number} decimalPlaces
  * @returns {string}
  */
-export function formatPrecision(value, decimalPlaces) {
+function formatPrecision(value, decimalPlaces) {
   if (typeof value !== 'number' || isNaN(value)) return '';
   const str = value.toFixed(decimalPlaces);
   // Remove leading zero for values between -1 and 1 (ProShop convention)
@@ -131,7 +129,8 @@ export function formatPrecision(value, decimalPlaces) {
  * @param {number} [precision=4] — decimal places
  * @returns {{ go: number, noGo: number, formatted: string }}
  */
-export function computePinGage(nominal, tolerance, precision = 4) {
+function computePinGage(nominal, tolerance, precision) {
+  if (precision === undefined) precision = 4;
   const go = nominal - tolerance;
   const noGo = nominal + tolerance;
 
@@ -159,7 +158,8 @@ export function computePinGage(nominal, tolerance, precision = 4) {
  * @param {number} [precision=4]
  * @returns {{ low: number, high: number, formatted: string }}
  */
-export function computeGageBlock(nominal, tolPlus, tolMinus, precision = 4) {
+function computeGageBlock(nominal, tolPlus, tolMinus, precision) {
+  if (precision === undefined) precision = 4;
   const low = nominal - tolMinus;
   const high = nominal + tolPlus;
 
@@ -172,3 +172,11 @@ export function computeGageBlock(nominal, tolPlus, tolMinus, precision = 4) {
     formatted: `G(${lowStr} | ${highStr})`,
   };
 }
+
+// ── Export to namespace ───────────────────────────────────
+PSB.centerNominal = centerNominal;
+PSB.applyPlating = applyPlating;
+PSB.convertUnits = convertUnits;
+PSB.formatPrecision = formatPrecision;
+PSB.computePinGage = computePinGage;
+PSB.computeGageBlock = computeGageBlock;

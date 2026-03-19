@@ -8,9 +8,11 @@
  * - Never corrupt data: if unsure, preserve original
  */
 
+window.PSB = window.PSB || {};
+
 // ── CSV Column Mapping ────────────────────────────────────
 // ProShop CSV headers → internal field names
-const COLUMN_MAP = {
+var COLUMN_MAP = {
   'Internal Part #': 'internalPartNum',
   'Op #': 'opNum',
   'Dim Tag #': 'dimTag',
@@ -29,14 +31,14 @@ const COLUMN_MAP = {
 };
 
 // ── GD&T and special symbols ──────────────────────────────
-const GDT_SYMBOLS = [
+var GDT_SYMBOLS = [
   '⏤', '⏥', '○', '⌭', '⌒', '⌓', '⊚', '↗', '⌖',  // GD&T
   '⊕', '⊘', '◎',                                       // More GD&T
   'Ⓜ', 'Ⓕ', 'Ⓛ', 'Ⓟ', 'Ⓢ', 'Ⓣ', 'Ⓤ',             // Modifiers
 ];
 
 // Thread patterns
-const THREAD_PATTERNS = [
+var THREAD_PATTERNS = [
   /\d+[\-\/]\d+\s*UN[CEFJS]/i,   // 1/4-20 UNC, 1-8 UNF
   /M\d+(\.\d+)?\s*[xX×]\s*\d/i,  // M6x1.0, M10X1.5
   /\d+[\-]\d+\s*ACME/i,           // 1-5 ACME
@@ -45,7 +47,7 @@ const THREAD_PATTERNS = [
 ];
 
 // Note detection patterns
-const NOTE_PATTERNS = [
+var NOTE_PATTERNS = [
   /BREAK\s+(AND\s+)?DEBURR/i,
   /BAG\s+AND\s+TAG/i,
   /MATERIAL/i,
@@ -65,7 +67,7 @@ const NOTE_PATTERNS = [
 ];
 
 // Spec Unit 2 keywords
-const SU2_KEYWORDS = [
+var SU2_KEYWORDS = [
   'THRU', 'DEEP', 'TYP', 'MIN', 'MAX',
   'Flatness', 'Perpendicular', 'Parallel',
   'Position', 'Position M', 'Concentricity', 'Concentricity M',
@@ -75,7 +77,7 @@ const SU2_KEYWORDS = [
 ];
 
 // Spec Unit 3 patterns (quantity)
-const SU3_PATTERNS = [
+var SU3_PATTERNS = [
   /(\d+)\s*[xX×]/,          // 2X, 4x, 2×
   /[xX×]\s*(\d+)/,          // X2, x4
   /(\d+)\s*PLACES?/i,       // 4 PLACES
@@ -88,31 +90,35 @@ const SU3_PATTERNS = [
  * @param {string} csvString — raw CSV text
  * @returns {Object[]} rows — array of { dimTag, refLoc, charDsg, specUnit1, drawingSpec, ... }
  */
-export function parseCSV(csvString) {
+function parseCSV(csvString) {
   // Normalize line endings and remove BOM
-  const text = csvString.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = text.split('\n').filter(line => line.trim() !== '');
+  var text = csvString.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  var lines = text.split('\n').filter(function(line) { return line.trim() !== ''; });
 
   if (lines.length < 2) return [];
 
   // Parse header row
-  const headers = parseCSVLine(lines[0]);
-  const fieldMap = headers.map(h => COLUMN_MAP[h.trim()] || null);
+  var headers = parseCSVLine(lines[0]);
+  var fieldMap = headers.map(function(h) { return COLUMN_MAP[h.trim()] || null; });
 
   // Parse data rows
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i]);
-    const rowObj = {};
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    var values = parseCSVLine(lines[i]);
+    var rowObj = {};
 
-    for (let j = 0; j < fieldMap.length; j++) {
+    for (var j = 0; j < fieldMap.length; j++) {
       if (fieldMap[j]) {
         rowObj[fieldMap[j]] = (values[j] || '').trim();
       }
     }
 
     // Skip completely empty rows
-    if (Object.values(rowObj).every(v => v === '')) continue;
+    var allEmpty = true;
+    for (var key in rowObj) {
+      if (rowObj[key] !== '') { allEmpty = false; break; }
+    }
+    if (allEmpty) continue;
 
     // Must have at least a dim tag or drawing spec
     if (!rowObj.dimTag && !rowObj.drawingSpec) continue;
@@ -127,12 +133,12 @@ export function parseCSV(csvString) {
  * Parse a single CSV line, respecting quoted fields.
  */
 function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
+  var result = [];
+  var current = '';
+  var inQuotes = false;
 
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
     if (ch === '"') {
       if (inQuotes && line[i + 1] === '"') {
         current += '"';
@@ -157,24 +163,24 @@ function parseCSVLine(line) {
  * @param {string} drawingSpec
  * @returns {'dimension'|'note'|'gdt'|'thread'}
  */
-export function detectFeatureType(drawingSpec) {
+function detectFeatureType(drawingSpec) {
   if (!drawingSpec || drawingSpec.trim() === '') return 'dimension';
 
-  const text = drawingSpec.trim();
+  var text = drawingSpec.trim();
 
   // Check for GD&T symbols
-  for (const sym of GDT_SYMBOLS) {
-    if (text.includes(sym)) return 'gdt';
+  for (var i = 0; i < GDT_SYMBOLS.length; i++) {
+    if (text.includes(GDT_SYMBOLS[i])) return 'gdt';
   }
 
   // Check for thread patterns
-  for (const pattern of THREAD_PATTERNS) {
-    if (pattern.test(text)) return 'thread';
+  for (var i = 0; i < THREAD_PATTERNS.length; i++) {
+    if (THREAD_PATTERNS[i].test(text)) return 'thread';
   }
 
   // Check for note patterns
-  for (const pattern of NOTE_PATTERNS) {
-    if (pattern.test(text)) return 'note';
+  for (var i = 0; i < NOTE_PATTERNS.length; i++) {
+    if (NOTE_PATTERNS[i].test(text)) return 'note';
   }
 
   // Long text strings that aren't numeric → likely notes
@@ -191,13 +197,13 @@ export function detectFeatureType(drawingSpec) {
  * @param {string} text
  * @returns {{ su1: string, su2: string, su3: string, cleaned: string }}
  */
-export function parseSpecUnits(text) {
+function parseSpecUnits(text) {
   if (!text) return { su1: '', su2: '', su3: '', cleaned: '' };
 
-  let remaining = text.trim();
-  let su1 = '';
-  let su2 = '';
-  let su3 = '';
+  var remaining = text.trim();
+  var su1 = '';
+  var su2 = '';
+  var su3 = '';
 
   // ── SU1: Diameter/Radius ────────────────────────────
   // Look for diameter symbol
@@ -212,8 +218,9 @@ export function parseSpecUnits(text) {
   }
 
   // ── SU2: Modifiers ─────────────────────────────────
-  for (const kw of SU2_KEYWORDS) {
-    const regex = new RegExp(`\\b${kw}\\b`, 'i');
+  for (var i = 0; i < SU2_KEYWORDS.length; i++) {
+    var kw = SU2_KEYWORDS[i];
+    var regex = new RegExp('\\b' + kw + '\\b', 'i');
     if (regex.test(remaining)) {
       su2 = kw;
       remaining = remaining.replace(regex, '').trim();
@@ -228,19 +235,19 @@ export function parseSpecUnits(text) {
   }
 
   // ── SU3: Quantity ──────────────────────────────────
-  for (const pattern of SU3_PATTERNS) {
-    const match = remaining.match(pattern);
+  for (var i = 0; i < SU3_PATTERNS.length; i++) {
+    var match = remaining.match(SU3_PATTERNS[i]);
     if (match) {
-      su3 = `${match[1]}x`;
-      remaining = remaining.replace(pattern, '').trim();
+      su3 = match[1] + 'x';
+      remaining = remaining.replace(SU3_PATTERNS[i], '').trim();
       break;
     }
   }
 
   return {
-    su1,
-    su2,
-    su3,
+    su1: su1,
+    su2: su2,
+    su3: su3,
     cleaned: remaining.trim(),
   };
 }
@@ -257,28 +264,28 @@ export function parseSpecUnits(text) {
  * @param {string} text
  * @returns {{ tolPlus: number, tolMinus: number, isSymmetric: boolean }}
  */
-export function parseTolerance(text) {
+function parseTolerance(text) {
   if (!text || text.trim() === '') {
     return { tolPlus: 0, tolMinus: 0, isSymmetric: true };
   }
 
-  const t = text.trim();
+  var t = text.trim();
 
   // ± format: ±0.005 or +/-0.005
-  const symMatch = t.match(/[±]\s*([0-9]*\.?[0-9]+)/);
+  var symMatch = t.match(/[±]\s*([0-9]*\.?[0-9]+)/);
   if (symMatch) {
-    const val = parseFloat(symMatch[1]);
+    var val = parseFloat(symMatch[1]);
     return { tolPlus: val, tolMinus: val, isSymmetric: true };
   }
 
-  const pmMatch = t.match(/\+\s*\/\s*-\s*([0-9]*\.?[0-9]+)/);
+  var pmMatch = t.match(/\+\s*\/\s*-\s*([0-9]*\.?[0-9]+)/);
   if (pmMatch) {
-    const val = parseFloat(pmMatch[1]);
+    var val = parseFloat(pmMatch[1]);
     return { tolPlus: val, tolMinus: val, isSymmetric: true };
   }
 
   // Asymmetric: +0.005 -0.002 or +.005-.002
-  const asymMatch = t.match(/\+\s*([0-9]*\.?[0-9]+)\s*[-–]\s*([0-9]*\.?[0-9]+)/);
+  var asymMatch = t.match(/\+\s*([0-9]*\.?[0-9]+)\s*[-–]\s*([0-9]*\.?[0-9]+)/);
   if (asymMatch) {
     return {
       tolPlus: parseFloat(asymMatch[1]),
@@ -288,8 +295,8 @@ export function parseTolerance(text) {
   }
 
   // Separate +/- on same field
-  const plusMatch = t.match(/\+\s*([0-9]*\.?[0-9]+)/);
-  const minusMatch = t.match(/-\s*([0-9]*\.?[0-9]+)/);
+  var plusMatch = t.match(/\+\s*([0-9]*\.?[0-9]+)/);
+  var minusMatch = t.match(/-\s*([0-9]*\.?[0-9]+)/);
   if (plusMatch && minusMatch) {
     return {
       tolPlus: parseFloat(plusMatch[1]),
@@ -299,9 +306,9 @@ export function parseTolerance(text) {
   }
 
   // Plain number → symmetric tolerance
-  const numMatch = t.match(/^([0-9]*\.?[0-9]+)$/);
+  var numMatch = t.match(/^([0-9]*\.?[0-9]+)$/);
   if (numMatch) {
-    const val = parseFloat(numMatch[1]);
+    var val = parseFloat(numMatch[1]);
     return { tolPlus: val, tolMinus: val, isSymmetric: true };
   }
 
@@ -317,12 +324,12 @@ export function parseTolerance(text) {
  * @param {string} nominalText — the nominal field text
  * @returns {Object} parsed dimension data
  */
-export function parseDimension(drawingSpec, toleranceText, nominalText) {
-  const featureType = detectFeatureType(drawingSpec);
+function parseDimension(drawingSpec, toleranceText, nominalText) {
+  var featureType = detectFeatureType(drawingSpec);
 
   if (featureType !== 'dimension') {
     return {
-      featureType,
+      featureType: featureType,
       isNote: true,
       specUnits: { su1: '', su2: '', su3: '', cleaned: drawingSpec },
       tolerance: { tolPlus: 0, tolMinus: 0, isSymmetric: true },
@@ -330,11 +337,11 @@ export function parseDimension(drawingSpec, toleranceText, nominalText) {
     };
   }
 
-  const specUnits = parseSpecUnits(drawingSpec);
-  const tolerance = parseTolerance(toleranceText);
+  var specUnits = parseSpecUnits(drawingSpec);
+  var tolerance = parseTolerance(toleranceText);
 
   // Nominal: prefer explicit nominal field, fall back to cleaned drawing spec
-  let nominal = parseFloat(nominalText);
+  var nominal = parseFloat(nominalText);
   if (isNaN(nominal)) {
     nominal = parseFloat(specUnits.cleaned);
   }
@@ -343,10 +350,17 @@ export function parseDimension(drawingSpec, toleranceText, nominalText) {
   }
 
   return {
-    featureType,
+    featureType: featureType,
     isNote: false,
-    specUnits,
-    tolerance,
-    nominal,
+    specUnits: specUnits,
+    tolerance: tolerance,
+    nominal: nominal,
   };
 }
+
+// ── Export to namespace ───────────────────────────────────
+PSB.parseCSV = parseCSV;
+PSB.detectFeatureType = detectFeatureType;
+PSB.parseSpecUnits = parseSpecUnits;
+PSB.parseTolerance = parseTolerance;
+PSB.parseDimension = parseDimension;

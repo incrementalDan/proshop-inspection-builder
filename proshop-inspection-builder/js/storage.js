@@ -5,16 +5,18 @@
  * Uses localStorage for auto-save, JSON file download for manual save.
  */
 
-const STORAGE_KEY = 'proshop_inspection_builder';
+window.PSB = window.PSB || {};
+
+var STORAGE_KEY = 'proshop_inspection_builder';
 
 /**
  * Auto-save current state to localStorage.
  *
  * @param {Object} state — { rows, globals }
  */
-export function autoSave(state) {
+function autoSave(state) {
   try {
-    const serialized = serializeState(state);
+    var serialized = serializeState(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
   } catch (e) {
     console.warn('Auto-save failed:', e);
@@ -26,9 +28,9 @@ export function autoSave(state) {
  *
  * @returns {Object|null} — { rows, globals } or null if none found
  */
-export function autoLoad() {
+function autoLoad() {
   try {
-    const json = localStorage.getItem(STORAGE_KEY);
+    var json = localStorage.getItem(STORAGE_KEY);
     if (!json) return null;
     return deserializeState(JSON.parse(json));
   } catch (e) {
@@ -41,19 +43,18 @@ export function autoLoad() {
  * Save full project state as a downloadable JSON file.
  *
  * @param {Object} state — { rows, globals }
- * @param {string} [filename]
  */
-export function saveProject(state) {
-  const serialized = serializeState(state);
-  const json = JSON.stringify(serialized, null, 2);
+function saveProject(state) {
+  var serialized = serializeState(state);
+  var json = JSON.stringify(serialized, null, 2);
 
-  const now = new Date();
-  const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const filename = `ProShop_Project_${stamp}.json`;
+  var now = new Date();
+  var stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  var filename = 'ProShop_Project_' + stamp + '.json';
 
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var link = document.createElement('a');
   link.href = url;
   link.download = filename;
   link.style.display = 'none';
@@ -69,15 +70,15 @@ export function saveProject(state) {
  * @param {string} jsonString
  * @returns {Object} — { rows, globals }
  */
-export function loadProject(jsonString) {
-  const parsed = JSON.parse(jsonString);
+function loadProject(jsonString) {
+  var parsed = JSON.parse(jsonString);
   return deserializeState(parsed);
 }
 
 /**
  * Clear auto-saved state.
  */
-export function clearAutoSave() {
+function clearAutoSave() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
@@ -88,12 +89,14 @@ function serializeState(state) {
     version: 1,
     timestamp: new Date().toISOString(),
     globals: state.globals,
-    rows: state.rows.map(row => ({
-      id: row.id,
-      raw: row.raw,
-      user: row.user,
-      // computed is NOT saved — it's recalculated on load
-    })),
+    rows: state.rows.map(function(row) {
+      return {
+        id: row.id,
+        raw: row.raw,
+        user: row.user,
+        // computed is NOT saved — it's recalculated on load
+      };
+    }),
   };
 }
 
@@ -104,11 +107,20 @@ function deserializeState(data) {
 
   return {
     globals: data.globals || {},
-    rows: data.rows.map(r => ({
-      id: r.id,
-      raw: Object.freeze({ ...r.raw }),
-      user: r.user,
-      computed: {}, // Will be recalculated by app.js on load
-    })),
+    rows: data.rows.map(function(r) {
+      return {
+        id: r.id,
+        raw: Object.freeze(Object.assign({}, r.raw)),
+        user: r.user,
+        computed: {}, // Will be recalculated by app.js on load
+      };
+    }),
   };
 }
+
+// ── Export to namespace ───────────────────────────────────
+PSB.autoSave = autoSave;
+PSB.autoLoad = autoLoad;
+PSB.saveProject = saveProject;
+PSB.loadProject = loadProject;
+PSB.clearAutoSave = clearAutoSave;

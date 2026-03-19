@@ -18,34 +18,42 @@
   <div id="results"></div>
   <div id="summary" class="summary"></div>
 
-  <script type="module">
-    import { runParserTests } from './parser.test.js';
-    import { runMathTests } from './mathEngine.test.js';
+  <!-- Load modules in dependency order -->
+  <script src="../js/mathEngine.js"></script>
+  <script src="../js/parser.js"></script>
+  <script src="../js/dataModel.js"></script>
 
-    const results = document.getElementById('results');
-    const summary = document.getElementById('summary');
+  <!-- Load test data and test suites -->
+  <script src="testData.js"></script>
+  <script src="parser.test.js"></script>
+  <script src="mathEngine.test.js"></script>
 
-    let totalPass = 0;
-    let totalFail = 0;
+  <!-- Run tests -->
+  <script>
+    var results = document.getElementById('results');
+    var summary = document.getElementById('summary');
+
+    var totalPass = 0;
+    var totalFail = 0;
 
     function log(html) {
       results.innerHTML += html;
     }
 
     function runSuite(name, testFn) {
-      log(`<h2>${name}</h2>`);
-      const { passed, failed } = testFn(log);
-      totalPass += passed;
-      totalFail += failed;
+      log('<h2>' + name + '</h2>');
+      var result = testFn(log);
+      totalPass += result.passed;
+      totalFail += result.failed;
     }
 
-    runSuite('Parser Tests', runParserTests);
-    runSuite('Math Engine Tests', runMathTests);
+    runSuite('Parser Tests', TEST.runParserTests);
+    runSuite('Math Engine Tests', TEST.runMathTests);
 
-    const color = totalFail === 0 ? 'pass' : 'fail';
-    summary.innerHTML = `<span class="${color}">
-      ${totalPass + totalFail} tests: ${totalPass} passed, ${totalFail} failed
-    </span>`;
+    var color = totalFail === 0 ? 'pass' : 'fail';
+    summary.innerHTML = '<span class="' + color + '">' +
+      (totalPass + totalFail) + ' tests: ' + totalPass + ' passed, ' + totalFail + ' failed' +
+    '</span>';
   </script>
 </body>
 </html>

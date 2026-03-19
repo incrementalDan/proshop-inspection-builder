@@ -8,10 +8,10 @@
  * Other OPs: computed values with unit conversion
  */
 
-import { getExportData } from './dataModel.js';
+window.PSB = window.PSB || {};
 
 // ── CSV Column Headers (exact ProShop format) ─────────────
-const CSV_HEADERS = [
+var CSV_HEADERS = [
   'Internal Part #',
   'Op #',
   'Dim Tag #',
@@ -37,27 +37,23 @@ const CSV_HEADERS = [
  * @param {Object} globals — global settings
  * @returns {string} CSV content
  */
-export function generateCSV(rows, selectedOps, globals) {
-  const lines = [];
+function generateCSV(rows, selectedOps, globals) {
+  var lines = [];
 
   // Header row
   lines.push(CSV_HEADERS.join(','));
 
   // Data rows: for each selected OP, export all included rows
-  for (const opNum of selectedOps) {
-    for (const row of rows) {
-      // Skip notes if they shouldn't be exported (optional: you may want to include them)
-      // Skip rows not included in this OP
-      if (row.computed.includeOps && row.computed.includeOps[opNum] === false) {
-        continue;
-      }
-
+  for (var oi = 0; oi < selectedOps.length; oi++) {
+    var opNum = selectedOps[oi];
+    for (var ri = 0; ri < rows.length; ri++) {
+      var row = rows[ri];
       // Only export rows that have this OP enabled
       if (row.user.includeOps[opNum] !== true) {
         continue;
       }
 
-      const exportData = getExportData(row, opNum, globals);
+      var exportData = PSB.getExportData(row, opNum, globals);
       lines.push(formatExportRow(exportData));
     }
   }
@@ -71,18 +67,19 @@ export function generateCSV(rows, selectedOps, globals) {
  * @param {Object} data — flat object with CSV column keys
  * @returns {string} CSV line
  */
-export function formatExportRow(data) {
-  return CSV_HEADERS.map(header => {
-    let value = data[header] ?? '';
+function formatExportRow(data) {
+  return CSV_HEADERS.map(function(header) {
+    var value = data[header];
+    if (value === undefined || value === null) value = '';
     // Normalize diameter symbol for ProShop: Ø → ⌀
     if (header === 'Spec Unit 1') {
       value = String(value).replace(/Ø/g, '⌀');
     }
-    const str = String(value);
+    var str = String(value);
 
     // Quote fields that contain commas, quotes, or newlines
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-      return `"${str.replace(/"/g, '""')}"`;
+      return '"' + str.replace(/"/g, '""') + '"';
     }
     return str;
   }).join(',');
@@ -94,16 +91,16 @@ export function formatExportRow(data) {
  * @param {string} csvContent — the CSV string
  * @param {string} [filename] — download filename
  */
-export function downloadCSV(csvContent, filename) {
+function downloadCSV(csvContent, filename) {
   if (!filename) {
-    const now = new Date();
-    const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    filename = `ProShop_Export_${stamp}.csv`;
+    var now = new Date();
+    var stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    filename = 'ProShop_Export_' + stamp + '.csv';
   }
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var link = document.createElement('a');
   link.href = url;
   link.download = filename;
   link.style.display = 'none';
@@ -112,3 +109,8 @@ export function downloadCSV(csvContent, filename) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+// ── Export to namespace ───────────────────────────────────
+PSB.generateCSV = generateCSV;
+PSB.formatExportRow = formatExportRow;
+PSB.downloadCSV = downloadCSV;

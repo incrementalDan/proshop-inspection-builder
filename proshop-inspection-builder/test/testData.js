@@ -4,36 +4,29 @@
  * Contains real data from Ground Control and expected ProShop output.
  */
 
-// Raw CSV string from Ground Control export
-export const SAMPLE_INPUT_CSV = `Internal Part #,Op #,Dim Tag #,Ref Loc,Char Dsg,Spec Unit 1,Drawing Spec,Spec Unit 2,Spec Unit 3,Inspec Equip,Nom Dim,Tol ±,IPC?,Inspection Frequency,Show Dim When?
-,,1,S1,,,33.0,,,,33.0,0.5,,,
-,,2,S1,,,25.0,,,,25.0,0.1,,,
-,,3,S1,,,12.5,,,,12.5,0.1,,,
-,,4,S1,,,8.00,,,,8.00,0.05,,,
-,,5,S1,,,4.0,,,,4.0,0.1,,,
-,,6,S1,,,16.5,,,,16.5,0.3,,,
-,,7,S1,,Ø,3.5,,,,3.5,0.1,,,
-,,8,S1,,Ø,9.0,,,,9.0,0.3,,,
-,,9,S1,,Ø,3.3,,2x,,3.3,0.1,,,
-,,10,S1,,,5.0,,,,5.0,0.1,,,
-,,11,S1,,,2.0,,4x,,2.0,0.1,,,
-,,12,S1,,,3.0,,,,3.0,0.5,,,
-,,13,S1,,,15.0,,,,15.0,0.3,,,
-,,14,S1,,,BREAK AND DEBURR ALL SHARP EDGES.,,,,,,,,
-,,15,S1,,,BAG AND TAG PART WITH PART NO. AND REV LABELLED.,,,,,,,,
-,,16,S1,,,INVAR 36,,,,,,,,`;
+window.TEST = window.TEST || {};
 
-// Expected ProShop export (known-good output)
-export const SAMPLE_OUTPUT_CSV = `Internal Part #,Op #,Dim Tag #,Ref Loc,Char Dsg,Spec Unit 1,Drawing Spec,Spec Unit 2,Spec Unit 3,Inspec Equip,Nom Dim,Tol ±,IPC?,Inspection Frequency,Show Dim When?
-,50,HREF-01,S1,,,1.2982,,,Calipers,1.2982 (-2xE),.0197,TRUE,1 in 50,
-,50,HREF-07,S1,,⌀,.1388,,,GO / NO-GO,.1388 (+2xI),.0039,TRUE,1 in 50,
-,50,GREF-08,S1,,⌀,.3553,,,GO / NO-GO,.3553 (+2xI),.0118,TRUE,1 in 20,
-,50,HREF-09,S1,,⌀,.1309,,2x,GO / NO-GO,.1309 (+2xI),.0039,TRUE,1 in 50,
-,50,HREF-12,S1,,,.1171,,,Calipers,.1171 (-2xE),.0197,TRUE,1 in 50,
-,50,HREF-13,S1,,,.5896,,,Calipers,.5896 (-2xE),.0118,TRUE,1 in 50,`;
+// Raw CSV string from Ground Control export
+TEST.SAMPLE_INPUT_CSV = 'Internal Part #,Op #,Dim Tag #,Ref Loc,Char Dsg,Spec Unit 1,Drawing Spec,Spec Unit 2,Spec Unit 3,Inspec Equip,Nom Dim,Tol ±,IPC?,Inspection Frequency,Show Dim When?\n' +
+',,1,S1,,,33.0,,,,33.0,0.5,,,\n' +
+',,2,S1,,,25.0,,,,25.0,0.1,,,\n' +
+',,3,S1,,,12.5,,,,12.5,0.1,,,\n' +
+',,4,S1,,,8.00,,,,8.00,0.05,,,\n' +
+',,5,S1,,,4.0,,,,4.0,0.1,,,\n' +
+',,6,S1,,,16.5,,,,16.5,0.3,,,\n' +
+',,7,S1,,Ø,3.5,,,,3.5,0.1,,,\n' +
+',,8,S1,,Ø,9.0,,,,9.0,0.3,,,\n' +
+',,9,S1,,Ø,3.3,,2x,,3.3,0.1,,,\n' +
+',,10,S1,,,5.0,,,,5.0,0.1,,,\n' +
+',,11,S1,,,2.0,,4x,,2.0,0.1,,,\n' +
+',,12,S1,,,3.0,,,,3.0,0.5,,,\n' +
+',,13,S1,,,15.0,,,,15.0,0.3,,,\n' +
+',,14,S1,,,BREAK AND DEBURR ALL SHARP EDGES.,,,,,,,,\n' +
+',,15,S1,,,BAG AND TAG PART WITH PART NO. AND REV LABELLED.,,,,,,,,\n' +
+',,16,S1,,,INVAR 36,,,,,,,,';
 
 // Individual test cases for math engine
-export const MATH_TEST_CASES = {
+TEST.MATH_TEST_CASES = {
   // Nominal centering tests
   centering: [
     {
@@ -107,7 +100,7 @@ export const MATH_TEST_CASES = {
 };
 
 // Parser test cases
-export const PARSER_TEST_CASES = {
+TEST.PARSER_TEST_CASES = {
   featureDetection: [
     { input: '33.0', expected: 'dimension' },
     { input: 'BREAK AND DEBURR ALL SHARP EDGES.', expected: 'note' },
