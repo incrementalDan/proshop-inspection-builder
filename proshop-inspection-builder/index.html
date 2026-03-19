@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProShop Inspection Builder</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- HEADER BAR — Global settings, always visible       -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <header id="global-header">
+    <div class="header-left">
+      <h1 class="app-title">ProShop Inspection Builder</h1>
+    </div>
+    <div class="header-controls">
+      <div class="control-group">
+        <label>Import Units</label>
+        <select id="import-units">
+          <option value="mm">mm</option>
+          <option value="inch">inch</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Plating</label>
+        <input type="number" id="plating-thickness" step="0.0001" value="0" min="0" placeholder="0.0000">
+      </div>
+      <div class="control-group">
+        <label>Plating Units</label>
+        <select id="plating-units">
+          <option value="mm">mm</option>
+          <option value="inch">inch</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Inch Prec.</label>
+        <input type="number" id="inch-precision" value="4" min="1" max="6" step="1">
+      </div>
+      <div class="control-group">
+        <label>MM Prec.</label>
+        <input type="number" id="mm-precision" value="3" min="1" max="6" step="1">
+      </div>
+      <div class="header-actions">
+        <button id="btn-import" class="btn btn-primary">Import CSV</button>
+        <button id="btn-export" class="btn btn-accent">Export CSV</button>
+        <button id="btn-save" class="btn btn-secondary">Save Project</button>
+        <button id="btn-load" class="btn btn-secondary">Load Project</button>
+        <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
+        <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">◑</button>
+      </div>
+    </div>
+    <!-- Hidden file inputs -->
+    <input type="file" id="file-import-csv" accept=".csv" hidden>
+    <input type="file" id="file-load-project" accept=".json" hidden>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- OP BAR — Custom ops management                     -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="op-bar">
+    <span class="op-bar-label">OPs:</span>
+    <div id="op-tags"></div>
+    <input type="text" id="op-add-input" placeholder="Add OP..." class="op-add-input">
+    <button id="btn-add-op" class="btn btn-small">+</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- MAIN CONTENT — Table + Sidebar                     -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <main id="main-content">
+
+    <!-- Drop zone overlay (shown when dragging files) -->
+    <div id="drop-zone" class="drop-zone hidden">
+      <div class="drop-zone-content">
+        <span class="drop-icon">📄</span>
+        <span>Drop CSV or Project file here</span>
+      </div>
+    </div>
+
+    <!-- Data Table -->
+    <div id="table-container">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">📋</div>
+        <h2>No Data Loaded</h2>
+        <p>Import a CSV from Ground Control or load a saved project to get started.</p>
+        <p class="hint">You can also drag & drop a file anywhere on this page.</p>
+      </div>
+      <table id="data-table" class="hidden">
+        <thead>
+          <tr>
+            <th data-col="status" class="col-status">Status</th>
+            <th data-col="dimTag" class="col-dimtag">Dim Tag</th>
+            <th data-col="specUnit1" class="col-su1">SU1</th>
+            <th data-col="outDrawingSpec" class="col-drawspec">OUT Drawing Spec</th>
+            <th data-col="inputSpec" class="col-inputspec">Input Spec</th>
+            <th data-col="specUnit2" class="col-su2">SU2</th>
+            <th data-col="specUnit3" class="col-su3">SU3</th>
+            <th data-col="outNominal" class="col-outnom">OUT Nom</th>
+            <th data-col="pinGage" class="col-pingage">Pin/Gage</th>
+            <th data-col="inputTol" class="col-inputtol">Input Tol</th>
+            <th data-col="outTolerance" class="col-outtol">OUT Tol</th>
+            <th data-col="plating" class="col-plating">Plating</th>
+            <th data-col="ops" class="col-ops">OPs</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- Rows rendered by ui.js -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Sidebar (resizable) -->
+    <div id="sidebar-resizer" class="hidden"></div>
+    <aside id="sidebar" class="hidden">
+      <div class="sidebar-header">
+        <h2 id="sidebar-dimtag" class="sidebar-dimtag">—</h2>
+        <button id="sidebar-close" class="btn btn-icon" title="Close">✕</button>
+      </div>
+
+      <div class="sidebar-output-preview">
+        <div class="preview-label">Output Drawing Spec</div>
+        <div id="sidebar-out-spec" class="preview-value">—</div>
+        <div class="preview-row">
+          <div>
+            <div class="preview-label">OUT Nominal</div>
+            <div id="sidebar-out-nominal" class="preview-value-sm">—</div>
+          </div>
+          <div>
+            <div class="preview-label">OUT Tolerance</div>
+            <div id="sidebar-out-tol" class="preview-value-sm">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-controls">
+        <!-- OP Toggles -->
+        <fieldset class="control-section">
+          <legend>Operations</legend>
+          <div id="sidebar-op-toggles"></div>
+        </fieldset>
+
+        <!-- Core Settings -->
+        <fieldset class="control-section">
+          <legend>Settings</legend>
+
+          <div class="control-row">
+            <label>IPC</label>
+            <input type="checkbox" id="sidebar-ipc">
+          </div>
+
+          <div class="control-row">
+            <label>Is Note</label>
+            <input type="checkbox" id="sidebar-is-note">
+          </div>
+
+          <div class="control-row">
+            <label>Auto Nominal</label>
+            <input type="checkbox" id="sidebar-auto-nominal" checked>
+          </div>
+
+          <div class="control-row">
+            <label>Pin/Gage</label>
+            <input type="checkbox" id="sidebar-pin-gage-enabled">
+          </div>
+        </fieldset>
+
+        <!-- Plating -->
+        <fieldset class="control-section">
+          <legend>Plating Mode</legend>
+          <select id="sidebar-plating-mode">
+            <option value="none">None</option>
+            <option value="+1xI">+1x Internal</option>
+            <option value="+2xI">+2x Internal</option>
+            <option value="-1xE">-1x External</option>
+            <option value="-2xE">-2x External</option>
+          </select>
+        </fieldset>
+
+        <!-- Inspection -->
+        <fieldset class="control-section">
+          <legend>Inspection</legend>
+
+          <div class="control-row">
+            <label>Equipment</label>
+            <select id="sidebar-equipment">
+              <!-- Populated by app.js from equipment list -->
+            </select>
+          </div>
+
+          <div class="control-row">
+            <label>Frequency</label>
+            <input type="text" id="sidebar-frequency" placeholder="e.g. 1 in 50">
+          </div>
+        </fieldset>
+
+        <!-- Status -->
+        <fieldset class="control-section">
+          <legend>Status</legend>
+          <div class="status-buttons">
+            <button id="sidebar-status-none" class="btn btn-status" data-status="none">None</button>
+            <button id="sidebar-status-edited" class="btn btn-status" data-status="edited">Edited</button>
+            <button id="sidebar-status-complete" class="btn btn-status btn-complete" data-status="complete">Complete ✓</button>
+          </div>
+        </fieldset>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SETTINGS MODAL                                     -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button id="settings-close" class="btn btn-icon">✕</button>
+      </div>
+      <div class="modal-body">
+        <fieldset>
+          <legend>Equipment List</legend>
+          <p class="hint">One item per line. Saved automatically.</p>
+          <textarea id="settings-equipment-list" rows="12"></textarea>
+        </fieldset>
+        <fieldset>
+          <legend>Dim Tag Prefix (per OP)</legend>
+          <p class="hint">Prefix added to dim tag numbers on export. E.g., "HREF-" for OP 50.</p>
+          <div id="settings-op-prefixes"></div>
+        </fieldset>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- EXPORT MODAL                                       -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="export-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Export to ProShop CSV</h2>
+        <button id="export-close" class="btn btn-icon">✕</button>
+      </div>
+      <div class="modal-body">
+        <fieldset>
+          <legend>Select OPs to Export</legend>
+          <div id="export-op-checkboxes"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Export Units (non-OP2000)</legend>
+          <select id="export-units">
+            <option value="inch">Inch</option>
+            <option value="mm">MM</option>
+          </select>
+        </fieldset>
+        <button id="btn-export-confirm" class="btn btn-accent btn-full">Download CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SCRIPTS — ES6 Modules                              -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>

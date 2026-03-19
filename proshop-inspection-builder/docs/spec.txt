@@ -1,0 +1,319 @@
+ProShop Inspection Builder — Web App (Final Engineering Spec v2)
+
+TL;DR
+This is a complete, implementation-ready spec for a local-first web app that:
+- replaces your Google Sheets + Apps Script tool
+- uses a single source of truth data model
+- has fully defined parsing + math + plating rules
+- guarantees no duplicated calculations
+- preserves all ProShop-specific edge cases (especially OP2000)
+
+1. Core Objective
+Build a browser-based, local-first engineering tool that:
+1. Imports inspection data from CSV
+2. Parses and structures dimension data
+3. Applies deterministic math (nominal centering, plating, unit conversion)
+4. Allows controlled user overrides
+5. Exports ProShop-compatible CSV
+6. Saves/loads full project state locally
+7. Modern UI
+
+2. Architecture Constraints (Non-Negotiable)
+2.1 Local-first
+	•	Runs entirely in browser
+	•	No backend
+	•	No external API calls
+	•	Safe for GitHub Pages hosting
+
+2.2 Low friction
+	•	No install required
+	•	Open index.html → app runs
+	•	Drag/drop file → start working
+
+3. Core Design Principle (Single Source of Truth)
+Each row:
+row = {
+  raw: {},
+  user: {},
+  computed: {}
+}
+
+Rule:
+- Table UI reads computed
+- Sidebar reads computed
+- Export reads computed
+- No duplicate calculations
+
+4. Data Model
+
+Raw (immutable):
+- dimTag
+- drawingSpecText
+- toleranceText
+- nominalText
+- inspectionEquipment
+- frequency
+
+User:
+- includeOps
+- ipc
+- isNote
+- autoNominal
+- platingMode
+- inspectionFrequency
+- inspectionEquipment
+- pinGageEnabled
+- overrides (outDrawingSpec, outTolerance, pinGageValue)
+- status
+
+Computed:
+- parsed (SU1, SU2, SU3, featureType)
+- original (nominal, tolPlus, tolMinus)
+- output (nominal, tolPlus, tolMinus, drawingSpec, pinGage)
+- display (primary/secondary units)
+- export (per-op values)
+
+5. Parsing Rules
+
+General:
+- Never corrupt data
+- If unsure → preserve original
+- GD&T and notes = do not parse
+
+
+Spec Units:
+SU1 = geometry
+SU2 = THRU, DEEP, TYP, MIN/MAX
+SU3 = counts → normalize to Nx
+
+Tolerance:
+- Extract ±, +/-
+
+Remove duplicates across fields.
+5.2 Feature Detection
+
+Detect as NOTE if:
+	•	contains GD&T symbols
+	•	long text strings
+	•	thread specs
+
+→ skip parsing entirely
+
+5.3 Diameter Handling
+
+Normalize:
+	•	⌀ → Ø
+
+Rules:
+	•	Always move to Spec Unit 1
+	•	Strip from other locations
+
+5.4 Spec Unit Assignment
+
+Spec Unit 1 (geometry)
+	•	Ø values
+	•	base numeric size
+
+Spec Unit 2 (modifiers)
+	•	THRU
+	•	DEEP
+	•	TYP
+	•	MIN / MAX
+	•	degree symbol
+
+Spec Unit 3 (quantity)
+	•	2X, X2, 4 PLACES, 2 HOLES → normalize to: 2x, 4x
+5.5 Duplication Rules
+
+Remove duplicates:
+	•	THRU only in SU2
+	•	counts only in SU3
+	•	NEVER repeated across fields
+
+5.6 Tolerance Parsing
+
+Supported formats:
+±0.005
++0.005 -0.002
++.005-.002
+
+Extract:
+tolPlus
+tolMinus
+
+6. Math Engine
+
+Execution order:
+1. Parse
+2. Extract values
+3. Nominal centering
+4. Plating
+5. Unit conversion
+6. Precision formatting
+
+6.2 OP2000 RULE (CRITICAL)
+For OP2000:
+	•	NO math
+	•	NO unit conversion
+	•	NO nominal centering
+	•	ONLY parsing cleanup
+
+Output must match print values exactly.
+
+Nominal centering:
+- asymmetric → shift center
+
+Symmetric tolerance
+EX: Ø0.100 ±0.005 → nominal = 0.100
+
+Asymmetric tolerance
+EX: Ø0.100 +0.010 -0.002
+
+nominal = 0.100 + (0.010 - 0.002)/2 = 0.104
+
+Tolerance becomes symmetric:
+±(range/2)
+
+Plating:
+Modes:
+	•	+1x Internal = + 1x Plating variable 
+	•	+2x Internal = + 2x Plating variable 
+	•	-1x External = - 1x Plating variable 
+	•	-2x External = - 2x Plating variable 
+
+Rules:
+Mode: Internal Effect= subtract plating
+Mode: External Effect= add plating
+
+Apply to:
+	•	nominal
+Not apply to tolerance
+
+
+6.5 Unit Conversion
+	•	Internal calculations: consistent base unit
+	•	Display: Primary [Secondary]
+6.6 Precision Rules
+	•	Controlled by globals:
+	•	Inch precision
+	•	MM precision
+
+
+7. Pin / Gage
+
+Pin:
+GO = nominal - tol
+NO GO = nominal + tol
+Format: P(ØGO+ | ØNOGO-)
+
+Gage Block:
+Format: G(low | high)
+
+Stored as editable value.
+7.1 Rules
+	•	Only computed if enabled
+	•	Stored as editable value
+	•	Export uses stored value (not recomputed)
+
+8. UI
+
+Table columns:
+Status | Dim Tag | SU1 | OUT Drawing Spec | Input Spec | SU2 | SU3 | OUT Nom | Pin/Gage | Input Tol | OUT Tol | Plating | OPs
+
+Row behavior:
+- click selects row
+- sidebar opens
+- status = none / yellow / green
+	State Meaning none = untouched
+	yellow = edited
+ 	green = complete button was selected
+
+
+Inline editing Allowed:
+- OUT Drawing Spec
+- OUT Tol
+- Pin/Gage
+
+8.1 Table formatting 
+	- columns should be able to filter and sort like a normal table in excel 
+	- do alternating colors
+	- highlight full row when selected 
+
+9. Sidebar
+
+Controls:
+- OP toggles
+- IPC
+- Note flag
+- Auto nominal
+- Frequency (blank default)
+- Equipment dropdown
+- Plating mode
+- Pin/Gage toggle
+
+9.1 Can resize width of side bar by clicking and dragging the edge
+	- should be on right side
+	- should not need to scroll vertically since everything should fit
+	- formatting to have the Dim Tag # big at the top - not editable
+	- Drawing spec in grayed out and what the output will be should be big and centered as the focus while editing the other values. And should all update in real time. Tolerance should also be towards to top and important.
+
+10. File System
+
+Import:
+- CSV
+- Project file
+
+Save:
+- full JSON state
+
+Load:
+- restore session
+
+11. Export
+
+User selects:
+- OPs
+- Units (non-OP2000)
+
+OP2000:
+- raw values only
+- cleaned formatting changes only
+
+Other OPs:
+- computed values
+- correct units
+- pin/gage included
+
+12. Globals
+
+Always visible in top header:
+- Import Units
+- Plating Thickness
+- Plating Units
+- Custom OPs
+
+Settings:
+- Equipment list (alphabetical)
+	Items can be added and should save - current list = Calipers,Micrometer,Optical C.,CMM,Height Gage,Gage Block,GO / NO-GO,PASS/FAIL,Drop Indicator, N/A, Blank no value is default
+- Precision settings
+
+13. Theming
+
+- Dark default
+- Blue/orange accents
+- Optional light mode
+
+14. Future
+
+- Edit history log
+- PDF viewer
+- OCR / ballooning = long-term replacement for Ground Control
+
+
+15. Guarantees
+
+- No duplicate calculations
+- OP2000 always correct
+- Parsing never corrupts data
+- Export matches computed values
+- All UI uses same data model

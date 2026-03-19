@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ProShop Inspection Builder — Tests</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #e8e8e8; padding: 20px; }
+    h1 { color: #4a9eff; }
+    h2 { color: #a0a8c0; margin-top: 20px; }
+    .pass { color: #4caf50; }
+    .fail { color: #f44336; }
+    .test { padding: 4px 0; padding-left: 16px; }
+    .summary { margin-top: 20px; padding: 12px; border: 1px solid #2a3354; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>ProShop Inspection Builder — Test Suite</h1>
+  <div id="results"></div>
+  <div id="summary" class="summary"></div>
+
+  <script type="module">
+    import { runParserTests } from './parser.test.js';
+    import { runMathTests } from './mathEngine.test.js';
+
+    const results = document.getElementById('results');
+    const summary = document.getElementById('summary');
+
+    let totalPass = 0;
+    let totalFail = 0;
+
+    function log(html) {
+      results.innerHTML += html;
+    }
+
+    function runSuite(name, testFn) {
+      log(`<h2>${name}</h2>`);
+      const { passed, failed } = testFn(log);
+      totalPass += passed;
+      totalFail += failed;
+    }
+
+    runSuite('Parser Tests', runParserTests);
+    runSuite('Math Engine Tests', runMathTests);
+
+    const color = totalFail === 0 ? 'pass' : 'fail';
+    summary.innerHTML = `<span class="${color}">
+      ${totalPass + totalFail} tests: ${totalPass} passed, ${totalFail} failed
+    </span>`;
+  </script>
+</body>
+</html>

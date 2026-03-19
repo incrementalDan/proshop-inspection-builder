@@ -1,0 +1,7 @@
+Internal Part #,Op #,Dim Tag #,Ref Loc,Char Dsg,Spec Unit 1,Drawing Spec,Spec Unit 2,Spec Unit 3,Inspec Equip,Nom Dim,Tol ±,IPC?,Inspection Frequency,Show Dim When?
+,50,HREF-01,S1,,,1.2982,,,Calipers,1.2982 (-2xE),.0197,TRUE,1 in 50,
+,50,HREF-07,S1,,⌀,.1388,,,GO / NO-GO,.1388 (+2xI),.0039,TRUE,1 in 50,
+,50,GREF-08,S1,,⌀,.3553,,,GO / NO-GO,.3553 (+2xI),.0118,TRUE,1 in 20,
+,50,HREF-09,S1,,⌀,.1309,,2x,GO / NO-GO,.1309 (+2xI),.0039,TRUE,1 in 50,
+,50,HREF-12,S1,,,.1171,,,Calipers,.1171 (-2xE),.0197,TRUE,1 in 50,
+,50,HREF-13,S1,,,.5896,,,Calipers,.5896 (-2xE),.0118,TRUE,1 in 50,
