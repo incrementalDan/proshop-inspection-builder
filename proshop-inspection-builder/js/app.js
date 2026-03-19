@@ -11,6 +11,23 @@
  * Owns the app state: { rows[], globals }
  */
 
+console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
+
+// ═══════════════════════════════════════════════════════════
+// SAMPLE DATA (for quick testing)
+// ═══════════════════════════════════════════════════════════
+var SAMPLE_CSV = [
+  'Internal Part #,Op #,Dim Tag #,Ref Loc,Char Dsg,Spec Unit 1,Drawing Spec,Spec Unit 2,Spec Unit 3,Inspec Equip,Nom Dim,Tol ±,IPC?,Inspection Frequency,Show Dim When?',
+  ',,1,S1,,,33.0,,,,33.0,0.5,,,',
+  ',,2,S1,,,25.0,,,,25.0,0.1,,,',
+  ',,3,S1,,,8.00,,,,8.00,0.05,,,',
+  ',,4,S1,,Ø,3.5,,,,3.5,0.1,,,',
+  ',,5,S1,,Ø,9.0,,,,9.0,0.3,,,',
+  ',,6,S1,,Ø,3.3,,2x,,3.3,0.1,,,',
+  ',,7,S1,,,2.0,,4x,,2.0,0.1,,,',
+  ',,8,S1,,,BREAK AND DEBURR ALL SHARP EDGES.,,,,,,,,'
+].join('\n');
+
 // ═══════════════════════════════════════════════════════════
 // APP STATE (single source of truth for the session)
 // ═══════════════════════════════════════════════════════════
@@ -23,34 +40,73 @@ var state = {
 // INITIALIZATION
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
-  // Try to restore from auto-save
-  var saved = PSB.autoLoad();
-  if (saved) {
-    state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
-    state.rows = saved.rows;
-    recomputeAll();
-    console.log('Restored ' + state.rows.length + ' rows from auto-save');
+  try {
+    console.log('[PSB] DOMContentLoaded fired, initializing...');
+
+    // Clear any corrupt auto-save from old ES module version
+    try {
+      var saved = PSB.autoLoad();
+      if (saved) {
+        state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
+        state.rows = saved.rows;
+        // Ensure all rows have proper user.overrides
+        for (var i = 0; i < state.rows.length; i++) {
+          if (!state.rows[i].user) state.rows[i].user = PSB.defaultUserState();
+          if (!state.rows[i].user.overrides) {
+            state.rows[i].user.overrides = { outDrawingSpec: null, outTolerance: null, pinGageValue: null };
+          }
+        }
+        recomputeAll();
+        console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
+      }
+    } catch (e) {
+      console.warn('[PSB] Auto-load failed, clearing:', e);
+      PSB.clearAutoSave();
+    }
+
+    // Initialize UI
+    PSB.initUI({
+      onRowUserChange: handleRowUserChange,
+      onFileImport: handleFileImport,
+      getAppState: function() { return state; },
+    });
+    console.log('[PSB] UI initialized');
+
+    // Bind header controls
+    bindGlobalControls();
+    bindFileButtons();
+    bindSampleButton();
+    bindOpBar();
+    bindExportModal();
+    bindSettingsModal();
+    console.log('[PSB] All controls bound');
+
+    // Initial render
+    syncGlobalsToUI();
+    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+    PSB.renderTable(state.rows);
+    console.log('[PSB] Init complete');
+
+  } catch (err) {
+    console.error('[PSB] Init error:', err);
+    // Show visible error
+    var el = document.getElementById('empty-state');
+    if (el) {
+      el.innerHTML = '<div style="color:#f44336;padding:20px;"><h2>JS Init Error</h2><pre>' +
+        err.message + '\n' + err.stack + '</pre></div>';
+    }
   }
-
-  // Initialize UI
-  PSB.initUI({
-    onRowUserChange: handleRowUserChange,
-    onFileImport: handleFileImport,
-    getAppState: function() { return state; },
-  });
-
-  // Bind header controls
-  bindGlobalControls();
-  bindFileButtons();
-  bindOpBar();
-  bindExportModal();
-  bindSettingsModal();
-
-  // Initial render
-  syncGlobalsToUI();
-  PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-  PSB.renderTable(state.rows);
 });
+
+// ═══════════════════════════════════════════════════════════
+// SAMPLE DATA BUTTON
+// ═══════════════════════════════════════════════════════════
+function bindSampleButton() {
+  document.getElementById('btn-sample').addEventListener('click', function() {
+    console.log('[PSB] Loading sample data...');
+    handleFileImport(SAMPLE_CSV, 'sample.csv');
+  });
+}
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL CONTROLS
@@ -105,6 +161,7 @@ function syncGlobalsToUI() {
 function bindFileButtons() {
   // Import CSV button
   document.getElementById('btn-import').addEventListener('click', function() {
+    console.log('[PSB] Import button clicked');
     document.getElementById('file-import-csv').click();
   });
 
@@ -140,7 +197,7 @@ function bindFileButtons() {
         syncGlobalsToUI();
         PSB.renderOpBar(state.globals.ops, handleRemoveOp);
         PSB.closeSidebar();
-        console.log('Loaded project with ' + state.rows.length + ' rows');
+        console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
       } catch (err) {
         alert('Failed to load project file: ' + err.message);
       }
@@ -342,7 +399,7 @@ function handleFileImport(content, fileName) {
   recomputeAll();
   PSB.closeSidebar();
 
-  console.log('Imported ' + state.rows.length + ' rows from ' + fileName);
+  console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
 }
 
 // ═══════════════════════════════════════════════════════════
