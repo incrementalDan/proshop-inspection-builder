@@ -73,7 +73,11 @@ export function generateCSV(rows, selectedOps, globals) {
  */
 export function formatExportRow(data) {
   return CSV_HEADERS.map(header => {
-    const value = data[header] ?? '';
+    let value = data[header] ?? '';
+    // Normalize diameter symbol for ProShop: Ø → ⌀
+    if (header === 'Spec Unit 1') {
+      value = String(value).replace(/Ø/g, '⌀');
+    }
     const str = String(value);
 
     // Quote fields that contain commas, quotes, or newlines

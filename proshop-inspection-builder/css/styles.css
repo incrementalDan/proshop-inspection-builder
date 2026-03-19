@@ -641,6 +641,18 @@ td.editable input {
   color: var(--text-secondary);
 }
 
+#sidebar-plating-mode {
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
 .control-row select,
 .control-row input[type="text"] {
   width: 140px;
@@ -676,6 +688,8 @@ td.editable input {
   font-family: var(--font-mono);
   cursor: pointer;
   transition: all var(--transition);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .op-toggle.active {
