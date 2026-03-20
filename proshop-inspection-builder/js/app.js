@@ -285,6 +285,7 @@ function openExportModal() {
 
   for (var i = 0; i < state.globals.ops.length; i++) {
     var op = state.globals.ops[i];
+    var color = PSB.getOpColor ? PSB.getOpColor(op) : '#4a9eff';
     var label = document.createElement('label');
     label.style.display = 'flex';
     label.style.alignItems = 'center';
@@ -296,8 +297,16 @@ function openExportModal() {
     cb.value = op;
     cb.checked = true;
 
+    var opSpan = document.createElement('span');
+    opSpan.className = 'op-bubble active';
+    opSpan.style.setProperty('--op-c', color);
+    opSpan.textContent = 'OP ' + op;
+
+    var extraText = op === 2000 ? ' (raw values)' : '';
+
     label.appendChild(cb);
-    label.appendChild(document.createTextNode('OP ' + op + (op === 2000 ? ' (raw values)' : '')));
+    label.appendChild(opSpan);
+    if (extraText) label.appendChild(document.createTextNode(extraText));
     container.appendChild(label);
   }
 
@@ -318,6 +327,7 @@ function bindSettingsModal() {
     prefixContainer.innerHTML = '';
     for (var i = 0; i < state.globals.ops.length; i++) {
       var op = state.globals.ops[i];
+      var color = PSB.getOpColor ? PSB.getOpColor(op) : '#4a9eff';
       var row = document.createElement('div');
       row.style.display = 'flex';
       row.style.alignItems = 'center';
@@ -328,6 +338,8 @@ function bindSettingsModal() {
       label.textContent = 'OP ' + op + ':';
       label.style.width = '60px';
       label.style.fontSize = '12px';
+      label.style.color = color;
+      label.style.fontWeight = '600';
 
       var input = document.createElement('input');
       input.type = 'text';

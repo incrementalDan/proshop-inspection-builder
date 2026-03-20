@@ -24,6 +24,33 @@ var onRowUserChange = null;   // (rowId, userChanges) => void
 var onFileImport = null;      // (fileContent, fileName) => void
 var getAppState = null;       // () => { rows, globals }
 
+// ── OP Color Palette ──────────────────────────────────────
+// CSS vars: --op-color-0 (OP2000/orange), --op-color-1..7
+var OP_COLORS = [
+  '#ff8c42',  // 0: OP2000
+  '#4a9eff',  // 1: blue
+  '#4caf50',  // 2: green
+  '#e040fb',  // 3: purple
+  '#ff5252',  // 4: red
+  '#00bcd4',  // 5: cyan
+  '#ffc107',  // 6: yellow
+  '#ff6e40',  // 7: deep orange
+];
+
+/**
+ * Get the color for a given OP number.
+ * OP2000 always gets index 0 (orange). Other OPs get 1-7 by position in globals.ops.
+ */
+function getOpColor(opNum) {
+  if (opNum === 2000) return OP_COLORS[0];
+  var state = getAppState();
+  if (!state) return OP_COLORS[1];
+  var nonTwoK = state.globals.ops.filter(function(o) { return o !== 2000; });
+  var idx = nonTwoK.indexOf(opNum);
+  if (idx < 0) idx = 0;
+  return OP_COLORS[(idx % 7) + 1];
+}
+
 /**
  * Initialize the UI module.
  *
@@ -105,13 +132,18 @@ function buildRowHTML(row) {
   var c = row.computed;
   var statusClass = 'status-' + (c.status || 'none');
 
-  // OP display: show which ops are enabled
-  var ops = c.includeOps || {};
-  var opParts = [];
-  for (var k in ops) {
-    if (ops[k]) opParts.push(k);
+  // OP display: render colored bubbles for all available OPs
+  var state = getAppState();
+  var allOps = state ? state.globals.ops : [];
+  var enabledOps = c.includeOps || {};
+  var opBubblesHTML = '<div class="op-bubbles">';
+  for (var oi = 0; oi < allOps.length; oi++) {
+    var op = allOps[oi];
+    var color = getOpColor(op);
+    var isActive = enabledOps[op] ? ' active' : '';
+    opBubblesHTML += '<span class="op-bubble' + isActive + '" style="--op-c:' + color + ';">' + op + '</span>';
   }
-  var opDisplay = opParts.join(', ');
+  opBubblesHTML += '</div>';
 
   return '' +
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span></td>' +
@@ -126,7 +158,7 @@ function buildRowHTML(row) {
     '<td class="col-inputtol">' + esc(c.inputTolerance) + '</td>' +
     '<td class="col-outtol editable">' + esc(c.outTolerance) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
-    '<td class="col-ops">' + esc(opDisplay) + '</td>';
+    '<td class="col-ops">' + opBubblesHTML + '</td>';
 }
 
 /**
@@ -180,16 +212,24 @@ function populateSidebar(rowId) {
   opContainer.innerHTML = '';
   for (var oi = 0; oi < state.globals.ops.length; oi++) {
     var op = state.globals.ops[oi];
+    var color = getOpColor(op);
     var btn = document.createElement('button');
-    btn.className = 'op-toggle' + (u.includeOps[op] ? ' active' : '') + (op === 2000 ? ' op-2000' : '');
+    btn.className = 'op-toggle' + (u.includeOps[op] ? ' active' : '');
+    btn.style.setProperty('--op-c', color);
     btn.textContent = 'OP ' + op;
-    (function(opNum) {
-      btn.addEventListener('click', function() {
+    (function(opNum, btnEl) {
+      btnEl.addEventListener('click', function() {
         var newInclude = Object.assign({}, u.includeOps);
         newInclude[opNum] = !newInclude[opNum];
+        // Immediately toggle visual state
+        if (newInclude[opNum]) {
+          btnEl.classList.add('active');
+        } else {
+          btnEl.classList.remove('active');
+        }
         onRowUserChange(rowId, { includeOps: newInclude });
       });
-    })(op);
+    })(op, btn);
     opContainer.appendChild(btn);
   }
 
@@ -318,8 +358,10 @@ function renderOpBar(ops, onRemoveOp) {
   container.innerHTML = '';
   for (var i = 0; i < ops.length; i++) {
     var op = ops[i];
+    var color = getOpColor(op);
     var tag = document.createElement('span');
-    tag.className = 'op-tag' + (op === 2000 ? ' op-2000' : '');
+    tag.className = 'op-tag';
+    tag.style.setProperty('--op-c', color);
     tag.innerHTML = 'OP ' + op + ' <span class="remove-op" title="Remove">✕</span>';
     (function(opNum) {
       tag.querySelector('.remove-op').addEventListener('click', function() { onRemoveOp(opNum); });
@@ -552,3 +594,4 @@ PSB.renderTable = renderTable;
 PSB.renderOpBar = renderOpBar;
 PSB.closeSidebar = closeSidebar;
 PSB.getSelectedRowId = getSelectedRowId;
+PSB.getOpColor = getOpColor;

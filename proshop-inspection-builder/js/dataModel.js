@@ -27,8 +27,8 @@ function defaultGlobals() {
     platingUnits: 'inch',
     inchPrecision: 4,
     mmPrecision: 3,
-    ops: [],                  // e.g., [2000, 50, 60]
-    opPrefixes: {},           // e.g., { 2000: '', 50: 'HREF-' }
+    ops: [50, 60],            // default OPs
+    opPrefixes: { 50: '', 60: '' },
     equipmentList: [
       'Calipers',
       'Micrometer',
