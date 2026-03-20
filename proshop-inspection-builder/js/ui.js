@@ -257,7 +257,7 @@ function wireUpSidebarHandlers(rowId) {
     onRowUserChange(rowId, { inspectionEquipment: e.target.value });
   });
 
-  bind('sidebar-frequency', 'input', function(e) {
+  bind('sidebar-frequency', 'change', function(e) {
     onRowUserChange(rowId, { inspectionFrequency: e.target.value });
   });
 
