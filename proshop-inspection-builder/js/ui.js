@@ -12,15 +12,17 @@
  * - Drag & drop file handling
  */
 
+window.PSB = window.PSB || {};
+
 // ── State ─────────────────────────────────────────────────
-let selectedRowId = null;
-let sortColumn = null;
-let sortDirection = 'asc'; // 'asc' or 'desc'
+var selectedRowId = null;
+var sortColumn = null;
+var sortDirection = 'asc'; // 'asc' or 'desc'
 
 // Callback references (set by app.js)
-let onRowUserChange = null;   // (rowId, userChanges) => void
-let onFileImport = null;      // (fileContent, fileName) => void
-let getAppState = null;       // () => { rows, globals }
+var onRowUserChange = null;   // (rowId, userChanges) => void
+var onFileImport = null;      // (fileContent, fileName) => void
+var getAppState = null;       // () => { rows, globals }
 
 /**
  * Initialize the UI module.
@@ -30,7 +32,7 @@ let getAppState = null;       // () => { rows, globals }
  * @param {Function} callbacks.onFileImport — called when a file is dropped or selected
  * @param {Function} callbacks.getAppState — returns current { rows, globals }
  */
-export function initUI(callbacks) {
+function initUI(callbacks) {
   onRowUserChange = callbacks.onRowUserChange;
   onFileImport = callbacks.onFileImport;
   getAppState = callbacks.getAppState;
@@ -47,10 +49,10 @@ export function initUI(callbacks) {
  *
  * @param {Object[]} rows — array of row objects with computed values
  */
-export function renderTable(rows) {
-  const tbody = document.getElementById('table-body');
-  const table = document.getElementById('data-table');
-  const emptyState = document.getElementById('empty-state');
+function renderTable(rows) {
+  var tbody = document.getElementById('table-body');
+  var table = document.getElementById('data-table');
+  var emptyState = document.getElementById('empty-state');
 
   if (!rows || rows.length === 0) {
     table.classList.add('hidden');
@@ -62,20 +64,21 @@ export function renderTable(rows) {
   emptyState.classList.add('hidden');
 
   // Sort rows if sort is active
-  let displayRows = [...rows];
+  var displayRows = rows.slice();
   if (sortColumn) {
-    displayRows.sort((a, b) => {
-      const aVal = getCellValue(a, sortColumn);
-      const bVal = getCellValue(b, sortColumn);
-      const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true });
+    displayRows.sort(function(a, b) {
+      var aVal = getCellValue(a, sortColumn);
+      var bVal = getCellValue(b, sortColumn);
+      var cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true });
       return sortDirection === 'asc' ? cmp : -cmp;
     });
   }
 
   // Build table rows
   tbody.innerHTML = '';
-  for (const row of displayRows) {
-    const tr = document.createElement('tr');
+  for (var i = 0; i < displayRows.length; i++) {
+    var row = displayRows[i];
+    var tr = document.createElement('tr');
     tr.dataset.rowId = row.id;
 
     if (row.computed.isNote) tr.classList.add('is-note');
@@ -83,8 +86,10 @@ export function renderTable(rows) {
 
     tr.innerHTML = buildRowHTML(row);
 
-    // Row click → select + open sidebar
-    tr.addEventListener('click', () => selectRow(row.id));
+    // Row click → select + open sidebar (use IIFE for closure)
+    (function(rowId) {
+      tr.addEventListener('click', function() { selectRow(rowId); });
+    })(row.id);
 
     // Inline editing for editable cells
     setupInlineEditing(tr, row);
@@ -97,30 +102,31 @@ export function renderTable(rows) {
  * Build the HTML for a single table row.
  */
 function buildRowHTML(row) {
-  const c = row.computed;
-  const statusClass = `status-${c.status || 'none'}`;
+  var c = row.computed;
+  var statusClass = 'status-' + (c.status || 'none');
 
   // OP display: show which ops are enabled
-  const opDisplay = Object.entries(c.includeOps || {})
-    .filter(([, v]) => v)
-    .map(([k]) => k)
-    .join(', ');
+  var ops = c.includeOps || {};
+  var opParts = [];
+  for (var k in ops) {
+    if (ops[k]) opParts.push(k);
+  }
+  var opDisplay = opParts.join(', ');
 
-  return `
-    <td class="col-status"><span class="status-dot ${statusClass}"></span></td>
-    <td class="col-dimtag">${esc(c.dimTag)}</td>
-    <td class="col-su1">${esc(c.specUnit1)}</td>
-    <td class="col-drawspec editable">${esc(c.outDrawingSpec)}</td>
-    <td class="col-inputspec">${esc(c.inputSpec)}</td>
-    <td class="col-su2">${esc(c.specUnit2)}</td>
-    <td class="col-su3">${esc(c.specUnit3)}</td>
-    <td class="col-outnom">${esc(c.outNominal)}</td>
-    <td class="col-pingage editable">${esc(c.pinGage)}</td>
-    <td class="col-inputtol">${esc(c.inputTolerance)}</td>
-    <td class="col-outtol editable">${esc(c.outTolerance)}</td>
-    <td class="col-plating">${esc(c.platingMode !== 'none' ? c.platingMode : '')}</td>
-    <td class="col-ops">${esc(opDisplay)}</td>
-  `;
+  return '' +
+    '<td class="col-status"><span class="status-dot ' + statusClass + '"></span></td>' +
+    '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
+    '<td class="col-su1">' + esc(c.specUnit1) + '</td>' +
+    '<td class="col-drawspec editable">' + esc(c.outDrawingSpec) + '</td>' +
+    '<td class="col-inputspec">' + esc(c.inputSpec) + '</td>' +
+    '<td class="col-su2">' + esc(c.specUnit2) + '</td>' +
+    '<td class="col-su3">' + esc(c.specUnit3) + '</td>' +
+    '<td class="col-outnom">' + esc(c.outNominal) + '</td>' +
+    '<td class="col-pingage editable">' + esc(c.pinGage) + '</td>' +
+    '<td class="col-inputtol">' + esc(c.inputTolerance) + '</td>' +
+    '<td class="col-outtol editable">' + esc(c.outTolerance) + '</td>' +
+    '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
+    '<td class="col-ops">' + esc(opDisplay) + '</td>';
 }
 
 /**
@@ -130,13 +136,19 @@ function selectRow(rowId) {
   selectedRowId = rowId;
 
   // Highlight row
-  document.querySelectorAll('#table-body tr').forEach(tr => {
-    tr.classList.toggle('selected', Number(tr.dataset.rowId) === rowId);
-  });
+  var allRows = document.querySelectorAll('#table-body tr');
+  for (var i = 0; i < allRows.length; i++) {
+    var tr = allRows[i];
+    if (Number(tr.dataset.rowId) === rowId) {
+      tr.classList.add('selected');
+    } else {
+      tr.classList.remove('selected');
+    }
+  }
 
   // Show sidebar
-  const sidebar = document.getElementById('sidebar');
-  const resizer = document.getElementById('sidebar-resizer');
+  var sidebar = document.getElementById('sidebar');
+  var resizer = document.getElementById('sidebar-resizer');
   sidebar.classList.remove('hidden');
   resizer.classList.remove('hidden');
 
@@ -148,12 +160,12 @@ function selectRow(rowId) {
  * Populate sidebar with selected row's data.
  */
 function populateSidebar(rowId) {
-  const state = getAppState();
-  const row = state.rows.find(r => r.id === rowId);
+  var state = getAppState();
+  var row = state.rows.find(function(r) { return r.id === rowId; });
   if (!row) return;
 
-  const c = row.computed;
-  const u = row.user;
+  var c = row.computed;
+  var u = row.user;
 
   // Header
   document.getElementById('sidebar-dimtag').textContent = c.dimTag || '—';
@@ -164,16 +176,20 @@ function populateSidebar(rowId) {
   document.getElementById('sidebar-out-tol').textContent = c.outTolerance || '—';
 
   // OP toggles
-  const opContainer = document.getElementById('sidebar-op-toggles');
+  var opContainer = document.getElementById('sidebar-op-toggles');
   opContainer.innerHTML = '';
-  for (const op of state.globals.ops) {
-    const btn = document.createElement('button');
-    btn.className = `op-toggle${u.includeOps[op] ? ' active' : ''}${op === 2000 ? ' op-2000' : ''}`;
-    btn.textContent = `OP ${op}`;
-    btn.addEventListener('click', () => {
-      const newInclude = { ...u.includeOps, [op]: !u.includeOps[op] };
-      onRowUserChange(rowId, { includeOps: newInclude });
-    });
+  for (var oi = 0; oi < state.globals.ops.length; oi++) {
+    var op = state.globals.ops[oi];
+    var btn = document.createElement('button');
+    btn.className = 'op-toggle' + (u.includeOps[op] ? ' active' : '') + (op === 2000 ? ' op-2000' : '');
+    btn.textContent = 'OP ' + op;
+    (function(opNum) {
+      btn.addEventListener('click', function() {
+        var newInclude = Object.assign({}, u.includeOps);
+        newInclude[opNum] = !newInclude[opNum];
+        onRowUserChange(rowId, { includeOps: newInclude });
+      });
+    })(op);
     opContainer.appendChild(btn);
   }
 
@@ -191,9 +207,14 @@ function populateSidebar(rowId) {
   document.getElementById('sidebar-frequency').value = u.inspectionFrequency || '';
 
   // Status buttons
-  document.querySelectorAll('.btn-status').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.status === u.status);
-  });
+  var statusBtns = document.querySelectorAll('.btn-status');
+  for (var i = 0; i < statusBtns.length; i++) {
+    if (statusBtns[i].dataset.status === u.status) {
+      statusBtns[i].classList.add('active');
+    } else {
+      statusBtns[i].classList.remove('active');
+    }
+  }
 
   // Wire up change handlers (remove old ones first by replacing elements)
   wireUpSidebarHandlers(rowId);
@@ -204,54 +225,58 @@ function populateSidebar(rowId) {
  */
 function wireUpSidebarHandlers(rowId) {
   // Helper to bind a change handler
-  const bind = (id, event, handler) => {
-    const el = document.getElementById(id);
+  function bind(id, event, handler) {
+    var el = document.getElementById(id);
     // Clone to remove old listeners
-    const clone = el.cloneNode(true);
+    var clone = el.cloneNode(true);
     el.parentNode.replaceChild(clone, el);
     clone.addEventListener(event, handler);
-  };
+  }
 
-  bind('sidebar-ipc', 'change', (e) => {
+  bind('sidebar-ipc', 'change', function(e) {
     onRowUserChange(rowId, { ipc: e.target.checked });
   });
 
-  bind('sidebar-is-note', 'change', (e) => {
+  bind('sidebar-is-note', 'change', function(e) {
     onRowUserChange(rowId, { isNote: e.target.checked });
   });
 
-  bind('sidebar-auto-nominal', 'change', (e) => {
+  bind('sidebar-auto-nominal', 'change', function(e) {
     onRowUserChange(rowId, { autoNominal: e.target.checked });
   });
 
-  bind('sidebar-pin-gage-enabled', 'change', (e) => {
+  bind('sidebar-pin-gage-enabled', 'change', function(e) {
     onRowUserChange(rowId, { pinGageEnabled: e.target.checked });
   });
 
-  bind('sidebar-plating-mode', 'change', (e) => {
+  bind('sidebar-plating-mode', 'change', function(e) {
     onRowUserChange(rowId, { platingMode: e.target.value });
   });
 
-  bind('sidebar-equipment', 'change', (e) => {
+  bind('sidebar-equipment', 'change', function(e) {
     onRowUserChange(rowId, { inspectionEquipment: e.target.value });
   });
 
-  bind('sidebar-frequency', 'input', (e) => {
+  bind('sidebar-frequency', 'input', function(e) {
     onRowUserChange(rowId, { inspectionFrequency: e.target.value });
   });
 
   // Status buttons
-  document.querySelectorAll('.btn-status').forEach(btn => {
-    const clone = btn.cloneNode(true);
+  var statusBtns = document.querySelectorAll('.btn-status');
+  for (var i = 0; i < statusBtns.length; i++) {
+    var btn = statusBtns[i];
+    var clone = btn.cloneNode(true);
     btn.parentNode.replaceChild(clone, btn);
-    clone.addEventListener('click', () => {
-      onRowUserChange(rowId, { status: clone.dataset.status });
-    });
-  });
+    (function(cloneBtn) {
+      cloneBtn.addEventListener('click', function() {
+        onRowUserChange(rowId, { status: cloneBtn.dataset.status });
+      });
+    })(clone);
+  }
 
   // Sidebar close
-  const closeBtn = document.getElementById('sidebar-close');
-  const closeClone = closeBtn.cloneNode(true);
+  var closeBtn = document.getElementById('sidebar-close');
+  var closeClone = closeBtn.cloneNode(true);
   closeBtn.parentNode.replaceChild(closeClone, closeBtn);
   closeClone.addEventListener('click', closeSidebar);
 }
@@ -259,21 +284,25 @@ function wireUpSidebarHandlers(rowId) {
 /**
  * Close the sidebar.
  */
-export function closeSidebar() {
+function closeSidebar() {
   selectedRowId = null;
   document.getElementById('sidebar').classList.add('hidden');
   document.getElementById('sidebar-resizer').classList.add('hidden');
-  document.querySelectorAll('#table-body tr').forEach(tr => tr.classList.remove('selected'));
+  var allRows = document.querySelectorAll('#table-body tr');
+  for (var i = 0; i < allRows.length; i++) {
+    allRows[i].classList.remove('selected');
+  }
 }
 
 /**
  * Populate the equipment dropdown.
  */
 function populateEquipmentDropdown(equipmentList, currentValue) {
-  const select = document.getElementById('sidebar-equipment');
+  var select = document.getElementById('sidebar-equipment');
   select.innerHTML = '<option value="">— Select —</option>';
-  for (const item of equipmentList) {
-    const opt = document.createElement('option');
+  for (var i = 0; i < equipmentList.length; i++) {
+    var item = equipmentList[i];
+    var opt = document.createElement('option');
     opt.value = item;
     opt.textContent = item;
     if (item === currentValue) opt.selected = true;
@@ -284,14 +313,17 @@ function populateEquipmentDropdown(equipmentList, currentValue) {
 /**
  * Render the OP tags in the OP bar.
  */
-export function renderOpBar(ops, onRemoveOp) {
-  const container = document.getElementById('op-tags');
+function renderOpBar(ops, onRemoveOp) {
+  var container = document.getElementById('op-tags');
   container.innerHTML = '';
-  for (const op of ops) {
-    const tag = document.createElement('span');
-    tag.className = `op-tag${op === 2000 ? ' op-2000' : ''}`;
-    tag.innerHTML = `OP ${op} <span class="remove-op" title="Remove">✕</span>`;
-    tag.querySelector('.remove-op').addEventListener('click', () => onRemoveOp(op));
+  for (var i = 0; i < ops.length; i++) {
+    var op = ops[i];
+    var tag = document.createElement('span');
+    tag.className = 'op-tag' + (op === 2000 ? ' op-2000' : '');
+    tag.innerHTML = 'OP ' + op + ' <span class="remove-op" title="Remove">✕</span>';
+    (function(opNum) {
+      tag.querySelector('.remove-op').addEventListener('click', function() { onRemoveOp(opNum); });
+    })(op);
     container.appendChild(tag);
   }
 }
@@ -299,33 +331,33 @@ export function renderOpBar(ops, onRemoveOp) {
 // ── Drag & Drop ───────────────────────────────────────────
 
 function setupDragDrop() {
-  const dropZone = document.getElementById('drop-zone');
-  const body = document.body;
+  var dropZone = document.getElementById('drop-zone');
+  var body = document.body;
 
-  let dragCounter = 0;
+  var dragCounter = 0;
 
-  body.addEventListener('dragenter', (e) => {
+  body.addEventListener('dragenter', function(e) {
     e.preventDefault();
     dragCounter++;
     dropZone.classList.remove('hidden');
   });
 
-  body.addEventListener('dragleave', (e) => {
+  body.addEventListener('dragleave', function(e) {
     e.preventDefault();
     dragCounter--;
     if (dragCounter === 0) dropZone.classList.add('hidden');
   });
 
-  body.addEventListener('dragover', (e) => {
+  body.addEventListener('dragover', function(e) {
     e.preventDefault();
   });
 
-  body.addEventListener('drop', (e) => {
+  body.addEventListener('drop', function(e) {
     e.preventDefault();
     dragCounter = 0;
     dropZone.classList.add('hidden');
 
-    const files = e.dataTransfer.files;
+    var files = e.dataTransfer.files;
     if (files.length > 0) {
       readFile(files[0]);
     }
@@ -333,8 +365,8 @@ function setupDragDrop() {
 }
 
 function readFile(file) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
+  var reader = new FileReader();
+  reader.onload = function(e) {
     if (onFileImport) {
       onFileImport(e.target.result, file.name);
     }
@@ -345,11 +377,11 @@ function readFile(file) {
 // ── Sidebar Resizer ───────────────────────────────────────
 
 function setupSidebarResizer() {
-  const resizer = document.getElementById('sidebar-resizer');
-  const sidebar = document.getElementById('sidebar');
-  let isResizing = false;
+  var resizer = document.getElementById('sidebar-resizer');
+  var sidebar = document.getElementById('sidebar');
+  var isResizing = false;
 
-  resizer.addEventListener('mousedown', (e) => {
+  resizer.addEventListener('mousedown', function(e) {
     isResizing = true;
     resizer.classList.add('active');
     document.body.style.cursor = 'col-resize';
@@ -357,14 +389,14 @@ function setupSidebarResizer() {
     e.preventDefault();
   });
 
-  document.addEventListener('mousemove', (e) => {
+  document.addEventListener('mousemove', function(e) {
     if (!isResizing) return;
-    const newWidth = window.innerWidth - e.clientX;
-    const clamped = Math.max(280, Math.min(600, newWidth));
-    sidebar.style.width = `${clamped}px`;
+    var newWidth = window.innerWidth - e.clientX;
+    var clamped = Math.max(280, Math.min(600, newWidth));
+    sidebar.style.width = clamped + 'px';
   });
 
-  document.addEventListener('mouseup', () => {
+  document.addEventListener('mouseup', function() {
     if (isResizing) {
       isResizing = false;
       resizer.classList.remove('active');
@@ -377,9 +409,9 @@ function setupSidebarResizer() {
 // ── Theme Toggle ──────────────────────────────────────────
 
 function setupThemeToggle() {
-  document.getElementById('btn-theme').addEventListener('click', () => {
-    const html = document.documentElement;
-    const current = html.getAttribute('data-theme');
+  document.getElementById('btn-theme').addEventListener('click', function() {
+    var html = document.documentElement;
+    var current = html.getAttribute('data-theme');
     html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
   });
 }
@@ -387,27 +419,31 @@ function setupThemeToggle() {
 // ── Table Header Sorting ──────────────────────────────────
 
 function setupTableHeaderClicks() {
-  document.querySelectorAll('#data-table th[data-col]').forEach(th => {
-    th.addEventListener('click', () => {
-      const col = th.dataset.col;
-      if (sortColumn === col) {
-        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-      } else {
-        sortColumn = col;
-        sortDirection = 'asc';
-      }
+  var headers = document.querySelectorAll('#data-table th[data-col]');
+  for (var i = 0; i < headers.length; i++) {
+    (function(th) {
+      th.addEventListener('click', function() {
+        var col = th.dataset.col;
+        if (sortColumn === col) {
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortColumn = col;
+          sortDirection = 'asc';
+        }
 
-      // Update header classes
-      document.querySelectorAll('#data-table th').forEach(h => {
-        h.classList.remove('sorted-asc', 'sorted-desc');
+        // Update header classes
+        var allHeaders = document.querySelectorAll('#data-table th');
+        for (var j = 0; j < allHeaders.length; j++) {
+          allHeaders[j].classList.remove('sorted-asc', 'sorted-desc');
+        }
+        th.classList.add('sorted-' + sortDirection);
+
+        // Re-render with current data
+        var state = getAppState();
+        if (state) renderTable(state.rows);
       });
-      th.classList.add(`sorted-${sortDirection}`);
-
-      // Re-render with current data
-      const state = getAppState();
-      if (state) renderTable(state.rows);
-    });
-  });
+    })(headers[i]);
+  }
 }
 
 // ── Inline Editing ────────────────────────────────────
@@ -415,51 +451,57 @@ function setupTableHeaderClicks() {
 function setupInlineEditing(tr, row) {
   if (row.computed.isNote) return;
 
-  const editableCells = tr.querySelectorAll('td.editable');
-  editableCells.forEach(td => {
-    td.addEventListener('dblclick', (e) => {
-      e.stopPropagation();
-      if (td.querySelector('input')) return; // Already editing
+  var editableCells = tr.querySelectorAll('td.editable');
+  for (var i = 0; i < editableCells.length; i++) {
+    (function(td) {
+      td.addEventListener('dblclick', function(e) {
+        e.stopPropagation();
+        if (td.querySelector('input')) return; // Already editing
 
-      const originalValue = td.textContent;
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = originalValue;
-      td.textContent = '';
-      td.appendChild(input);
-      input.focus();
-      input.select();
+        var originalValue = td.textContent;
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = originalValue;
+        td.textContent = '';
+        td.appendChild(input);
+        input.focus();
+        input.select();
 
-      const commit = () => {
-        const newValue = input.value.trim();
-        td.textContent = newValue || originalValue;
+        var committed = false;
+        var commit = function() {
+          if (committed) return;
+          committed = true;
+          var newValue = input.value.trim();
+          td.textContent = newValue || originalValue;
 
-        // Determine which field was edited
-        if (td.classList.contains('col-drawspec')) {
-          onRowUserChange(row.id, { overrides: { ...row.user.overrides, outDrawingSpec: newValue || null } });
-        } else if (td.classList.contains('col-outtol')) {
-          onRowUserChange(row.id, { overrides: { ...row.user.overrides, outTolerance: newValue || null } });
-        } else if (td.classList.contains('col-pingage')) {
-          onRowUserChange(row.id, { overrides: { ...row.user.overrides, pinGageValue: newValue || null } });
-        }
-      };
+          // Determine which field was edited
+          if (td.classList.contains('col-drawspec')) {
+            onRowUserChange(row.id, { overrides: Object.assign({}, row.user.overrides, { outDrawingSpec: newValue || null }) });
+          } else if (td.classList.contains('col-outtol')) {
+            onRowUserChange(row.id, { overrides: Object.assign({}, row.user.overrides, { outTolerance: newValue || null }) });
+          } else if (td.classList.contains('col-pingage')) {
+            onRowUserChange(row.id, { overrides: Object.assign({}, row.user.overrides, { pinGageValue: newValue || null }) });
+          }
+        };
 
-      input.addEventListener('blur', commit);
-      input.addEventListener('keydown', (ke) => {
-        if (ke.key === 'Enter') input.blur();
-        if (ke.key === 'Escape') {
-          td.textContent = originalValue;
-        }
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', function(ke) {
+          if (ke.key === 'Enter') input.blur();
+          if (ke.key === 'Escape') {
+            committed = true; // Prevent commit on blur
+            td.textContent = originalValue;
+          }
+        });
       });
-    });
-  });
+    })(editableCells[i]);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────
 
 function getCellValue(row, col) {
-  const c = row.computed;
-  const map = {
+  var c = row.computed;
+  var map = {
     status: c.status,
     dimTag: c.dimTag,
     specUnit1: c.specUnit1,
@@ -472,8 +514,15 @@ function getCellValue(row, col) {
     inputTol: c.inputTolerance,
     outTolerance: c.outTolerance,
     plating: c.platingMode,
-    ops: Object.keys(c.includeOps || {}).filter(k => c.includeOps[k]).join(','),
+    ops: '',
   };
+  if (c.includeOps) {
+    var parts = [];
+    for (var k in c.includeOps) {
+      if (c.includeOps[k]) parts.push(k);
+    }
+    map.ops = parts.join(',');
+  }
   return map[col] || '';
 }
 
@@ -493,6 +542,13 @@ function esc(str) {
 /**
  * Get the currently selected row ID.
  */
-export function getSelectedRowId() {
+function getSelectedRowId() {
   return selectedRowId;
 }
+
+// ── Export to namespace ───────────────────────────────────
+PSB.initUI = initUI;
+PSB.renderTable = renderTable;
+PSB.renderOpBar = renderOpBar;
+PSB.closeSidebar = closeSidebar;
+PSB.getSelectedRowId = getSelectedRowId;

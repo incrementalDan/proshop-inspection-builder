@@ -11,86 +11,136 @@
  * Owns the app state: { rows[], globals }
  */
 
-import { parseCSV } from './parser.js';
-import { createRow, recompute, defaultGlobals, resetIdCounter } from './dataModel.js';
-import { initUI, renderTable, renderOpBar, closeSidebar, getSelectedRowId } from './ui.js';
-import { generateCSV, downloadCSV } from './exportEngine.js';
-import { autoSave, autoLoad, saveProject, loadProject } from './storage.js';
+console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
+
+// ═══════════════════════════════════════════════════════════
+// SAMPLE DATA (for quick testing)
+// ═══════════════════════════════════════════════════════════
+var SAMPLE_CSV = [
+  'Internal Part #,Op #,Dim Tag #,Ref Loc,Char Dsg,Spec Unit 1,Drawing Spec,Spec Unit 2,Spec Unit 3,Inspec Equip,Nom Dim,Tol ±,IPC?,Inspection Frequency,Show Dim When?',
+  ',,1,S1,,,33.0,,,,33.0,0.5,,,',
+  ',,2,S1,,,25.0,,,,25.0,0.1,,,',
+  ',,3,S1,,,8.00,,,,8.00,0.05,,,',
+  ',,4,S1,,Ø,3.5,,,,3.5,0.1,,,',
+  ',,5,S1,,Ø,9.0,,,,9.0,0.3,,,',
+  ',,6,S1,,Ø,3.3,,2x,,3.3,0.1,,,',
+  ',,7,S1,,,2.0,,4x,,2.0,0.1,,,',
+  ',,8,S1,,,BREAK AND DEBURR ALL SHARP EDGES.,,,,,,,,'
+].join('\n');
 
 // ═══════════════════════════════════════════════════════════
 // APP STATE (single source of truth for the session)
 // ═══════════════════════════════════════════════════════════
-let state = {
+var state = {
   rows: [],
-  globals: defaultGlobals(),
+  globals: PSB.defaultGlobals(),
 };
 
 // ═══════════════════════════════════════════════════════════
 // INITIALIZATION
 // ═══════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
-  // Try to restore from auto-save
-  const saved = autoLoad();
-  if (saved) {
-    state.globals = { ...defaultGlobals(), ...saved.globals };
-    state.rows = saved.rows;
-    recomputeAll();
-    console.log(`Restored ${state.rows.length} rows from auto-save`);
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    console.log('[PSB] DOMContentLoaded fired, initializing...');
+
+    // Clear any corrupt auto-save from old ES module version
+    try {
+      var saved = PSB.autoLoad();
+      if (saved) {
+        state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
+        state.rows = saved.rows;
+        // Ensure all rows have proper user.overrides
+        for (var i = 0; i < state.rows.length; i++) {
+          if (!state.rows[i].user) state.rows[i].user = PSB.defaultUserState();
+          if (!state.rows[i].user.overrides) {
+            state.rows[i].user.overrides = { outDrawingSpec: null, outTolerance: null, pinGageValue: null };
+          }
+        }
+        recomputeAll();
+        console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
+      }
+    } catch (e) {
+      console.warn('[PSB] Auto-load failed, clearing:', e);
+      PSB.clearAutoSave();
+    }
+
+    // Initialize UI
+    PSB.initUI({
+      onRowUserChange: handleRowUserChange,
+      onFileImport: handleFileImport,
+      getAppState: function() { return state; },
+    });
+    console.log('[PSB] UI initialized');
+
+    // Bind header controls
+    bindGlobalControls();
+    bindFileButtons();
+    bindSampleButton();
+    bindOpBar();
+    bindExportModal();
+    bindSettingsModal();
+    console.log('[PSB] All controls bound');
+
+    // Initial render
+    syncGlobalsToUI();
+    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+    PSB.renderTable(state.rows);
+    console.log('[PSB] Init complete');
+
+  } catch (err) {
+    console.error('[PSB] Init error:', err);
+    // Show visible error
+    var el = document.getElementById('empty-state');
+    if (el) {
+      el.innerHTML = '<div style="color:#f44336;padding:20px;"><h2>JS Init Error</h2><pre>' +
+        err.message + '\n' + err.stack + '</pre></div>';
+    }
   }
-
-  // Initialize UI
-  initUI({
-    onRowUserChange: handleRowUserChange,
-    onFileImport: handleFileImport,
-    getAppState: () => state,
-  });
-
-  // Bind header controls
-  bindGlobalControls();
-  bindFileButtons();
-  bindOpBar();
-  bindExportModal();
-  bindSettingsModal();
-
-  // Initial render
-  syncGlobalsToUI();
-  renderOpBar(state.globals.ops, handleRemoveOp);
-  renderTable(state.rows);
 });
+
+// ═══════════════════════════════════════════════════════════
+// SAMPLE DATA BUTTON
+// ═══════════════════════════════════════════════════════════
+function bindSampleButton() {
+  document.getElementById('btn-sample').addEventListener('click', function() {
+    console.log('[PSB] Loading sample data...');
+    handleFileImport(SAMPLE_CSV, 'sample.csv');
+  });
+}
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL CONTROLS
 // ═══════════════════════════════════════════════════════════
 function bindGlobalControls() {
   // Import units
-  document.getElementById('import-units').addEventListener('change', (e) => {
+  document.getElementById('import-units').addEventListener('change', function(e) {
     state.globals.importUnits = e.target.value;
     recomputeAll();
     scheduleAutoSave();
   });
 
   // Plating thickness
-  document.getElementById('plating-thickness').addEventListener('input', (e) => {
+  document.getElementById('plating-thickness').addEventListener('input', function(e) {
     state.globals.platingThickness = parseFloat(e.target.value) || 0;
     recomputeAll();
     scheduleAutoSave();
   });
 
   // Plating units
-  document.getElementById('plating-units').addEventListener('change', (e) => {
+  document.getElementById('plating-units').addEventListener('change', function(e) {
     state.globals.platingUnits = e.target.value;
     recomputeAll();
     scheduleAutoSave();
   });
 
   // Precision
-  document.getElementById('inch-precision').addEventListener('input', (e) => {
+  document.getElementById('inch-precision').addEventListener('input', function(e) {
     state.globals.inchPrecision = parseInt(e.target.value) || 4;
     recomputeAll();
     scheduleAutoSave();
   });
 
-  document.getElementById('mm-precision').addEventListener('input', (e) => {
+  document.getElementById('mm-precision').addEventListener('input', function(e) {
     state.globals.mmPrecision = parseInt(e.target.value) || 3;
     recomputeAll();
     scheduleAutoSave();
@@ -110,43 +160,44 @@ function syncGlobalsToUI() {
 // ═══════════════════════════════════════════════════════════
 function bindFileButtons() {
   // Import CSV button
-  document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('btn-import').addEventListener('click', function() {
+    console.log('[PSB] Import button clicked');
     document.getElementById('file-import-csv').click();
   });
 
-  document.getElementById('file-import-csv').addEventListener('change', (e) => {
-    const file = e.target.files[0];
+  document.getElementById('file-import-csv').addEventListener('change', function(e) {
+    var file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => handleFileImport(ev.target.result, file.name);
+    var reader = new FileReader();
+    reader.onload = function(ev) { handleFileImport(ev.target.result, file.name); };
     reader.readAsText(file);
     e.target.value = ''; // Reset so same file can be re-imported
   });
 
   // Save project
-  document.getElementById('btn-save').addEventListener('click', () => {
-    saveProject(state);
+  document.getElementById('btn-save').addEventListener('click', function() {
+    PSB.saveProject(state);
   });
 
   // Load project button
-  document.getElementById('btn-load').addEventListener('click', () => {
+  document.getElementById('btn-load').addEventListener('click', function() {
     document.getElementById('file-load-project').click();
   });
 
-  document.getElementById('file-load-project').addEventListener('change', (e) => {
-    const file = e.target.files[0];
+  document.getElementById('file-load-project').addEventListener('change', function(e) {
+    var file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
       try {
-        const loaded = loadProject(ev.target.result);
-        state.globals = { ...defaultGlobals(), ...loaded.globals };
+        var loaded = PSB.loadProject(ev.target.result);
+        state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
         state.rows = loaded.rows;
         recomputeAll();
         syncGlobalsToUI();
-        renderOpBar(state.globals.ops, handleRemoveOp);
-        closeSidebar();
-        console.log(`Loaded project with ${state.rows.length} rows`);
+        PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+        PSB.closeSidebar();
+        console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
       } catch (err) {
         alert('Failed to load project file: ' + err.message);
       }
@@ -156,7 +207,7 @@ function bindFileButtons() {
   });
 
   // Export button → open modal
-  document.getElementById('btn-export').addEventListener('click', () => {
+  document.getElementById('btn-export').addEventListener('click', function() {
     openExportModal();
   });
 }
@@ -165,16 +216,16 @@ function bindFileButtons() {
 // OP BAR
 // ═══════════════════════════════════════════════════════════
 function bindOpBar() {
-  const input = document.getElementById('op-add-input');
-  const btn = document.getElementById('btn-add-op');
+  var input = document.getElementById('op-add-input');
+  var btn = document.getElementById('btn-add-op');
 
-  const addOp = () => {
-    const val = parseInt(input.value);
+  var addOp = function() {
+    var val = parseInt(input.value);
     if (isNaN(val) || val <= 0) return;
-    if (state.globals.ops.includes(val)) return;
+    if (state.globals.ops.indexOf(val) !== -1) return;
 
     state.globals.ops.push(val);
-    state.globals.ops.sort((a, b) => a - b);
+    state.globals.ops.sort(function(a, b) { return a - b; });
 
     // Initialize prefix if not exists
     if (!state.globals.opPrefixes[val]) {
@@ -182,20 +233,20 @@ function bindOpBar() {
     }
 
     input.value = '';
-    renderOpBar(state.globals.ops, handleRemoveOp);
+    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     recomputeAll();
     scheduleAutoSave();
   };
 
   btn.addEventListener('click', addOp);
-  input.addEventListener('keydown', (e) => {
+  input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') addOp();
   });
 }
 
 function handleRemoveOp(opNum) {
-  state.globals.ops = state.globals.ops.filter(o => o !== opNum);
-  renderOpBar(state.globals.ops, handleRemoveOp);
+  state.globals.ops = state.globals.ops.filter(function(o) { return o !== opNum; });
+  PSB.renderOpBar(state.globals.ops, handleRemoveOp);
   recomputeAll();
   scheduleAutoSave();
 }
@@ -204,14 +255,17 @@ function handleRemoveOp(opNum) {
 // EXPORT MODAL
 // ═══════════════════════════════════════════════════════════
 function bindExportModal() {
-  document.getElementById('export-close').addEventListener('click', () => {
+  document.getElementById('export-close').addEventListener('click', function() {
     document.getElementById('export-modal').classList.add('hidden');
   });
 
-  document.getElementById('btn-export-confirm').addEventListener('click', () => {
-    const checkboxes = document.querySelectorAll('#export-op-checkboxes input:checked');
-    const selectedOps = Array.from(checkboxes).map(cb => parseInt(cb.value));
-    const exportUnits = document.getElementById('export-units').value;
+  document.getElementById('btn-export-confirm').addEventListener('click', function() {
+    var checkboxes = document.querySelectorAll('#export-op-checkboxes input:checked');
+    var selectedOps = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+      selectedOps.push(parseInt(checkboxes[i].value));
+    }
+    var exportUnits = document.getElementById('export-units').value;
 
     if (selectedOps.length === 0) {
       alert('Select at least one OP to export.');
@@ -219,30 +273,31 @@ function bindExportModal() {
     }
 
     state.globals.exportUnits = exportUnits;
-    const csv = generateCSV(state.rows, selectedOps, state.globals);
-    downloadCSV(csv);
+    var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
+    PSB.downloadCSV(csv);
     document.getElementById('export-modal').classList.add('hidden');
   });
 }
 
 function openExportModal() {
-  const container = document.getElementById('export-op-checkboxes');
+  var container = document.getElementById('export-op-checkboxes');
   container.innerHTML = '';
 
-  for (const op of state.globals.ops) {
-    const label = document.createElement('label');
+  for (var i = 0; i < state.globals.ops.length; i++) {
+    var op = state.globals.ops[i];
+    var label = document.createElement('label');
     label.style.display = 'flex';
     label.style.alignItems = 'center';
     label.style.gap = '6px';
     label.style.padding = '4px 0';
 
-    const cb = document.createElement('input');
+    var cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.value = op;
     cb.checked = true;
 
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(`OP ${op}${op === 2000 ? ' (raw values)' : ''}`));
+    label.appendChild(document.createTextNode('OP ' + op + (op === 2000 ? ' (raw values)' : '')));
     container.appendChild(label);
   }
 
@@ -253,27 +308,28 @@ function openExportModal() {
 // SETTINGS MODAL
 // ═══════════════════════════════════════════════════════════
 function bindSettingsModal() {
-  document.getElementById('btn-settings').addEventListener('click', () => {
+  document.getElementById('btn-settings').addEventListener('click', function() {
     // Populate equipment list
     document.getElementById('settings-equipment-list').value =
       state.globals.equipmentList.join('\n');
 
     // Populate op prefixes
-    const prefixContainer = document.getElementById('settings-op-prefixes');
+    var prefixContainer = document.getElementById('settings-op-prefixes');
     prefixContainer.innerHTML = '';
-    for (const op of state.globals.ops) {
-      const row = document.createElement('div');
+    for (var i = 0; i < state.globals.ops.length; i++) {
+      var op = state.globals.ops[i];
+      var row = document.createElement('div');
       row.style.display = 'flex';
       row.style.alignItems = 'center';
       row.style.gap = '8px';
       row.style.padding = '4px 0';
 
-      const label = document.createElement('label');
-      label.textContent = `OP ${op}:`;
+      var label = document.createElement('label');
+      label.textContent = 'OP ' + op + ':';
       label.style.width = '60px';
       label.style.fontSize = '12px';
 
-      const input = document.createElement('input');
+      var input = document.createElement('input');
       input.type = 'text';
       input.value = state.globals.opPrefixes[op] || '';
       input.placeholder = 'e.g., HREF-';
@@ -289,18 +345,19 @@ function bindSettingsModal() {
     document.getElementById('settings-modal').classList.remove('hidden');
   });
 
-  document.getElementById('settings-close').addEventListener('click', () => {
+  document.getElementById('settings-close').addEventListener('click', function() {
     // Save equipment list
-    const eqText = document.getElementById('settings-equipment-list').value;
+    var eqText = document.getElementById('settings-equipment-list').value;
     state.globals.equipmentList = eqText.split('\n')
-      .map(s => s.trim())
-      .filter(s => s !== '')
+      .map(function(s) { return s.trim(); })
+      .filter(function(s) { return s !== ''; })
       .sort();
 
     // Save op prefixes
-    document.querySelectorAll('.op-prefix-input').forEach(input => {
-      state.globals.opPrefixes[input.dataset.op] = input.value;
-    });
+    var prefixInputs = document.querySelectorAll('.op-prefix-input');
+    for (var i = 0; i < prefixInputs.length; i++) {
+      state.globals.opPrefixes[prefixInputs[i].dataset.op] = prefixInputs[i].value;
+    }
 
     document.getElementById('settings-modal').classList.add('hidden');
     scheduleAutoSave();
@@ -314,13 +371,13 @@ function handleFileImport(content, fileName) {
   if (fileName.endsWith('.json')) {
     // Load project file
     try {
-      const loaded = loadProject(content);
-      state.globals = { ...defaultGlobals(), ...loaded.globals };
+      var loaded = PSB.loadProject(content);
+      state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
       state.rows = loaded.rows;
       recomputeAll();
       syncGlobalsToUI();
-      renderOpBar(state.globals.ops, handleRemoveOp);
-      closeSidebar();
+      PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+      PSB.closeSidebar();
     } catch (err) {
       alert('Failed to load project: ' + err.message);
     }
@@ -328,28 +385,28 @@ function handleFileImport(content, fileName) {
   }
 
   // Parse CSV
-  const rawRows = parseCSV(content);
+  var rawRows = PSB.parseCSV(content);
   if (rawRows.length === 0) {
     alert('No valid data found in CSV.');
     return;
   }
 
   // Create row objects
-  resetIdCounter();
-  state.rows = rawRows.map(raw => createRow(raw));
+  PSB.resetIdCounter();
+  state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
 
   // Recompute all and render
   recomputeAll();
-  closeSidebar();
+  PSB.closeSidebar();
 
-  console.log(`Imported ${state.rows.length} rows from ${fileName}`);
+  console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
 }
 
 // ═══════════════════════════════════════════════════════════
 // ROW USER CHANGE HANDLER
 // ═══════════════════════════════════════════════════════════
 function handleRowUserChange(rowId, changes) {
-  const row = state.rows.find(r => r.id === rowId);
+  var row = state.rows.find(function(r) { return r.id === rowId; });
   if (!row) return;
 
   // Merge changes into user state
@@ -361,28 +418,32 @@ function handleRowUserChange(rowId, changes) {
   }
 
   // Recompute this row
-  recompute(row, state.globals);
+  PSB.recompute(row, state.globals);
 
   // Re-render table and sidebar
-  renderTable(state.rows);
+  PSB.renderTable(state.rows);
 
   // Update sidebar if this row is selected
-  if (getSelectedRowId() === rowId) {
-    // The sidebar will be repopulated by selectRow in renderTable
-    // But since renderTable rebuilds rows, we need to re-select
-    const tr = document.querySelector(`#table-body tr[data-row-id="${rowId}"]`);
+  if (PSB.getSelectedRowId() === rowId) {
+    // Re-select the row in the table
+    var tr = document.querySelector('#table-body tr[data-row-id="' + rowId + '"]');
     if (tr) tr.classList.add('selected');
 
     // Update sidebar preview values
-    const c = row.computed;
+    var c = row.computed;
     document.getElementById('sidebar-out-spec').textContent = c.outDrawingSpec || '—';
     document.getElementById('sidebar-out-nominal').textContent = c.outNominal || '—';
     document.getElementById('sidebar-out-tol').textContent = c.outTolerance || '—';
 
     // Update status buttons
-    document.querySelectorAll('.btn-status').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.status === row.user.status);
-    });
+    var statusBtns = document.querySelectorAll('.btn-status');
+    for (var i = 0; i < statusBtns.length; i++) {
+      if (statusBtns[i].dataset.status === row.user.status) {
+        statusBtns[i].classList.add('active');
+      } else {
+        statusBtns[i].classList.remove('active');
+      }
+    }
   }
 
   scheduleAutoSave();
@@ -392,21 +453,21 @@ function handleRowUserChange(rowId, changes) {
 // RECOMPUTE ALL ROWS
 // ═══════════════════════════════════════════════════════════
 function recomputeAll() {
-  for (const row of state.rows) {
-    recompute(row, state.globals);
+  for (var i = 0; i < state.rows.length; i++) {
+    PSB.recompute(state.rows[i], state.globals);
   }
-  renderTable(state.rows);
+  PSB.renderTable(state.rows);
   scheduleAutoSave();
 }
 
 // ═══════════════════════════════════════════════════════════
 // AUTO-SAVE (debounced)
 // ═══════════════════════════════════════════════════════════
-let autoSaveTimer = null;
+var autoSaveTimer = null;
 
 function scheduleAutoSave() {
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => {
-    autoSave(state);
+  autoSaveTimer = setTimeout(function() {
+    PSB.autoSave(state);
   }, 1000);
 }
