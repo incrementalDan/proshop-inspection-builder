@@ -95,7 +95,7 @@ Tol ±, IPC?, Inspection Frequency, Show Dim When?
 
 Key differences in output:
 - Op # is populated (user selects which ops)
-- Dim Tag gets a prefix (user-configurable per op)
+- Dim Tag gets a prefix - formatted = frequency letter code+"REF-"+ Dim tag #(follow the = Inspection Frequency → Output Tag Naming Logic below)
 - Nom Dim includes plating annotation like `(+2xI)` or `(-2xE)`
 - Values may be unit-converted (mm→inch or vice versa)
 - IPC, Frequency, Equipment are populated from user selections
@@ -179,7 +179,7 @@ Drawing spec = final post-plating dimension. We compute the pre-plating machinin
 
 ### Purpose
 This logic controls the prefix letter used in the generated Output Tag for non-OP2000 operations, so ProShop lists characteristics in the intended order based on inspection priority/frequency.
-
+Formatting = frequency letter code+"REF-"+ Dim tag . So for Dim Tag #7 and frequency of 1 in 50 output = HREF-07 . another example Dim Tag #23 and frequency of 1 in 2 output = BREF-23 
 OP2000 does not use this naming logic.
 
 ### Rule 1: Frequency dropdown values
@@ -214,7 +214,7 @@ Use this mapping exactly:
 | blank                | no letter     |
 
 This is a fixed one-to-one mapping.
-Do not dynamically rank or sort frequencies.
+Do not dynamically rank or sort frequencies unless Inspection Frequeny is updated.
 Do not infer letters based on which frequencies exist in the current file.
 
 ### Rule 3: Output Tag format for non-OP2000 ops
