@@ -199,6 +199,10 @@ function populateSidebar(rowId) {
   var c = row.computed;
   var u = row.user;
 
+  // Wire up handlers FIRST — cloneNode wipes select values, so we must
+  // clone before setting any values, then set values on the clones in DOM.
+  wireUpSidebarHandlers(rowId);
+
   // Header
   document.getElementById('sidebar-dimtag').textContent = c.dimTag || '—';
 
@@ -239,14 +243,14 @@ function populateSidebar(rowId) {
   setChecked('sidebar-auto-nominal', u.autoNominal);
   setChecked('sidebar-pin-gage-enabled', u.pinGageEnabled);
 
-  // Plating
+  // Plating — set AFTER wireUpSidebarHandlers so clone is already in DOM
   document.getElementById('sidebar-plating-mode').value = u.platingMode;
 
-  // Inspection
+  // Inspection — populate options then set value
   populateEquipmentDropdown(state.globals.equipmentList, u.inspectionEquipment);
   document.getElementById('sidebar-frequency').value = u.inspectionFrequency || '';
 
-  // Status buttons
+  // Status buttons — cloned by wireUpSidebarHandlers, set active state after
   var statusBtns = document.querySelectorAll('.btn-status');
   for (var i = 0; i < statusBtns.length; i++) {
     if (statusBtns[i].dataset.status === u.status) {
@@ -255,9 +259,6 @@ function populateSidebar(rowId) {
       statusBtns[i].classList.remove('active');
     }
   }
-
-  // Wire up change handlers (remove old ones first by replacing elements)
-  wireUpSidebarHandlers(rowId);
 }
 
 /**
