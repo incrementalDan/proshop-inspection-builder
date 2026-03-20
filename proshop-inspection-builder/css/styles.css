@@ -116,6 +116,13 @@ html, body {
   white-space: nowrap;
 }
 
+.app-version {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 6px;
+  font-weight: 400;
+}
+
 .header-controls {
   display: flex;
   align-items: center;
