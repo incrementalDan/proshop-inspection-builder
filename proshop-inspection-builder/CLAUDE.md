@@ -124,10 +124,11 @@ Key differences in output:
 - Asymmetric: `Ø0.100 +0.010 -0.002` → nominal = 0.100 + (0.010 - 0.002)/2 = 0.104, tol = ±0.006
 
 ### Plating (4 modes)
-- `+1x Internal`: subtract 1× plating thickness from nominal
-- `+2x Internal`: subtract 2× plating thickness from nominal
-- `-1x External`: add 1× plating thickness to nominal
-- `-2x External`: add 2× plating thickness to nominal
+Drawing spec = final post-plating dimension. We compute the pre-plating machining target.
+- `+1x Internal`: ADD 1× plating to nominal (1 side — hole shrinks after plating, so machine larger)
+- `+2x Internal`: ADD 2× plating to nominal (2 sides, e.g. diameter — hole shrinks, machine larger)
+- `-1x External`: SUBTRACT 1× plating from nominal (1 side — part grows after plating, so machine smaller)
+- `-2x External`: SUBTRACT 2× plating from nominal (2 sides, e.g. OD — part grows, machine smaller)
 - **NEVER apply plating to tolerance — only to nominal**
 
 ### OP2000 (CRITICAL)

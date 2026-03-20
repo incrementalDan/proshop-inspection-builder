@@ -48,29 +48,32 @@ function centerNominal(nominal, tolPlus, tolMinus) {
 /**
  * Apply plating offset to nominal.
  *
- * Internal modes (hole gets smaller after plating → pre-plating must be larger):
- *   +1xI: subtract 1× plating from nominal
- *   +2xI: subtract 2× plating from nominal
+ * The drawing spec is the FINAL (post-plating) dimension.
+ * We compute the PRE-plating machining target.
  *
- * External modes (external surface grows after plating → pre-plating must be smaller):
- *   -1xE: add 1× plating to nominal
- *   -2xE: add 2× plating to nominal
+ * Internal modes (hole shrinks after plating → machine LARGER):
+ *   +1xI: add 1× plating to nominal (1 side, e.g. depth)
+ *   +2xI: add 2× plating to nominal (2 sides, e.g. diameter)
  *
- * @param {number} nominal — current nominal value
- * @param {number} platingThickness — plating thickness (positive number)
+ * External modes (part grows after plating → machine SMALLER):
+ *   -1xE: subtract 1× plating from nominal (1 side)
+ *   -2xE: subtract 2× plating from nominal (2 sides, e.g. OD)
+ *
+ * @param {number} nominal — current nominal value (drawing spec)
+ * @param {number} platingThickness — plating thickness per side (positive number)
  * @param {string} mode — '+1xI', '+2xI', '-1xE', '-2xE'
- * @returns {number} adjusted nominal
+ * @returns {number} adjusted nominal (pre-plating machining target)
  */
 function applyPlating(nominal, platingThickness, mode) {
   switch (mode) {
     case '+1xI':
-      return nominal - (1 * platingThickness);
-    case '+2xI':
-      return nominal - (2 * platingThickness);
-    case '-1xE':
       return nominal + (1 * platingThickness);
-    case '-2xE':
+    case '+2xI':
       return nominal + (2 * platingThickness);
+    case '-1xE':
+      return nominal - (1 * platingThickness);
+    case '-2xE':
+      return nominal - (2 * platingThickness);
     default:
       return nominal;
   }
