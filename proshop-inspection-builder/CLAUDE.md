@@ -174,6 +174,109 @@ Key differences in output:
 - Use descriptive commit messages: `feat: add tolerance parsing`, `fix: OP2000 bypass`
 - Tag milestones: `v0.1-import`, `v0.2-parsing`, `v0.3-math`, `v0.4-ui`, `v0.5-export`
 
+## Inspection Frequency → Output Tag Naming Logic
+
+### Purpose
+This logic controls the prefix letter used in the generated Output Tag for non-OP2000 operations, so ProShop lists characteristics in the intended order based on inspection priority/frequency.
+
+OP2000 does not use this naming logic.
+
+### Rule 1: Frequency dropdown values
+Supported values:
+- blank
+- 1 in 1
+- 1 in 2
+- 1 in 3
+- 1 in 4
+- 1 in 5
+- 1 in 10
+- 1 in 20
+- 1 in 50
+- First and Last
+
+Default should be blank.
+
+### Rule 2: Frequency → Letter mapping
+Use this mapping exactly:
+
+| Inspection Frequency | Letter Prefix |
+|----------------------|---------------|
+| 1 in 1               | A             |
+| 1 in 2               | B             |
+| 1 in 3               | C             |
+| 1 in 4               | D             |
+| 1 in 5               | E             |
+| 1 in 10              | F             |
+| 1 in 20              | G             |
+| 1 in 50              | H             |
+| First and Last       | I             |
+| blank                | no letter     |
+
+This is a fixed one-to-one mapping.
+Do not dynamically rank or sort frequencies.
+Do not infer letters based on which frequencies exist in the current file.
+
+### Rule 3: Output Tag format for non-OP2000 ops
+For non-OP2000 operations, generate:
+```
+<LetterPrefix>REF-<two-digit Dim Tag #>
+```
+
+Examples:
+- Dim Tag 2, Frequency 1 in 1 → `AREF-02`
+- Dim Tag 7, Frequency 1 in 20 → `GREF-07`
+- Dim Tag 13, Frequency 1 in 5 → `EREF-13`
+
+If frequency is blank:
+- no letter prefix
+- format becomes: `REF-<two-digit Dim Tag #>`
+- Example: Dim Tag 4, blank frequency → `REF-04`
+
+### Rule 4: Dim Tag formatting
+The numeric Dim Tag portion must:
+- use the imported Dim Tag number
+- be zero-padded to two digits for single-digit numbers
+
+Examples:
+- 1 → 01
+- 7 → 07
+- 12 → 12
+
+If the Dim Tag is non-numeric or unusual, preserve it as-is after `REF-`.
+
+### Rule 5: OP2000 exception
+For OP2000 only:
+- do not use frequency letters
+- do not use `REF-`
+- output the raw imported Dim Tag # only
+
+Example: Dim Tag 13 → `13`
+
+This applies only to OP2000 export. The internal row may still store an Output Tag for the production ops.
+
+### Rule 6: Output Tag should auto-generate, but remain overrideable
+The app should auto-generate Output Tag from:
+- Dim Tag #
+- Inspection Frequency
+
+However, if the user manually edits the Output Tag, that manual value should be preserved unless the user explicitly resets/rebuilds it.
+
+If the app detects the tag is still in an auto-generated form, it may safely update it when frequency changes.
+
+Auto-generated patterns include:
+- `REF-02`
+- `AREF-02`
+- `BREF-02`
+- … through `IREF-02`
+
+### Rule 7: Purpose of this logic
+This naming convention is used so that in ProShop:
+- more frequently inspected characteristics sort toward the top
+- dimensional groups appear in a predictable order
+- the user can visually infer inspection priority from the tag prefix
+
+This is an ordering / readability tool, not a math function.
+
 ## Common Pitfalls (from previous attempts)
 - Do NOT duplicate calculation logic between UI and export — both read `computed`
 - Do NOT apply math to OP2000 rows
