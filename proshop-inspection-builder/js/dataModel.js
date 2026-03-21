@@ -15,6 +15,42 @@ window.PSB = window.PSB || {};
 // ── Row ID counter ────────────────────────────────────────
 var _nextId = 1;
 
+// ── Frequency → Letter mapping (fixed, never dynamic) ────
+var FREQ_LETTER_MAP = {
+  '1 in 1': 'A',
+  '1 in 2': 'B',
+  '1 in 3': 'C',
+  '1 in 4': 'D',
+  '1 in 5': 'E',
+  '1 in 10': 'F',
+  '1 in 20': 'G',
+  '1 in 50': 'H',
+  'First and Last': 'I',
+};
+
+/**
+ * Generate the Output Tag for a dim tag + frequency.
+ *
+ * Non-OP2000: <LetterPrefix>REF-<zero-padded dim tag>
+ * OP2000: raw dim tag only (no REF-, no letter)
+ *
+ * @param {string} dimTag — raw dim tag value
+ * @param {string} frequency — inspection frequency string
+ * @param {boolean} isOp2000
+ * @returns {string}
+ */
+function generateOutputTag(dimTag, frequency, isOp2000) {
+  // Zero-pad to 2 digits if numeric
+  var padded = /^\d+$/.test(dimTag) ? dimTag.padStart(2, '0') : dimTag;
+
+  if (isOp2000) {
+    return padded;
+  }
+
+  var letter = FREQ_LETTER_MAP[frequency] || '';
+  return letter + 'REF-' + padded;
+}
+
 /**
  * Default global settings
  */
@@ -28,7 +64,6 @@ function defaultGlobals() {
     inchPrecision: 4,
     mmPrecision: 3,
     ops: [50, 60],            // default OPs
-    opPrefixes: { 50: '', 60: '' },
     equipmentList: [
       'Calipers',
       'Micrometer',
@@ -105,6 +140,7 @@ function recompute(row, globals) {
     row.computed = {
       isNote: true,
       dimTag: raw.dimTag || '',
+      outputTag: generateOutputTag(raw.dimTag || '', user.inspectionFrequency || '', false),
       drawingSpec: raw.drawingSpec || '',
       outDrawingSpec: raw.drawingSpec || '',
       inputSpec: raw.drawingSpec || '',
@@ -233,10 +269,18 @@ function recompute(row, globals) {
     outNominal = dualNomStr + ' ' + platingAnnotation;
   }
 
+  // ── Step 10: Auto-generate Output Tag from frequency ───
+  var outputTag = generateOutputTag(
+    raw.dimTag || '',
+    user.inspectionFrequency || '',
+    false  // non-OP2000 for display
+  );
+
   // ── Assemble computed object ───────────────────────────
   row.computed = {
     isNote: false,
     dimTag: raw.dimTag || '',
+    outputTag: outputTag,
     specUnit1: raw.specUnit1 || specUnits.su1 || '',
     specUnit2: raw.specUnit2 || specUnits.su2 || '',
     specUnit3: raw.specUnit3 || specUnits.su3 || '',
@@ -293,19 +337,20 @@ function getExportData(row, opNumber, globals) {
   var user = row.user;
   var computed = row.computed;
   var isOp2000 = opNumber === 2000;
-  var prefix = globals.opPrefixes[opNumber] || '';
 
-  // Zero-pad dim tag to 2 digits if numeric
-  var dimTagStr = /^\d+$/.test(computed.dimTag)
-    ? computed.dimTag.padStart(2, '0')
-    : computed.dimTag;
+  // Auto-generate Output Tag from frequency + dim tag
+  var outputTag = generateOutputTag(
+    computed.dimTag || '',
+    computed.inspectionFrequency || '',
+    isOp2000
+  );
 
   if (computed.isNote) {
     // Notes export with drawing spec text only
     return {
       'Internal Part #': '',
       'Op #': opNumber,
-      'Dim Tag #': prefix + dimTagStr,
+      'Dim Tag #': outputTag,
       'Ref Loc': raw.refLoc || '',
       'Char Dsg': '',
       'Spec Unit 1': '',
@@ -322,11 +367,11 @@ function getExportData(row, opNumber, globals) {
   }
 
   if (isOp2000) {
-    // OP2000: raw values only, no math applied
+    // OP2000: raw dim tag only, no REF-, no letter, no math
     return {
       'Internal Part #': '',
       'Op #': 2000,
-      'Dim Tag #': prefix + dimTagStr,
+      'Dim Tag #': outputTag,
       'Ref Loc': raw.refLoc || '',
       'Char Dsg': raw.charDsg || '',
       'Spec Unit 1': raw.specUnit1 || '',
@@ -350,7 +395,7 @@ function getExportData(row, opNumber, globals) {
   return {
     'Internal Part #': '',
     'Op #': opNumber,
-    'Dim Tag #': prefix + dimTagStr,
+    'Dim Tag #': outputTag,
     'Ref Loc': raw.refLoc || '',
     'Char Dsg': '',
     'Spec Unit 1': computed.specUnit1,
@@ -380,3 +425,4 @@ PSB.createRow = createRow;
 PSB.recompute = recompute;
 PSB.getExportData = getExportData;
 PSB.resetIdCounter = resetIdCounter;
+PSB.generateOutputTag = generateOutputTag;

@@ -227,11 +227,6 @@ function bindOpBar() {
     state.globals.ops.push(val);
     state.globals.ops.sort(function(a, b) { return a - b; });
 
-    // Initialize prefix if not exists
-    if (!state.globals.opPrefixes[val]) {
-      state.globals.opPrefixes[val] = '';
-    }
-
     input.value = '';
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     recomputeAll();
@@ -322,38 +317,6 @@ function bindSettingsModal() {
     document.getElementById('settings-equipment-list').value =
       state.globals.equipmentList.join('\n');
 
-    // Populate op prefixes
-    var prefixContainer = document.getElementById('settings-op-prefixes');
-    prefixContainer.innerHTML = '';
-    for (var i = 0; i < state.globals.ops.length; i++) {
-      var op = state.globals.ops[i];
-      var color = PSB.getOpColor ? PSB.getOpColor(op) : '#4a9eff';
-      var row = document.createElement('div');
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.gap = '8px';
-      row.style.padding = '4px 0';
-
-      var label = document.createElement('label');
-      label.textContent = 'OP ' + op + ':';
-      label.style.width = '60px';
-      label.style.fontSize = '12px';
-      label.style.color = color;
-      label.style.fontWeight = '600';
-
-      var input = document.createElement('input');
-      input.type = 'text';
-      input.value = state.globals.opPrefixes[op] || '';
-      input.placeholder = 'e.g., HREF-';
-      input.style.flex = '1';
-      input.dataset.op = op;
-      input.className = 'op-prefix-input';
-
-      row.appendChild(label);
-      row.appendChild(input);
-      prefixContainer.appendChild(row);
-    }
-
     document.getElementById('settings-modal').classList.remove('hidden');
   });
 
@@ -364,12 +327,6 @@ function bindSettingsModal() {
       .map(function(s) { return s.trim(); })
       .filter(function(s) { return s !== ''; })
       .sort();
-
-    // Save op prefixes
-    var prefixInputs = document.querySelectorAll('.op-prefix-input');
-    for (var i = 0; i < prefixInputs.length; i++) {
-      state.globals.opPrefixes[prefixInputs[i].dataset.op] = prefixInputs[i].value;
-    }
 
     document.getElementById('settings-modal').classList.add('hidden');
     scheduleAutoSave();
@@ -446,6 +403,7 @@ function handleRowUserChange(rowId, changes) {
     document.getElementById('sidebar-out-spec').textContent = c.outDrawingSpec || '—';
     document.getElementById('sidebar-out-nominal').textContent = c.outNominal || '—';
     document.getElementById('sidebar-out-tol').textContent = c.outTolerance || '—';
+    document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
 
     // Update status buttons
     var statusBtns = document.querySelectorAll('.btn-status');

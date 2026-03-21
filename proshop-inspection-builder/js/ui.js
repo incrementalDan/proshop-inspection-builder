@@ -205,6 +205,7 @@ function populateSidebar(rowId) {
 
   // Header
   document.getElementById('sidebar-dimtag').textContent = c.dimTag || '—';
+  document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
 
   // Output preview
   document.getElementById('sidebar-out-spec').textContent = c.outDrawingSpec || '—';
