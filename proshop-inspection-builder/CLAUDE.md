@@ -16,7 +16,7 @@ A browser-based, local-first engineering tool that:
   - `user` = user overrides and settings for this row
   - `computed` = derived output values (what the table/sidebar/export reads)
 - **All UI, sidebar, and export read from `computed`** — never duplicate calculations.
-- **OP2000 is sacred**: NO math, NO unit conversion, NO nominal centering. Only parsing cleanup.
+- **OP2000 is sacred**: Only Type 1 (parsing) and Type 2 (manual overrides). No math, no unit conversion, no nominal centering. OP2000 values are the base from which other OP values are derived.
 
 ## File Structure & Module Responsibilities
 ```
@@ -102,7 +102,49 @@ Key differences in output:
 
 ## Key Business Rules
 
-### Parsing
+### Data Transformation Pipeline (Change Types)
+
+There are 4 types of transformations applied from import data to export data. They execute in order, and each builds on the output of the previous.
+
+**Type 1 — Parsing**
+Cleans up messy Ground Control import data by placing values in the correct ProShop columns. Tolerance data sometimes ends up in Drawing Spec; spec unit identifiers sometimes appear in the wrong field. Parsing corrects column placement and formatting without altering the underlying data. Implemented by `parseSpecUnits()`, `parseTolerance()`, `detectFeatureType()`.
+
+**Type 2 — Manual Overrides**
+User corrections for data that was originally incorrect or misread by Ground Control. Stored in `row.user.overrides`. Primarily applies to Drawing Spec and Tolerance but can apply to any editable field (SU1, SU2, SU3, Output Nominal, Input Tolerance, Pin Gage).
+
+**Type 3 — Modifiers**
+Sidebar-driven transformations: plating adjustments, unit conversion, inspection frequency tagging, pin/gage computation. Applied after types 1, 2, and 4.
+
+**Type 4 — Auto-Nominal Centering**
+Converts asymmetric tolerances to symmetric by shifting the nominal value. Applied before type 3 modifiers so all subsequent math uses centered values.
+
+#### Pipeline execution order
+
+```
+Raw CSV → Parse (Type 1) → Override (Type 2) → [OP2000 values]
+                                                      ↓
+                                          Auto-Nominal (Type 4)
+                                                      ↓
+                                          Modifiers (Type 3)
+                                                      ↓
+                                              [Other OP values]
+```
+
+The OP2000 computed values are the **base** from which all other OP values are derived. Types 3 and 4 build on top of the OP2000 values — they are not independent calculations from raw data. This ensures overrides always propagate correctly to every OP.
+
+#### Applicability by OP type
+
+| Change Type | OP2000 | Other OPs |
+|---|---|---|
+| 1 — Parsing | ✓ | ✓ |
+| 2 — Manual Overrides | ✓ | ✓ |
+| 3 — Modifiers | ✗ | ✓ |
+| 4 — Auto-Nominal | ✗ | ✓ |
+
+#### Implementation in `recompute()`
+The pipeline stores intermediate OP2000 values in `computed` (e.g., `computed.op2000Nominal`, `computed.op2000Tolerance`, `computed.op2000DrawingSpec`). These hold type 1+2 results only. The other OP output fields (`outNominal`, `outTolerance`, `outDrawingSpec`) are derived FROM the OP2000 values after applying types 3 and 4. The `getExportData()` function reads OP2000 fields for OP2000 export and the full-pipeline fields for other OPs.
+
+### Parsing Rules
 - **Notes**: Rows with GD&T symbols, thread specs, or long text → `isNote = true`, skip all math
 - **Diameter**: Normalize `⌀` to `Ø` internally. Always place in Spec Unit 1. Strip from other fields.
 - **Spec Unit 1**: Ø, R (radius), base geometry identifiers
@@ -111,13 +153,12 @@ Key differences in output:
 - **Tolerance**: Support `±0.005`, `+0.005 -0.002`, `+.005-.002` formats
 - **Deduplication**: A value should only appear in ONE spec unit field, never repeated across fields
 
-### Math (execution order)
-1. Parse raw values
-2. Extract numeric nominal + tolerances
-3. Nominal centering (if asymmetric tolerance)
-4. Plating adjustment (if plating mode set)
-5. Unit conversion (if target units differ from import units)
-6. Precision formatting
+### OP2000 (CRITICAL)
+- Receives **only** Type 1 (parsing) and Type 2 (manual overrides)
+- NO Type 3 modifiers (no plating, no unit conversion)
+- NO Type 4 auto-nominal centering
+- Output reflects the corrected print values — parsing fixes column placement, overrides fix misreads
+- OP2000 computed values serve as the base for all other OP calculations
 
 ### Nominal Centering
 - Symmetric: `Ø0.100 ±0.005` → nominal stays 0.100
@@ -130,13 +171,6 @@ Drawing spec = final post-plating dimension. We compute the pre-plating machinin
 - `-1x External`: SUBTRACT 1× plating from nominal (1 side — part grows after plating, so machine smaller)
 - `-2x External`: SUBTRACT 2× plating from nominal (2 sides, e.g. OD — part grows, machine smaller)
 - **NEVER apply plating to tolerance — only to nominal**
-
-### OP2000 (CRITICAL)
-- NO math of any kind
-- NO unit conversion
-- NO nominal centering
-- ONLY formatting/parsing cleanup
-- Output must match print values exactly
 
 ### Pin Gage
 - GO = nominal - tolerance
@@ -280,7 +314,8 @@ This is an ordering / readability tool, not a math function.
 
 ## Common Pitfalls (from previous attempts)
 - Do NOT duplicate calculation logic between UI and export — both read `computed`
-- Do NOT apply math to OP2000 rows
+- Do NOT apply Type 3 or Type 4 changes to OP2000 — only Type 1 (parsing) and Type 2 (overrides)
+- OP2000 computed values are the BASE for other OPs — do not calculate other OP values independently from raw data
 - Do NOT lose the original raw data when user edits — raw is immutable
 - Do NOT use frameworks or build tools — this must open from index.html directly
 - Do NOT put plating adjustment on tolerance — only on nominal

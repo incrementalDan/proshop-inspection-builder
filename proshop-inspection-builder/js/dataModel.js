@@ -170,11 +170,12 @@ function recompute(row, globals) {
     return row;
   }
 
-  // ── Step 1: Parse spec units from drawing spec text ────
+  // ══════════════════════════════════════════════════════════
+  // Type 1 — Parsing: clean up raw data into correct columns
+  // ══════════════════════════════════════════════════════════
   var specUnits = PSB.parseSpecUnits(raw.drawingSpec || '');
   var tolParsed = PSB.parseTolerance(raw.toleranceText || raw.tolerance || '');
 
-  // ── Step 2: Extract numeric values ─────────────────────
   var nominal = parseFloat(raw.nominalText || raw.nominal || raw.drawingSpec) || 0;
   var tolPlus = tolParsed.tolPlus;
   var tolMinus = tolParsed.tolMinus;
@@ -188,12 +189,26 @@ function recompute(row, globals) {
     }
   }
 
-  // Store originals before math
+  // ══════════════════════════════════════════════════════════
+  // Type 2 — Manual Overrides: apply user corrections
+  // After this point we have the OP2000 base values.
+  // ══════════════════════════════════════════════════════════
+  var op2000SpecUnit1 = user.overrides.specUnit1 !== null ? user.overrides.specUnit1 : (raw.specUnit1 || specUnits.su1 || '');
+  var op2000SpecUnit2 = user.overrides.specUnit2 !== null ? user.overrides.specUnit2 : (raw.specUnit2 || specUnits.su2 || '');
+  var op2000SpecUnit3 = user.overrides.specUnit3 !== null ? user.overrides.specUnit3 : (raw.specUnit3 || specUnits.su3 || '');
+  var op2000DrawingSpec = user.overrides.outDrawingSpec !== null ? user.overrides.outDrawingSpec : (raw.drawingSpec || '');
+  var op2000Nominal = nominal;  // numeric, from parsed raw
+  var op2000Tolerance = user.overrides.outTolerance !== null ? user.overrides.outTolerance : (raw.tolerance || '');
+  var op2000InputTolerance = user.overrides.inputTolerance !== null ? user.overrides.inputTolerance : (raw.tolerance || '');
+
+  // Store originals (pre-math) for reference
   var originalNominal = nominal;
   var originalTolPlus = tolPlus;
   var originalTolMinus = tolMinus;
 
-  // ── Step 3: Nominal centering (skip for OP2000) ────────
+  // ══════════════════════════════════════════════════════════
+  // Type 4 — Auto-Nominal Centering (derives from OP2000 base)
+  // ══════════════════════════════════════════════════════════
   if (user.autoNominal && !tolParsed.isSymmetric && (tolPlus !== tolMinus)) {
     var centered = PSB.centerNominal(nominal, tolPlus, tolMinus);
     nominal = centered.nominal;
@@ -201,7 +216,11 @@ function recompute(row, globals) {
     tolMinus = centered.tolSymmetric;
   }
 
-  // ── Step 4: Plating (skip for OP2000) ──────────────────
+  // ══════════════════════════════════════════════════════════
+  // Type 3 — Modifiers (derives from centered values)
+  // ══════════════════════════════════════════════════════════
+
+  // ── Plating ──────────────────────────────────────────────
   var platingAnnotation = '';
   if (user.platingMode !== 'none' && globals.platingThickness > 0) {
     var platingValue = globals.platingThickness;
@@ -223,35 +242,30 @@ function recompute(row, globals) {
     platingAnnotation = modeMap[user.platingMode] || '';
   }
 
-  // ── Step 5: Dual-unit formatting ──────────────────────
-  // Primary = import units, Secondary = other unit system
-  // Display: "Primary [Secondary]" like an engineering print
+  // ── Dual-unit formatting ─────────────────────────────────
   var importUnits = globals.importUnits || 'mm';
   var secondaryUnits = importUnits === 'mm' ? 'inch' : 'mm';
   var primaryPrec = importUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
   var secondaryPrec = secondaryUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
 
-  // Primary values are nominal/tolPlus/tolMinus (already in import units after centering+plating)
   var primaryNom = nominal;
   var primaryTolPlus = tolPlus;
   var primaryTolMinus = tolMinus;
 
-  // Secondary values = converted
   var secondaryNom = PSB.convertUnits(nominal, importUnits, secondaryUnits);
   var secondaryTolPlus = PSB.convertUnits(tolPlus, importUnits, secondaryUnits);
   var secondaryTolMinus = PSB.convertUnits(tolMinus, importUnits, secondaryUnits);
 
-  // ── Step 6: Precision formatting ───────────────────────
+  // ── Precision formatting ─────────────────────────────────
   var nominalStr = PSB.formatPrecision(primaryNom, primaryPrec);
   var tolStr = PSB.formatPrecision(primaryTolPlus, primaryPrec);
   var secNomStr = PSB.formatPrecision(secondaryNom, secondaryPrec);
   var secTolStr = PSB.formatPrecision(secondaryTolPlus, secondaryPrec);
 
-  // Combined display strings: "Primary [Secondary]"
   var dualNomStr = nominalStr + ' [' + secNomStr + ']';
   var dualTolStr = tolStr + ' [' + secTolStr + ']';
 
-  // ── Step 7: Pin/Gage computation (use secondary/export units) ──
+  // ── Pin/Gage computation ─────────────────────────────────
   var pinGageStr = '';
   if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
     pinGageStr = user.overrides.pinGageValue;
@@ -260,7 +274,7 @@ function recompute(row, globals) {
     pinGageStr = pg.formatted;
   }
 
-  // ── Step 8: Build output drawing spec ──────────────────
+  // ── Build output display values (other OPs) ──────────────
   var outDrawingSpec = user.overrides.outDrawingSpec !== null
     ? user.overrides.outDrawingSpec
     : dualNomStr;
@@ -269,30 +283,35 @@ function recompute(row, globals) {
     ? user.overrides.outTolerance
     : dualTolStr;
 
-  // ── Step 9: Build nominal display with plating annotation
   var outNominal = dualNomStr;
   if (platingAnnotation) {
     outNominal = dualNomStr + ' ' + platingAnnotation;
   }
 
-  // ── Step 10: Auto-generate Output Tag from frequency ───
+  // ── Output Tag ───────────────────────────────────────────
   var outputTag = generateOutputTag(
     raw.dimTag || '',
     user.inspectionFrequency || '',
     false  // non-OP2000 for display
   );
 
-  // ── Assemble computed object ───────────────────────────
+  // ── Assemble computed object ─────────────────────────────
   row.computed = {
     isNote: false,
     dimTag: raw.dimTag || '',
     outputTag: outputTag,
-    specUnit1: user.overrides.specUnit1 !== null ? user.overrides.specUnit1 : (raw.specUnit1 || specUnits.su1 || ''),
-    specUnit2: user.overrides.specUnit2 !== null ? user.overrides.specUnit2 : (raw.specUnit2 || specUnits.su2 || ''),
-    specUnit3: user.overrides.specUnit3 !== null ? user.overrides.specUnit3 : (raw.specUnit3 || specUnits.su3 || ''),
+    specUnit1: op2000SpecUnit1,
+    specUnit2: op2000SpecUnit2,
+    specUnit3: op2000SpecUnit3,
     inputSpec: raw.drawingSpec || '',
-    inputTolerance: user.overrides.inputTolerance !== null ? user.overrides.inputTolerance : (raw.tolerance || ''),
+    inputTolerance: op2000InputTolerance,
 
+    // OP2000 base values (Type 1 + Type 2 only)
+    op2000DrawingSpec: op2000DrawingSpec,
+    op2000Nominal: op2000Nominal,
+    op2000Tolerance: op2000Tolerance,
+
+    // Other OP values (derived from OP2000 base + Types 3 & 4)
     outDrawingSpec: outDrawingSpec,
     outNominal: user.overrides.outNominal !== null ? user.overrides.outNominal : outNominal,
     outTolerance: outTolerance,
@@ -331,7 +350,8 @@ function recompute(row, globals) {
 
 /**
  * Get flat export data for a row + specific op.
- * OP2000 returns raw values only.
+ * OP2000 returns Type 1+2 values (parsed + overridden).
+ * Other OPs return full pipeline values (Types 1-4).
  *
  * @param {Object} row
  * @param {number} opNumber
@@ -373,20 +393,20 @@ function getExportData(row, opNumber, globals) {
   }
 
   if (isOp2000) {
-    // OP2000: raw dim tag only, no REF-, no letter, no math
+    // OP2000: Type 1 (parsing) + Type 2 (overrides) only. No math, no unit conversion.
     return {
       'Internal Part #': '',
       'Op #': 2000,
       'Dim Tag #': outputTag,
       'Ref Loc': raw.refLoc || '',
       'Char Dsg': raw.charDsg || '',
-      'Spec Unit 1': raw.specUnit1 || '',
-      'Drawing Spec': raw.drawingSpec || '',
-      'Spec Unit 2': raw.specUnit2 || '',
-      'Spec Unit 3': raw.specUnit3 || '',
+      'Spec Unit 1': computed.specUnit1,
+      'Drawing Spec': computed.op2000DrawingSpec,
+      'Spec Unit 2': computed.specUnit2,
+      'Spec Unit 3': computed.specUnit3,
       'Inspec Equip': computed.inspectionEquipment || '',
-      'Nom Dim': raw.nominal || raw.drawingSpec || '',
-      'Tol ±': raw.tolerance || '',
+      'Nom Dim': computed.op2000DrawingSpec,
+      'Tol ±': computed.op2000Tolerance,
       'IPC?': computed.ipc ? 'TRUE' : '',
       'Inspection Frequency': computed.inspectionFrequency || '',
       'Show Dim When?': '',
