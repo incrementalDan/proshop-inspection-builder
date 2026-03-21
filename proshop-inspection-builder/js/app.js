@@ -75,6 +75,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Bind header controls
     bindGlobalControls();
     bindFileButtons();
+    bindNewButton();
     bindSampleButton();
     bindOpBar();
     bindExportModal();
@@ -97,6 +98,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+
+// ═══════════════════════════════════════════════════════════
+// NEW FILE BUTTON
+// ═══════════════════════════════════════════════════════════
+function bindNewButton() {
+  document.getElementById('btn-new').addEventListener('click', function() {
+    if (state.rows.length > 0 && !confirm('Clear all data and start a new file?')) return;
+    PSB.clearAutoSave();
+    state.rows = [];
+    state.globals = PSB.defaultGlobals();
+    syncGlobalsToUI();
+    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+    PSB.renderTable(state.rows);
+    PSB.closeSidebar();
+    console.log('[PSB] New file — state cleared');
+  });
+}
 
 // ═══════════════════════════════════════════════════════════
 // SAMPLE DATA BUTTON
@@ -278,8 +296,15 @@ function openExportModal() {
   var container = document.getElementById('export-op-checkboxes');
   container.innerHTML = '';
 
-  for (var i = 0; i < state.globals.ops.length; i++) {
-    var op = state.globals.ops[i];
+  // Build list: all user ops + always include OP2000
+  var exportOps = state.globals.ops.slice();
+  if (exportOps.indexOf(2000) === -1) {
+    exportOps.push(2000);
+    exportOps.sort(function(a, b) { return a - b; });
+  }
+
+  for (var i = 0; i < exportOps.length; i++) {
+    var op = exportOps[i];
     var color = PSB.getOpColor ? PSB.getOpColor(op) : '#4a9eff';
     var label = document.createElement('label');
     label.style.display = 'flex';
@@ -290,7 +315,7 @@ function openExportModal() {
     var cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.value = op;
-    cb.checked = true;
+    cb.checked = (op !== 2000); // OP2000 unchecked by default
 
     var opSpan = document.createElement('span');
     opSpan.className = 'op-bubble active';

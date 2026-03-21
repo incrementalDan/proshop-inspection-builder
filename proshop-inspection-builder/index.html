@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=8">
+  <link rel="stylesheet" href="css/styles.css?v=9">
 </head>
 <body>
 
@@ -14,7 +14,7 @@
   <header id="global-header">
     <div class="header-left">
       <h1 class="app-title">ProShop Inspection Builder</h1>
-      <span class="app-version">v0.8</span>
+      <span class="app-version">v0.9</span>
     </div>
     <div class="header-controls">
       <div class="control-group">
@@ -44,6 +44,7 @@
         <input type="number" id="mm-precision" value="3" min="1" max="6" step="1">
       </div>
       <div class="header-actions">
+        <button id="btn-new" class="btn btn-secondary" title="Clear all data and start fresh">New</button>
         <button id="btn-sample" class="btn btn-secondary" title="Load sample data for testing">Sample</button>
         <button id="btn-import" class="btn btn-primary">Import CSV</button>
         <button id="btn-export" class="btn btn-accent">Export CSV</button>
@@ -272,13 +273,13 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=8"></script>
-  <script src="js/parser.js?v=8"></script>
-  <script src="js/dataModel.js?v=8"></script>
-  <script src="js/exportEngine.js?v=8"></script>
-  <script src="js/storage.js?v=8"></script>
-  <script src="js/ui.js?v=8"></script>
-  <script src="js/app.js?v=8"></script>
+  <script src="js/mathEngine.js?v=9"></script>
+  <script src="js/parser.js?v=9"></script>
+  <script src="js/dataModel.js?v=9"></script>
+  <script src="js/exportEngine.js?v=9"></script>
+  <script src="js/storage.js?v=9"></script>
+  <script src="js/ui.js?v=9"></script>
+  <script src="js/app.js?v=9"></script>
 
 </body>
 </html>
