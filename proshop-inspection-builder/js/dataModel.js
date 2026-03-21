@@ -181,41 +181,56 @@ function recompute(row, globals) {
     platingAnnotation = modeMap[user.platingMode] || '';
   }
 
-  // ── Step 5: Unit conversion ────────────────────────────
-  if (globals.exportUnits && globals.exportUnits !== globals.importUnits) {
-    nominal = PSB.convertUnits(nominal, globals.importUnits, globals.exportUnits);
-    tolPlus = PSB.convertUnits(tolPlus, globals.importUnits, globals.exportUnits);
-    tolMinus = PSB.convertUnits(tolMinus, globals.importUnits, globals.exportUnits);
-  }
+  // ── Step 5: Dual-unit formatting ──────────────────────
+  // Primary = import units, Secondary = other unit system
+  // Display: "Primary [Secondary]" like an engineering print
+  var importUnits = globals.importUnits || 'mm';
+  var secondaryUnits = importUnits === 'mm' ? 'inch' : 'mm';
+  var primaryPrec = importUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+  var secondaryPrec = secondaryUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+
+  // Primary values are nominal/tolPlus/tolMinus (already in import units after centering+plating)
+  var primaryNom = nominal;
+  var primaryTolPlus = tolPlus;
+  var primaryTolMinus = tolMinus;
+
+  // Secondary values = converted
+  var secondaryNom = PSB.convertUnits(nominal, importUnits, secondaryUnits);
+  var secondaryTolPlus = PSB.convertUnits(tolPlus, importUnits, secondaryUnits);
+  var secondaryTolMinus = PSB.convertUnits(tolMinus, importUnits, secondaryUnits);
 
   // ── Step 6: Precision formatting ───────────────────────
-  var outputUnits = globals.exportUnits || globals.importUnits;
-  var precision = outputUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
-  var nominalStr = PSB.formatPrecision(nominal, precision);
-  var tolStr = PSB.formatPrecision(tolPlus, precision);
+  var nominalStr = PSB.formatPrecision(primaryNom, primaryPrec);
+  var tolStr = PSB.formatPrecision(primaryTolPlus, primaryPrec);
+  var secNomStr = PSB.formatPrecision(secondaryNom, secondaryPrec);
+  var secTolStr = PSB.formatPrecision(secondaryTolPlus, secondaryPrec);
 
-  // ── Step 7: Pin/Gage computation ───────────────────────
+  // Combined display strings: "Primary [Secondary]"
+  var dualNomStr = nominalStr + ' [' + secNomStr + ']';
+  var dualTolStr = tolStr + ' [' + secTolStr + ']';
+
+  // ── Step 7: Pin/Gage computation (use secondary/export units) ──
   var pinGageStr = '';
   if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
     pinGageStr = user.overrides.pinGageValue;
   } else if (user.pinGageEnabled) {
-    var pg = PSB.computePinGage(nominal, tolPlus);
+    var pg = PSB.computePinGage(secondaryNom, secondaryTolPlus, secondaryPrec);
     pinGageStr = pg.formatted;
   }
 
   // ── Step 8: Build output drawing spec ──────────────────
   var outDrawingSpec = user.overrides.outDrawingSpec !== null
     ? user.overrides.outDrawingSpec
-    : nominalStr;
+    : dualNomStr;
 
   var outTolerance = user.overrides.outTolerance !== null
     ? user.overrides.outTolerance
-    : tolStr;
+    : dualTolStr;
 
   // ── Step 9: Build nominal display with plating annotation
-  var outNominal = nominalStr;
+  var outNominal = dualNomStr;
   if (platingAnnotation) {
-    outNominal = nominalStr + ' ' + platingAnnotation;
+    outNominal = dualNomStr + ' ' + platingAnnotation;
   }
 
   // ── Assemble computed object ───────────────────────────
@@ -241,10 +256,18 @@ function recompute(row, globals) {
       tolMinus: originalTolMinus,
     },
     output: {
-      nominal: nominal,
-      tolPlus: tolPlus,
-      tolMinus: tolMinus,
+      nominal: primaryNom,
+      tolPlus: primaryTolPlus,
+      tolMinus: primaryTolMinus,
     },
+    secondary: {
+      nominal: secondaryNom,
+      tolPlus: secondaryTolPlus,
+      tolMinus: secondaryTolMinus,
+    },
+    // Export-ready values (secondary/converted units, no brackets)
+    exportNominal: PSB.formatPrecision(secondaryNom, secondaryPrec),
+    exportTolerance: PSB.formatPrecision(secondaryTolPlus, secondaryPrec),
 
     status: user.status,
     ipc: user.ipc,
@@ -319,7 +342,11 @@ function getExportData(row, opNumber, globals) {
     };
   }
 
-  // Non-OP2000: computed values
+  // Non-OP2000: export uses secondary (converted) unit values, no brackets
+  var exportNom = computed.exportNominal || '';
+  if (computed.platingAnnotation) {
+    exportNom = exportNom + ' ' + computed.platingAnnotation;
+  }
   return {
     'Internal Part #': '',
     'Op #': opNumber,
@@ -327,12 +354,12 @@ function getExportData(row, opNumber, globals) {
     'Ref Loc': raw.refLoc || '',
     'Char Dsg': '',
     'Spec Unit 1': computed.specUnit1,
-    'Drawing Spec': computed.outDrawingSpec,
+    'Drawing Spec': computed.exportNominal || '',
     'Spec Unit 2': computed.specUnit2,
     'Spec Unit 3': computed.specUnit3,
     'Inspec Equip': computed.inspectionEquipment || '',
-    'Nom Dim': computed.outNominal,
-    'Tol ±': computed.outTolerance,
+    'Nom Dim': exportNom,
+    'Tol ±': computed.exportTolerance || '',
     'IPC?': computed.ipc ? 'TRUE' : '',
     'Inspection Frequency': computed.inspectionFrequency || '',
     'Show Dim When?': '',
