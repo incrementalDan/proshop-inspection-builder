@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=6">
+  <link rel="stylesheet" href="css/styles.css?v=9">
 </head>
 <body>
 
@@ -14,7 +14,7 @@
   <header id="global-header">
     <div class="header-left">
       <h1 class="app-title">ProShop Inspection Builder</h1>
-      <span class="app-version">v0.6</span>
+      <span class="app-version">v0.9</span>
     </div>
     <div class="header-controls">
       <div class="control-group">
@@ -44,6 +44,7 @@
         <input type="number" id="mm-precision" value="3" min="1" max="6" step="1">
       </div>
       <div class="header-actions">
+        <button id="btn-new" class="btn btn-secondary" title="Clear all data and start fresh">New</button>
         <button id="btn-sample" class="btn btn-secondary" title="Load sample data for testing">Sample</button>
         <button id="btn-import" class="btn btn-primary">Import CSV</button>
         <button id="btn-export" class="btn btn-accent">Export CSV</button>
@@ -117,7 +118,10 @@
     <div id="sidebar-resizer" class="hidden"></div>
     <aside id="sidebar" class="hidden">
       <div class="sidebar-header">
-        <h2 id="sidebar-dimtag" class="sidebar-dimtag">—</h2>
+        <div>
+          <h2 id="sidebar-dimtag" class="sidebar-dimtag">—</h2>
+          <div id="sidebar-output-tag" class="sidebar-output-tag"></div>
+        </div>
         <button id="sidebar-close" class="btn btn-icon" title="Close">✕</button>
       </div>
 
@@ -236,11 +240,6 @@
           <p class="hint">One item per line. Saved automatically.</p>
           <textarea id="settings-equipment-list" rows="12"></textarea>
         </fieldset>
-        <fieldset>
-          <legend>Dim Tag Prefix (per OP)</legend>
-          <p class="hint">Prefix added to dim tag numbers on export. E.g., "HREF-" for OP 50.</p>
-          <div id="settings-op-prefixes"></div>
-        </fieldset>
       </div>
     </div>
   </div>
@@ -274,13 +273,13 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=6"></script>
-  <script src="js/parser.js?v=6"></script>
-  <script src="js/dataModel.js?v=6"></script>
-  <script src="js/exportEngine.js?v=6"></script>
-  <script src="js/storage.js?v=6"></script>
-  <script src="js/ui.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/mathEngine.js?v=9"></script>
+  <script src="js/parser.js?v=9"></script>
+  <script src="js/dataModel.js?v=9"></script>
+  <script src="js/exportEngine.js?v=9"></script>
+  <script src="js/storage.js?v=9"></script>
+  <script src="js/ui.js?v=9"></script>
+  <script src="js/app.js?v=9"></script>
 
 </body>
 </html>

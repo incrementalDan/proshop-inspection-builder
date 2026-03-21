@@ -619,6 +619,13 @@ td.editable input {
   font-family: var(--font-mono);
 }
 
+.sidebar-output-tag {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
 .sidebar-output-preview {
   padding: 16px;
   background: var(--bg-tertiary);

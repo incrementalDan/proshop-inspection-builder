@@ -17,20 +17,21 @@ var STORAGE_KEY = 'proshop_inspection_builder';
 function autoSave(state) {
   try {
     var serialized = serializeState(state);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
   } catch (e) {
     console.warn('Auto-save failed:', e);
   }
 }
 
 /**
- * Load auto-saved state from localStorage.
+ * Load auto-saved state from sessionStorage.
+ * Data is cleared when the tab/window is closed.
  *
  * @returns {Object|null} — { rows, globals } or null if none found
  */
 function autoLoad() {
   try {
-    var json = localStorage.getItem(STORAGE_KEY);
+    var json = sessionStorage.getItem(STORAGE_KEY);
     if (!json) return null;
     return deserializeState(JSON.parse(json));
   } catch (e) {
@@ -79,7 +80,8 @@ function loadProject(jsonString) {
  * Clear auto-saved state.
  */
 function clearAutoSave() {
-  localStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_KEY); // also clear legacy localStorage
 }
 
 // ── Serialization helpers ─────────────────────────────────
