@@ -48,8 +48,8 @@ function generateCSV(rows, selectedOps, globals) {
     var opNum = selectedOps[oi];
     for (var ri = 0; ri < rows.length; ri++) {
       var row = rows[ri];
-      // Only export rows that have this OP enabled
-      if (row.user.includeOps[opNum] !== true) {
+      // OP2000 exports all rows; other OPs require per-row enablement
+      if (opNum !== 2000 && row.user.includeOps[opNum] !== true) {
         continue;
       }
 

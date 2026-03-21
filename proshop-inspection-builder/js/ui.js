@@ -139,6 +139,7 @@ function buildRowHTML(row) {
   var opBubblesHTML = '<div class="op-bubbles">';
   for (var oi = 0; oi < allOps.length; oi++) {
     var op = allOps[oi];
+    if (op === 2000) continue; // OP2000 is export-only, not shown in table
     var color = getOpColor(op);
     var isActive = enabledOps[op] ? ' active' : '';
     opBubblesHTML += '<span class="op-bubble' + isActive + '" style="--op-c:' + color + ';">' + op + '</span>';
@@ -148,14 +149,14 @@ function buildRowHTML(row) {
   return '' +
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
-    '<td class="col-su1">' + esc(c.specUnit1) + '</td>' +
+    '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
     '<td class="col-drawspec editable">' + esc(c.outDrawingSpec) + '</td>' +
     '<td class="col-inputspec">' + esc(c.inputSpec) + '</td>' +
-    '<td class="col-su2">' + esc(c.specUnit2) + '</td>' +
-    '<td class="col-su3">' + esc(c.specUnit3) + '</td>' +
-    '<td class="col-outnom">' + esc(c.outNominal) + '</td>' +
+    '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
+    '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
+    '<td class="col-outnom editable">' + esc(c.outNominal) + '</td>' +
     '<td class="col-pingage editable">' + esc(c.pinGage) + '</td>' +
-    '<td class="col-inputtol">' + esc(c.inputTolerance) + '</td>' +
+    '<td class="col-inputtol editable">' + esc(c.inputTolerance) + '</td>' +
     '<td class="col-outtol editable">' + esc(c.outTolerance) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
     '<td class="col-ops">' + opBubblesHTML + '</td>';
@@ -217,6 +218,7 @@ function populateSidebar(rowId) {
   opContainer.innerHTML = '';
   for (var oi = 0; oi < state.globals.ops.length; oi++) {
     var op = state.globals.ops[oi];
+    if (op === 2000) continue; // OP2000 is export-only, not shown in sidebar
     var color = getOpColor(op);
     var btn = document.createElement('button');
     btn.className = 'op-toggle' + (u.includeOps[op] ? ' active' : '');
@@ -360,6 +362,7 @@ function renderOpBar(ops, onRemoveOp) {
   container.innerHTML = '';
   for (var i = 0; i < ops.length; i++) {
     var op = ops[i];
+    if (op === 2000) continue; // OP2000 is export-only, not shown in OP bar
     var color = getOpColor(op);
     var tag = document.createElement('span');
     tag.className = 'op-tag';
@@ -493,8 +496,6 @@ function setupTableHeaderClicks() {
 // ── Inline Editing ────────────────────────────────────
 
 function setupInlineEditing(tr, row) {
-  if (row.computed.isNote) return;
-
   var editableCells = tr.querySelectorAll('td.editable');
   for (var i = 0; i < editableCells.length; i++) {
     (function(td) {
@@ -519,13 +520,25 @@ function setupInlineEditing(tr, row) {
           td.textContent = newValue || originalValue;
 
           // Determine which field was edited
+          var ov = Object.assign({}, row.user.overrides);
           if (td.classList.contains('col-drawspec')) {
-            onRowUserChange(row.id, { overrides: Object.assign({}, row.user.overrides, { outDrawingSpec: newValue || null }) });
+            ov.outDrawingSpec = newValue || null;
           } else if (td.classList.contains('col-outtol')) {
-            onRowUserChange(row.id, { overrides: Object.assign({}, row.user.overrides, { outTolerance: newValue || null }) });
+            ov.outTolerance = newValue || null;
           } else if (td.classList.contains('col-pingage')) {
-            onRowUserChange(row.id, { overrides: Object.assign({}, row.user.overrides, { pinGageValue: newValue || null }) });
+            ov.pinGageValue = newValue || null;
+          } else if (td.classList.contains('col-su1')) {
+            ov.specUnit1 = newValue || null;
+          } else if (td.classList.contains('col-su2')) {
+            ov.specUnit2 = newValue || null;
+          } else if (td.classList.contains('col-su3')) {
+            ov.specUnit3 = newValue || null;
+          } else if (td.classList.contains('col-outnom')) {
+            ov.outNominal = newValue || null;
+          } else if (td.classList.contains('col-inputtol')) {
+            ov.inputTolerance = newValue || null;
           }
+          onRowUserChange(row.id, { overrides: ov });
         };
 
         input.addEventListener('blur', commit);

@@ -97,6 +97,11 @@ function defaultUserState() {
       outDrawingSpec: null,  // null = use computed, string = manual override
       outTolerance: null,
       pinGageValue: null,
+      specUnit1: null,
+      specUnit2: null,
+      specUnit3: null,
+      outNominal: null,
+      inputTolerance: null,
     },
   };
 }
@@ -137,20 +142,21 @@ function recompute(row, globals) {
 
   // ── Step 0: If note, skip all math ─────────────────────
   if (user.isNote) {
+    var ov = user.overrides || {};
     row.computed = {
       isNote: true,
       dimTag: raw.dimTag || '',
       outputTag: generateOutputTag(raw.dimTag || '', user.inspectionFrequency || '', false),
       drawingSpec: raw.drawingSpec || '',
-      outDrawingSpec: raw.drawingSpec || '',
+      outDrawingSpec: ov.outDrawingSpec !== null ? ov.outDrawingSpec : (raw.drawingSpec || ''),
       inputSpec: raw.drawingSpec || '',
-      specUnit1: raw.specUnit1 || '',
-      specUnit2: raw.specUnit2 || '',
-      specUnit3: raw.specUnit3 || '',
-      outNominal: '',
-      outTolerance: '',
-      inputTolerance: raw.tolerance || '',
-      pinGage: '',
+      specUnit1: ov.specUnit1 !== null ? ov.specUnit1 : (raw.specUnit1 || ''),
+      specUnit2: ov.specUnit2 !== null ? ov.specUnit2 : (raw.specUnit2 || ''),
+      specUnit3: ov.specUnit3 !== null ? ov.specUnit3 : (raw.specUnit3 || ''),
+      outNominal: ov.outNominal !== null ? ov.outNominal : '',
+      outTolerance: ov.outTolerance !== null ? ov.outTolerance : '',
+      inputTolerance: ov.inputTolerance !== null ? ov.inputTolerance : (raw.tolerance || ''),
+      pinGage: ov.pinGageValue !== null ? ov.pinGageValue : '',
       platingAnnotation: '',
       platingMode: 'none',
       status: user.status,
@@ -281,14 +287,14 @@ function recompute(row, globals) {
     isNote: false,
     dimTag: raw.dimTag || '',
     outputTag: outputTag,
-    specUnit1: raw.specUnit1 || specUnits.su1 || '',
-    specUnit2: raw.specUnit2 || specUnits.su2 || '',
-    specUnit3: raw.specUnit3 || specUnits.su3 || '',
+    specUnit1: user.overrides.specUnit1 !== null ? user.overrides.specUnit1 : (raw.specUnit1 || specUnits.su1 || ''),
+    specUnit2: user.overrides.specUnit2 !== null ? user.overrides.specUnit2 : (raw.specUnit2 || specUnits.su2 || ''),
+    specUnit3: user.overrides.specUnit3 !== null ? user.overrides.specUnit3 : (raw.specUnit3 || specUnits.su3 || ''),
     inputSpec: raw.drawingSpec || '',
-    inputTolerance: raw.tolerance || '',
+    inputTolerance: user.overrides.inputTolerance !== null ? user.overrides.inputTolerance : (raw.tolerance || ''),
 
     outDrawingSpec: outDrawingSpec,
-    outNominal: outNominal,
+    outNominal: user.overrides.outNominal !== null ? user.overrides.outNominal : outNominal,
     outTolerance: outTolerance,
     pinGage: pinGageStr,
     platingAnnotation: platingAnnotation,
@@ -346,22 +352,22 @@ function getExportData(row, opNumber, globals) {
   );
 
   if (computed.isNote) {
-    // Notes export with drawing spec text only
+    // Notes export with drawing spec text and any user overrides
     return {
       'Internal Part #': '',
       'Op #': opNumber,
       'Dim Tag #': outputTag,
       'Ref Loc': raw.refLoc || '',
       'Char Dsg': '',
-      'Spec Unit 1': '',
-      'Drawing Spec': computed.drawingSpec,
-      'Spec Unit 2': '',
-      'Spec Unit 3': '',
-      'Inspec Equip': '',
-      'Nom Dim': '',
-      'Tol ±': '',
-      'IPC?': '',
-      'Inspection Frequency': '',
+      'Spec Unit 1': computed.specUnit1,
+      'Drawing Spec': computed.outDrawingSpec,
+      'Spec Unit 2': computed.specUnit2,
+      'Spec Unit 3': computed.specUnit3,
+      'Inspec Equip': computed.inspectionEquipment || '',
+      'Nom Dim': computed.outNominal,
+      'Tol ±': computed.outTolerance,
+      'IPC?': computed.ipc ? 'TRUE' : '',
+      'Inspection Frequency': computed.inspectionFrequency || '',
       'Show Dim When?': '',
     };
   }
