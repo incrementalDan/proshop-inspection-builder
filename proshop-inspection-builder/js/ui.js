@@ -139,6 +139,7 @@ function buildRowHTML(row) {
   var opBubblesHTML = '<div class="op-bubbles">';
   for (var oi = 0; oi < allOps.length; oi++) {
     var op = allOps[oi];
+    if (op === 2000) continue; // OP2000 is export-only, not shown in table
     var color = getOpColor(op);
     var isActive = enabledOps[op] ? ' active' : '';
     opBubblesHTML += '<span class="op-bubble' + isActive + '" style="--op-c:' + color + ';">' + op + '</span>';
@@ -217,6 +218,7 @@ function populateSidebar(rowId) {
   opContainer.innerHTML = '';
   for (var oi = 0; oi < state.globals.ops.length; oi++) {
     var op = state.globals.ops[oi];
+    if (op === 2000) continue; // OP2000 is export-only, not shown in sidebar
     var color = getOpColor(op);
     var btn = document.createElement('button');
     btn.className = 'op-toggle' + (u.includeOps[op] ? ' active' : '');
@@ -360,6 +362,7 @@ function renderOpBar(ops, onRemoveOp) {
   container.innerHTML = '';
   for (var i = 0; i < ops.length; i++) {
     var op = ops[i];
+    if (op === 2000) continue; // OP2000 is export-only, not shown in OP bar
     var color = getOpColor(op);
     var tag = document.createElement('span');
     tag.className = 'op-tag';

@@ -240,6 +240,7 @@ function bindOpBar() {
   var addOp = function() {
     var val = parseInt(input.value);
     if (isNaN(val) || val <= 0) return;
+    if (val === 2000) { input.value = ''; return; } // OP2000 is export-only
     if (state.globals.ops.indexOf(val) !== -1) return;
 
     state.globals.ops.push(val);
