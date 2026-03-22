@@ -146,17 +146,19 @@ function buildRowHTML(row) {
   }
   opBubblesHTML += '</div>';
 
+  var ov = row.user.overrides || {};
+
   return '' +
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
     '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
     '<td class="col-drawspec editable">' + esc(c.outDrawingSpec) + '</td>' +
-    '<td class="col-inputspec">' + esc(c.inputSpec) + '</td>' +
+    '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + esc(c.op2000DrawingSpec) + '</td>' +
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
     '<td class="col-outnom editable">' + esc(c.outNominal) + '</td>' +
     '<td class="col-pingage editable">' + esc(c.pinGage) + '</td>' +
-    '<td class="col-inputtol editable">' + esc(c.inputTolerance) + '</td>' +
+    '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + esc(c.op2000Tolerance) + '</td>' +
     '<td class="col-outtol editable">' + esc(c.outTolerance) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
     '<td class="col-ops">' + opBubblesHTML + '</td>';
@@ -208,10 +210,43 @@ function populateSidebar(rowId) {
   document.getElementById('sidebar-dimtag').textContent = c.dimTag || '—';
   document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
 
-  // Output preview
+  // OP2000 values (left column — smaller/faded)
+  document.getElementById('sidebar-op2000-spec').textContent = c.op2000DrawingSpec || '—';
+  document.getElementById('sidebar-op2000-nominal').textContent = c.op2000DrawingSpec || '—';
+  document.getElementById('sidebar-op2000-tol').textContent = c.op2000Tolerance || '—';
+
+  // Output values (right column — bold/bright)
   document.getElementById('sidebar-out-spec').textContent = c.outDrawingSpec || '—';
   document.getElementById('sidebar-out-nominal').textContent = c.outNominal || '—';
   document.getElementById('sidebar-out-tol').textContent = c.outTolerance || '—';
+
+  // Override indicators — show arrow icon when value was manually changed
+  var oiSpec = document.getElementById('oi-spec');
+  var oiTol = document.getElementById('oi-tol');
+  var origSpec = document.getElementById('orig-spec');
+  var origTol = document.getElementById('orig-tol');
+
+  if (u.overrides.outDrawingSpec !== null) {
+    oiSpec.classList.remove('hidden');
+    origSpec.textContent = row.raw.drawingSpec || '';
+  } else {
+    oiSpec.classList.add('hidden');
+    origSpec.classList.add('hidden');
+    origSpec.textContent = '';
+  }
+
+  if (u.overrides.outTolerance !== null) {
+    oiTol.classList.remove('hidden');
+    origTol.textContent = row.raw.tolerance || '';
+  } else {
+    oiTol.classList.add('hidden');
+    origTol.classList.add('hidden');
+    origTol.textContent = '';
+  }
+
+  // Wire override indicator click — toggle showing original value
+  setupOverrideIndicator('oi-spec', 'orig-spec');
+  setupOverrideIndicator('oi-tol', 'orig-tol');
 
   // OP toggles
   var opContainer = document.getElementById('sidebar-op-toggles');
@@ -521,9 +556,9 @@ function setupInlineEditing(tr, row) {
 
           // Determine which field was edited
           var ov = Object.assign({}, row.user.overrides);
-          if (td.classList.contains('col-drawspec')) {
+          if (td.classList.contains('col-drawspec') || td.classList.contains('col-inputspec')) {
             ov.outDrawingSpec = newValue || null;
-          } else if (td.classList.contains('col-outtol')) {
+          } else if (td.classList.contains('col-outtol') || td.classList.contains('col-inputtol')) {
             ov.outTolerance = newValue || null;
           } else if (td.classList.contains('col-pingage')) {
             ov.pinGageValue = newValue || null;
@@ -535,8 +570,6 @@ function setupInlineEditing(tr, row) {
             ov.specUnit3 = newValue || null;
           } else if (td.classList.contains('col-outnom')) {
             ov.outNominal = newValue || null;
-          } else if (td.classList.contains('col-inputtol')) {
-            ov.inputTolerance = newValue || null;
           }
           onRowUserChange(row.id, { overrides: ov });
         };
@@ -554,6 +587,20 @@ function setupInlineEditing(tr, row) {
   }
 }
 
+// ── Override Indicator ─────────────────────────────────────
+
+function setupOverrideIndicator(btnId, origId) {
+  var btn = document.getElementById(btnId);
+  var orig = document.getElementById(origId);
+  // Clone to remove old listeners
+  var clone = btn.cloneNode(true);
+  btn.parentNode.replaceChild(clone, btn);
+  clone.addEventListener('click', function(e) {
+    e.stopPropagation();
+    orig.classList.toggle('hidden');
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────
 
 function getCellValue(row, col) {
@@ -563,12 +610,12 @@ function getCellValue(row, col) {
     dimTag: c.dimTag,
     specUnit1: c.specUnit1,
     outDrawingSpec: c.outDrawingSpec,
-    inputSpec: c.inputSpec,
+    op2000Spec: c.op2000DrawingSpec,
     specUnit2: c.specUnit2,
     specUnit3: c.specUnit3,
     outNominal: c.outNominal,
     pinGage: c.pinGage,
-    inputTol: c.inputTolerance,
+    op2000Tol: c.op2000Tolerance,
     outTolerance: c.outTolerance,
     plating: c.platingMode,
     ops: '',

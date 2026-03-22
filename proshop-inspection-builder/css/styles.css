@@ -57,9 +57,9 @@
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 
   --transition: 150ms ease;
 }
@@ -579,6 +579,12 @@ td.editable input {
 .col-plating { width: 70px; }
 .col-ops { width: 80px; }
 
+/* Override highlight — faint indicator that value was manually changed */
+td.has-override {
+  background: rgba(255, 140, 66, 0.08);
+  border-left: 2px solid rgba(255, 140, 66, 0.35);
+}
+
 /* ── Sidebar ───────────────────────────────────────────── */
 #sidebar {
   width: var(--sidebar-width);
@@ -627,10 +633,15 @@ td.editable input {
 }
 
 .sidebar-output-preview {
-  padding: 16px;
+  padding: 12px 16px;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-color);
-  text-align: center;
+}
+
+.preview-comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
 }
 
 .preview-label {
@@ -638,29 +649,114 @@ td.editable input {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+/* OP2000 column — smaller, faded */
+.preview-col-op2000 {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.preview-value-faded {
+  font-size: 13px;
+  font-weight: 400;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* Output column — bold, bright */
+.preview-col-output {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .preview-value {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   font-family: var(--font-mono);
   color: var(--accent-orange);
-  min-height: 28px;
+  min-height: 22px;
 }
 
 .preview-value-sm {
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   font-family: var(--font-mono);
   color: var(--text-primary);
   min-height: 20px;
 }
 
-.preview-row {
+/* Override indicator — arrow icon in circle */
+.preview-value-container {
   display: flex;
-  justify-content: space-around;
-  margin-top: 12px;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.override-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.override-indicator:hover {
+  color: var(--accent-orange);
+  background: rgba(255, 140, 66, 0.12);
+}
+
+.override-indicator:hover + .override-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.override-tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 4px);
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+  z-index: 10;
+  box-shadow: var(--shadow-sm);
+}
+
+.original-value {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  padding: 3px 6px;
+  margin-top: 3px;
+  background: rgba(107, 115, 148, 0.08);
+  border-radius: var(--radius-sm);
+  font-style: italic;
+}
+
+.original-value::before {
+  content: 'Import: ';
+  font-style: normal;
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 .sidebar-controls {
