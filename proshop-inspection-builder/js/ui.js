@@ -158,8 +158,8 @@ function buildRowHTML(row) {
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
     '<td class="col-outnom editable">' + esc(c.outNominal) + '</td>' +
     '<td class="col-pingage editable">' + esc(c.pinGage) + '</td>' +
-    '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + esc(c.op2000Tolerance) + '</td>' +
-    '<td class="col-outtol editable">' + esc(c.outTolerance) + '</td>' +
+    '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + esc(tolDisplay(c.op2000Tolerance)) + '</td>' +
+    '<td class="col-outtol editable">' + esc(tolDisplay(c.outTolerance)) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
     '<td class="col-ops">' + opBubblesHTML + '</td>';
 }
@@ -207,18 +207,18 @@ function populateSidebar(rowId) {
   wireUpSidebarHandlers(rowId);
 
   // Header
-  document.getElementById('sidebar-dimtag').textContent = c.dimTag || '—';
+  document.getElementById('sidebar-dimtag').textContent = 'DIM TAG# ' + (c.dimTag || '—');
   document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
 
   // OP2000 values (left column — smaller/faded)
   document.getElementById('sidebar-op2000-spec').textContent = c.op2000DrawingSpec || '—';
   document.getElementById('sidebar-op2000-nominal').textContent = c.op2000DrawingSpec || '—';
-  document.getElementById('sidebar-op2000-tol').textContent = c.op2000Tolerance || '—';
+  document.getElementById('sidebar-op2000-tol').textContent = tolDisplay(c.op2000Tolerance) || '—';
 
   // Output values (right column — bold/bright)
   document.getElementById('sidebar-out-spec').textContent = c.outDrawingSpec || '—';
   document.getElementById('sidebar-out-nominal').textContent = c.outNominal || '—';
-  document.getElementById('sidebar-out-tol').textContent = c.outTolerance || '—';
+  document.getElementById('sidebar-out-tol').textContent = tolDisplay(c.outTolerance) || '—';
 
   // Override indicators — show arrow icon when value was manually changed
   var oiSpec = document.getElementById('oi-spec');
@@ -288,14 +288,12 @@ function populateSidebar(rowId) {
   populateEquipmentDropdown(state.globals.equipmentList, u.inspectionEquipment);
   document.getElementById('sidebar-frequency').value = u.inspectionFrequency || '';
 
-  // Status buttons — cloned by wireUpSidebarHandlers, set active state after
-  var statusBtns = document.querySelectorAll('.btn-status');
-  for (var i = 0; i < statusBtns.length; i++) {
-    if (statusBtns[i].dataset.status === u.status) {
-      statusBtns[i].classList.add('active');
-    } else {
-      statusBtns[i].classList.remove('active');
-    }
+  // Complete button — update active state
+  var completeBtn = document.getElementById('sidebar-status-complete');
+  if (u.status === 'complete') {
+    completeBtn.classList.add('active');
+  } else {
+    completeBtn.classList.remove('active');
   }
 }
 
@@ -340,18 +338,23 @@ function wireUpSidebarHandlers(rowId) {
     onRowUserChange(rowId, { inspectionFrequency: e.target.value });
   });
 
-  // Status buttons
-  var statusBtns = document.querySelectorAll('.btn-status');
-  for (var i = 0; i < statusBtns.length; i++) {
-    var btn = statusBtns[i];
-    var clone = btn.cloneNode(true);
-    btn.parentNode.replaceChild(clone, btn);
-    (function(cloneBtn) {
-      cloneBtn.addEventListener('click', function() {
-        onRowUserChange(rowId, { status: cloneBtn.dataset.status });
-      });
-    })(clone);
-  }
+  // Complete button — toggle complete status and auto-advance to next row
+  var completeBtn = document.getElementById('sidebar-status-complete');
+  var completeClone = completeBtn.cloneNode(true);
+  completeBtn.parentNode.replaceChild(completeClone, completeBtn);
+  completeClone.addEventListener('click', function() {
+    var state = getAppState();
+    var currentRow = state.rows.find(function(r) { return r.id === rowId; });
+    var newStatus = (currentRow && currentRow.user.status === 'complete') ? 'none' : 'complete';
+    onRowUserChange(rowId, { status: newStatus });
+    // Auto-advance to next row
+    if (newStatus === 'complete') {
+      var idx = state.rows.findIndex(function(r) { return r.id === rowId; });
+      if (idx >= 0 && idx < state.rows.length - 1) {
+        selectRow(state.rows[idx + 1].id);
+      }
+    }
+  });
 
   // Sidebar close
   var closeBtn = document.getElementById('sidebar-close');
@@ -599,6 +602,19 @@ function setupOverrideIndicator(btnId, origId) {
     e.stopPropagation();
     orig.classList.toggle('hidden');
   });
+}
+
+/**
+ * Format tolerance for UI display — prepend ± if the string is a plain
+ * number without an existing sign prefix. Export is NOT affected.
+ */
+function tolDisplay(str) {
+  if (!str || str === '—') return str;
+  var s = String(str).trim();
+  if (!s) return s;
+  // Already has a sign prefix or ±
+  if (/^[±+\-]/.test(s)) return s;
+  return '±' + s;
 }
 
 // ── Helpers ───────────────────────────────────────────────
