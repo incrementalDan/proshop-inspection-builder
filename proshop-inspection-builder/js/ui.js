@@ -338,6 +338,46 @@ function wireUpSidebarHandlers(rowId) {
     onRowUserChange(rowId, { inspectionFrequency: e.target.value });
   });
 
+  // Output Tag — double-click to edit (Rule 6: overrideable)
+  var otEl = document.getElementById('sidebar-output-tag');
+  var otClone = otEl.cloneNode(true);
+  otEl.parentNode.replaceChild(otClone, otEl);
+  otClone.addEventListener('dblclick', function() {
+    if (otClone.querySelector('input')) return;
+    var originalValue = otClone.textContent;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = originalValue;
+    input.className = 'inline-edit-input';
+    otClone.textContent = '';
+    otClone.appendChild(input);
+    input.focus();
+    input.select();
+
+    var committed = false;
+    var commit = function() {
+      if (committed) return;
+      committed = true;
+      var newValue = input.value.trim();
+      otClone.textContent = newValue || originalValue;
+      var state = getAppState();
+      var row = state.rows.find(function(r) { return r.id === rowId; });
+      if (row) {
+        var ov = Object.assign({}, row.user.overrides);
+        ov.outputTag = newValue || null;
+        onRowUserChange(rowId, { overrides: ov });
+      }
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', function(ke) {
+      if (ke.key === 'Enter') input.blur();
+      if (ke.key === 'Escape') {
+        committed = true;
+        otClone.textContent = originalValue;
+      }
+    });
+  });
+
   // Complete button — toggle complete status and auto-advance to next row
   var completeBtn = document.getElementById('sidebar-status-complete');
   var completeClone = completeBtn.cloneNode(true);
@@ -697,5 +737,6 @@ PSB.initUI = initUI;
 PSB.renderTable = renderTable;
 PSB.renderOpBar = renderOpBar;
 PSB.closeSidebar = closeSidebar;
+PSB.populateSidebar = populateSidebar;
 PSB.getSelectedRowId = getSelectedRowId;
 PSB.getOpColor = getOpColor;
