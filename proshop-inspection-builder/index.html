@@ -25,8 +25,8 @@
         </select>
       </div>
       <div class="control-group">
-        <label>Plating</label>
-        <input type="number" id="plating-thickness" step="0.0001" value="0" min="0" placeholder="0.0000">
+        <label>Plating Thickness</label>
+        <input type="number" id="plating-thickness" class="no-spinners" step="0.0001" value="0" min="0" placeholder="0.0000">
       </div>
       <div class="control-group">
         <label>Plating Units</label>
@@ -183,25 +183,27 @@
         <!-- Core Settings -->
         <fieldset class="control-section">
           <legend>Settings</legend>
-
-          <div class="control-row">
-            <label>IPC</label>
-            <input type="checkbox" id="sidebar-ipc">
-          </div>
-
-          <div class="control-row">
-            <label>Is Note</label>
-            <input type="checkbox" id="sidebar-is-note">
-          </div>
-
-          <div class="control-row">
-            <label>Auto Nominal</label>
-            <input type="checkbox" id="sidebar-auto-nominal" checked>
-          </div>
-
-          <div class="control-row">
-            <label>Pin/Gage</label>
-            <input type="checkbox" id="sidebar-pin-gage-enabled">
+          <div class="toggle-grid">
+            <label class="toggle-row" for="sidebar-ipc">
+              <span>IPC</span>
+              <input type="checkbox" id="sidebar-ipc" class="toggle-input">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+            <label class="toggle-row" for="sidebar-is-note">
+              <span>Is Note?</span>
+              <input type="checkbox" id="sidebar-is-note" class="toggle-input">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+            <label class="toggle-row" for="sidebar-auto-nominal">
+              <span>Auto Nominal</span>
+              <input type="checkbox" id="sidebar-auto-nominal" class="toggle-input" checked>
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+            <label class="toggle-row" for="sidebar-pin-gage-enabled">
+              <span>Pin/Gage</span>
+              <input type="checkbox" id="sidebar-pin-gage-enabled" class="toggle-input">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
           </div>
         </fieldset>
 
@@ -245,15 +247,10 @@
           </div>
         </fieldset>
 
-        <!-- Status -->
-        <fieldset class="control-section">
-          <legend>Status</legend>
-          <div class="status-buttons">
-            <button id="sidebar-status-none" class="btn btn-status" data-status="none">None</button>
-            <button id="sidebar-status-edited" class="btn btn-status" data-status="edited">Edited</button>
-            <button id="sidebar-status-complete" class="btn btn-status btn-complete" data-status="complete">Complete ✓</button>
-          </div>
-        </fieldset>
+        <!-- Complete -->
+        <div class="complete-section">
+          <button id="sidebar-status-complete" class="btn btn-complete-main" data-status="complete">Complete ✓</button>
+        </div>
       </div>
     </aside>
   </main>
