@@ -902,9 +902,11 @@ td.has-override {
 
 /* iOS-style toggle switches */
 .toggle-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  justify-items: center;
+  padding: 4px 0;
 }
 
 .toggle-row {
