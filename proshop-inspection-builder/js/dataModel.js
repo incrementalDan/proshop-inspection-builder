@@ -265,6 +265,27 @@ function recompute(row, globals) {
   var dualNomStr = nominalStr + ' [' + secNomStr + ']';
   var dualTolStr = tolStr + ' [' + secTolStr + ']';
 
+  // ── OP2000 dual-unit display strings (UI only — Type 1+2 formatted) ──
+  var op2kSpecNum = parseFloat(op2000DrawingSpec);
+  var op2000DualSpec, op2000DualTol;
+  if (!isNaN(op2kSpecNum)) {
+    var op2kSpecStr = PSB.formatPrecision(op2kSpecNum, primaryPrec);
+    var op2kSecSpec = PSB.convertUnits(op2kSpecNum, importUnits, secondaryUnits);
+    var op2kSecSpecStr = PSB.formatPrecision(op2kSecSpec, secondaryPrec);
+    op2000DualSpec = op2kSpecStr + ' [' + op2kSecSpecStr + ']';
+  } else {
+    op2000DualSpec = op2000DrawingSpec;
+  }
+  var op2kTolNum = parseFloat(op2000Tolerance);
+  if (!isNaN(op2kTolNum) && op2kTolNum !== 0) {
+    var op2kTolStr = PSB.formatPrecision(op2kTolNum, primaryPrec);
+    var op2kSecTol = PSB.convertUnits(op2kTolNum, importUnits, secondaryUnits);
+    var op2kSecTolStr = PSB.formatPrecision(op2kSecTol, secondaryPrec);
+    op2000DualTol = op2kTolStr + ' [' + op2kSecTolStr + ']';
+  } else {
+    op2000DualTol = op2000Tolerance;
+  }
+
   // ── Pin/Gage computation ─────────────────────────────────
   var pinGageStr = '';
   if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
@@ -310,6 +331,8 @@ function recompute(row, globals) {
     op2000DrawingSpec: op2000DrawingSpec,
     op2000Nominal: op2000Nominal,
     op2000Tolerance: op2000Tolerance,
+    op2000DualSpec: op2000DualSpec,
+    op2000DualTol: op2000DualTol,
 
     // Other OP values (derived from OP2000 base + Types 3 & 4)
     outDrawingSpec: outDrawingSpec,

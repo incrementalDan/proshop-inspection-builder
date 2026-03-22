@@ -152,14 +152,14 @@ function buildRowHTML(row) {
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
     '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
-    '<td class="col-drawspec editable">' + esc(c.outDrawingSpec) + '</td>' +
-    '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + esc(c.op2000DrawingSpec) + '</td>' +
+    '<td class="col-drawspec editable">' + formatDualDisplay(c.outDrawingSpec) + '</td>' +
+    '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.op2000DualSpec) + '</td>' +
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
-    '<td class="col-outnom editable">' + esc(c.outNominal) + '</td>' +
-    '<td class="col-pingage editable">' + esc(c.pinGage) + '</td>' +
-    '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + esc(tolDisplay(c.op2000Tolerance)) + '</td>' +
-    '<td class="col-outtol editable">' + esc(tolDisplay(c.outTolerance)) + '</td>' +
+    '<td class="col-outnom editable">' + formatDualDisplay(c.outNominal) + '</td>' +
+    '<td class="col-pingage editable">' + esc(addLeadingZero(c.pinGage)) + '</td>' +
+    '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.op2000DualTol)) + '</td>' +
+    '<td class="col-outtol editable">' + formatDualDisplay(tolDisplay(c.outTolerance)) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
     '<td class="col-ops">' + opBubblesHTML + '</td>';
 }
@@ -210,15 +210,15 @@ function populateSidebar(rowId) {
   document.getElementById('sidebar-dimtag').textContent = 'DIM TAG# ' + (c.dimTag || '—');
   document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
 
-  // OP2000 values (left column — smaller/faded)
-  document.getElementById('sidebar-op2000-spec').textContent = c.op2000DrawingSpec || '—';
-  document.getElementById('sidebar-op2000-nominal').textContent = c.op2000DrawingSpec || '—';
-  document.getElementById('sidebar-op2000-tol').textContent = tolDisplay(c.op2000Tolerance) || '—';
+  // OP2000 values (left column — smaller/faded, dual-unit format)
+  document.getElementById('sidebar-op2000-spec').innerHTML = formatDualDisplay(c.op2000DualSpec) || '—';
+  document.getElementById('sidebar-op2000-nominal').innerHTML = formatDualDisplay(c.op2000DualSpec) || '—';
+  document.getElementById('sidebar-op2000-tol').innerHTML = formatDualDisplay(tolDisplay(c.op2000DualTol)) || '—';
 
-  // Output values (right column — bold/bright)
-  document.getElementById('sidebar-out-spec').textContent = c.outDrawingSpec || '—';
-  document.getElementById('sidebar-out-nominal').textContent = c.outNominal || '—';
-  document.getElementById('sidebar-out-tol').textContent = tolDisplay(c.outTolerance) || '—';
+  // Output values (right column — bold/bright, dual-unit format)
+  document.getElementById('sidebar-out-spec').innerHTML = formatDualDisplay(c.outDrawingSpec) || '—';
+  document.getElementById('sidebar-out-nominal').innerHTML = formatDualDisplay(c.outNominal) || '—';
+  document.getElementById('sidebar-out-tol').innerHTML = formatDualDisplay(tolDisplay(c.outTolerance)) || '—';
 
   // Override indicators — show arrow icon when value was manually changed
   var oiSpec = document.getElementById('oi-spec');
@@ -602,6 +602,32 @@ function setupOverrideIndicator(btnId, origId) {
     e.stopPropagation();
     orig.classList.toggle('hidden');
   });
+}
+
+/**
+ * Add leading zero to bare decimals (UI only).
+ * ".1388" → "0.1388", "-.005" → "-0.005", "3.500" unchanged.
+ * Works inside bracket notation: ".1388 [.005]" → "0.1388 [0.005]"
+ */
+function addLeadingZero(str) {
+  if (!str) return str;
+  return String(str).replace(/(^|[^0-9])\.(\d)/g, '$10.$2');
+}
+
+/**
+ * Format a dual-unit string for display:
+ * 1. Adds leading zeros
+ * 2. Wraps the [secondary] portion in a <span class="secondary-unit">
+ * Returns HTML (already escaped).
+ */
+function formatDualDisplay(str) {
+  if (!str) return '';
+  var s = addLeadingZero(String(str));
+  var match = s.match(/^(.*?)(\s*\[.*\])$/);
+  if (match) {
+    return esc(match[1]) + '<span class="secondary-unit">' + esc(match[2]) + '</span>';
+  }
+  return esc(s);
 }
 
 /**
