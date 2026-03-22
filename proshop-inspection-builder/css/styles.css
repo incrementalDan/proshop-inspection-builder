@@ -643,6 +643,12 @@ td.has-override {
   border-left: 2px solid rgba(255, 140, 66, 0.35);
 }
 
+/* ── Secondary Unit Display ────────────────────────────── */
+.secondary-unit {
+  color: var(--text-muted);
+  font-size: 0.88em;
+}
+
 /* ── Sidebar ───────────────────────────────────────────── */
 #sidebar {
   width: var(--sidebar-width);
