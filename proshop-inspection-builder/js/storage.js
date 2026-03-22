@@ -107,13 +107,18 @@ function deserializeState(data) {
     throw new Error('Invalid project file');
   }
 
+  var defaults = PSB.defaultUserState();
   return {
     globals: data.globals || {},
     rows: data.rows.map(function(r) {
+      // Ensure all user fields exist (handles saves from older versions)
+      var user = Object.assign({}, defaults, r.user);
+      user.overrides = Object.assign({}, defaults.overrides, (r.user && r.user.overrides) || {});
+      user.includeOps = Object.assign({}, (r.user && r.user.includeOps) || {});
       return {
         id: r.id,
         raw: Object.freeze(Object.assign({}, r.raw)),
-        user: r.user,
+        user: user,
         computed: {}, // Will be recalculated by app.js on load
       };
     }),

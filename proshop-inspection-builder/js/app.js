@@ -49,13 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (saved) {
         state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
         state.rows = saved.rows;
-        // Ensure all rows have proper user.overrides
-        for (var i = 0; i < state.rows.length; i++) {
-          if (!state.rows[i].user) state.rows[i].user = PSB.defaultUserState();
-          if (!state.rows[i].user.overrides) {
-            state.rows[i].user.overrides = { outDrawingSpec: null, outTolerance: null, pinGageValue: null };
-          }
-        }
+        // deserializeState already normalizes user/overrides fields
         recomputeAll();
         console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
       }
@@ -316,7 +310,7 @@ function openExportModal() {
     var cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.value = op;
-    cb.checked = (op !== 2000); // OP2000 unchecked by default
+    cb.checked = true; // All OPs including OP2000 checked by default
 
     var opSpan = document.createElement('span');
     opSpan.className = 'op-bubble active';
@@ -424,22 +418,8 @@ function handleRowUserChange(rowId, changes) {
     var tr = document.querySelector('#table-body tr[data-row-id="' + rowId + '"]');
     if (tr) tr.classList.add('selected');
 
-    // Update sidebar preview values
-    var c = row.computed;
-    document.getElementById('sidebar-out-spec').textContent = c.outDrawingSpec || '—';
-    document.getElementById('sidebar-out-nominal').textContent = c.outNominal || '—';
-    document.getElementById('sidebar-out-tol').textContent = c.outTolerance || '—';
-    document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
-
-    // Update status buttons
-    var statusBtns = document.querySelectorAll('.btn-status');
-    for (var i = 0; i < statusBtns.length; i++) {
-      if (statusBtns[i].dataset.status === row.user.status) {
-        statusBtns[i].classList.add('active');
-      } else {
-        statusBtns[i].classList.remove('active');
-      }
-    }
+    // Full sidebar refresh (uses formatDualDisplay, leading zeros, etc.)
+    PSB.populateSidebar(rowId);
   }
 
   scheduleAutoSave();

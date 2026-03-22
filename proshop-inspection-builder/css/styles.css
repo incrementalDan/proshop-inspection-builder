@@ -694,6 +694,19 @@ td.has-override {
   color: var(--text-muted);
   font-family: var(--font-mono);
   margin-top: 2px;
+  cursor: text;
+}
+
+.sidebar-output-tag .inline-edit-input {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 1px 4px;
+  width: 100%;
+  outline: none;
 }
 
 .sidebar-output-preview {
