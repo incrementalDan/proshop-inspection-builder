@@ -331,13 +331,36 @@ function recompute(row, globals) {
   }
 
   // ── Build output display values (other OPs) ──────────────
-  var outDrawingSpec = user.overrides.outDrawingSpec !== null
-    ? user.overrides.outDrawingSpec
-    : dualNomStr;
+  var outDrawingSpec;
+  if (user.overrides.outDrawingSpec !== null) {
+    var ovSpecNum = parseFloat(user.overrides.outDrawingSpec);
+    if (!isNaN(ovSpecNum)) {
+      var ovSpecStr = PSB.formatPrecision(ovSpecNum, primaryPrec);
+      var ovSecSpec = PSB.convertUnits(ovSpecNum, importUnits, secondaryUnits);
+      var ovSecSpecStr = PSB.formatPrecision(ovSecSpec, secondaryPrec);
+      outDrawingSpec = ovSpecStr + ' [' + ovSecSpecStr + ']';
+    } else {
+      outDrawingSpec = user.overrides.outDrawingSpec;
+    }
+  } else {
+    outDrawingSpec = dualNomStr;
+  }
 
-  var outTolerance = user.overrides.outTolerance !== null
-    ? user.overrides.outTolerance
-    : dualTolStr;
+  var outTolerance;
+  if (user.overrides.outTolerance !== null) {
+    var ovTolNum = parseFloat(user.overrides.outTolerance);
+    var isAsymOvTol = /\+.*[-–]/.test(user.overrides.outTolerance);
+    if (!isAsymOvTol && !isNaN(ovTolNum) && ovTolNum !== 0) {
+      var ovTolStr = PSB.formatPrecision(ovTolNum, primaryPrec);
+      var ovSecTol = PSB.convertUnits(ovTolNum, importUnits, secondaryUnits);
+      var ovSecTolStr = PSB.formatPrecision(ovSecTol, secondaryPrec);
+      outTolerance = ovTolStr + ' [' + ovSecTolStr + ']';
+    } else {
+      outTolerance = user.overrides.outTolerance;
+    }
+  } else {
+    outTolerance = dualTolStr;
+  }
 
   var outNominal = dualNomStr;
   if (platingAnnotation) {
