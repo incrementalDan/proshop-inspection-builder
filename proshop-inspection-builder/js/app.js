@@ -11,6 +11,8 @@
  * Owns the app state: { rows[], globals }
  */
 
+var APP_VERSION = 'v1.2';
+
 console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
 
 // ═══════════════════════════════════════════════════════════
@@ -80,6 +82,10 @@ document.addEventListener('DOMContentLoaded', function() {
     syncGlobalsToUI();
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     PSB.renderTable(state.rows);
+    // Set version from single source
+    var versionEl = document.querySelector('.app-version');
+    if (versionEl) versionEl.textContent = APP_VERSION;
+
     console.log('[PSB] Init complete');
 
   } catch (err) {
@@ -281,6 +287,8 @@ function bindExportModal() {
     }
 
     state.globals.exportUnits = exportUnits;
+    // Recompute so exportNominal/exportTolerance use the selected export units
+    recomputeAll();
     var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
     PSB.downloadCSV(csv);
     document.getElementById('export-modal').classList.add('hidden');
