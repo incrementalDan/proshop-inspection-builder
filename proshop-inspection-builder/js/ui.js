@@ -121,6 +121,9 @@ function renderTable(rows) {
     // Inline editing for editable cells
     setupInlineEditing(tr, row);
 
+    // OP bubble click → toggle on/off (same as sidebar)
+    setupOpBubbleClicks(tr, row);
+
     tbody.appendChild(tr);
   }
 }
@@ -142,7 +145,7 @@ function buildRowHTML(row) {
     if (op === 2000) continue; // OP2000 is export-only, not shown in table
     var color = getOpColor(op);
     var isActive = enabledOps[op] ? ' active' : '';
-    opBubblesHTML += '<span class="op-bubble' + isActive + '" style="--op-c:' + color + ';">' + op + '</span>';
+    opBubblesHTML += '<span class="op-bubble' + isActive + '" style="--op-c:' + color + ';" data-op="' + op + '">' + op + '</span>';
   }
   opBubblesHTML += '</div>';
 
@@ -248,6 +251,18 @@ function populateSidebar(rowId) {
   // Wire override indicator click — toggle showing original value
   setupOverrideIndicator('oi-spec', 'orig-spec');
   setupOverrideIndicator('oi-tol', 'orig-tol');
+
+  // Pin/Gage display (fixed area — always present, shows value only when enabled)
+  var pgEl = document.getElementById('sidebar-pingage-value');
+  if (pgEl) {
+    if (u.pinGageEnabled && c.pinGage) {
+      pgEl.textContent = addLeadingZero(c.pinGage);
+      pgEl.classList.add('active');
+    } else {
+      pgEl.textContent = '—';
+      pgEl.classList.remove('active');
+    }
+  }
 
   // OP toggles
   var opContainer = document.getElementById('sidebar-op-toggles');
@@ -636,6 +651,29 @@ function setupInlineEditing(tr, row) {
   }
 }
 
+// ── OP Bubble Clicks (table) ──────────────────────────────
+
+function setupOpBubbleClicks(tr, row) {
+  var bubbles = tr.querySelectorAll('.op-bubble[data-op]');
+  for (var i = 0; i < bubbles.length; i++) {
+    (function(bubble) {
+      bubble.addEventListener('click', function(e) {
+        e.stopPropagation(); // Don't trigger row select
+        var opNum = parseInt(bubble.dataset.op);
+        var newInclude = Object.assign({}, row.user.includeOps);
+        newInclude[opNum] = !newInclude[opNum];
+        // Immediate visual toggle
+        if (newInclude[opNum]) {
+          bubble.classList.add('active');
+        } else {
+          bubble.classList.remove('active');
+        }
+        onRowUserChange(row.id, { includeOps: newInclude });
+      });
+    })(bubbles[i]);
+  }
+}
+
 // ── Override Indicator ─────────────────────────────────────
 
 function setupOverrideIndicator(btnId, origId) {
@@ -671,7 +709,7 @@ function formatDualDisplay(str) {
   var s = addLeadingZero(String(str));
   var match = s.match(/^(.*?)(\s*\[.*\])$/);
   if (match) {
-    return esc(match[1]) + '<span class="secondary-unit">' + esc(match[2]) + '</span>';
+    return '<span class="primary-unit">' + esc(match[1]) + '</span><span class="secondary-unit">' + esc(match[2]) + '</span>';
   }
   return esc(s);
 }
