@@ -24,6 +24,9 @@ var onRowUserChange = null;   // (rowId, userChanges) => void
 var onFileImport = null;      // (fileContent, fileName) => void
 var getAppState = null;       // () => { rows, globals }
 
+// Edit flash: tracks which cell should flash after re-render
+var flashCellKey = null; // "rowId|col-classname"
+
 // ── OP Color Palette ──────────────────────────────────────
 // CSS vars: --op-color-0 (OP2000/orange), --op-color-1..7
 var OP_COLORS = [
@@ -125,6 +128,19 @@ function renderTable(rows) {
     setupOpBubbleClicks(tr, row);
 
     tbody.appendChild(tr);
+
+    // Apply edit flash if this row/column was just edited
+    if (flashCellKey) {
+      var parts = flashCellKey.split('|');
+      if (row.id === parseInt(parts[0])) {
+        var flashTd = tr.querySelector('.' + parts[1]);
+        if (flashTd) {
+          flashTd.classList.add('edit-flash');
+          setTimeout(function() { flashTd.classList.remove('edit-flash'); }, 600);
+        }
+        flashCellKey = null;
+      }
+    }
   }
 }
 
@@ -618,6 +634,14 @@ function setupInlineEditing(tr, row) {
           }
           td.textContent = newValue || originalValue;
 
+          // Set flash target for after re-render
+          var colClass = '';
+          var classes = td.className.split(' ');
+          for (var ci = 0; ci < classes.length; ci++) {
+            if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
+          }
+          if (colClass) flashCellKey = row.id + '|' + colClass;
+
           // Determine which field was edited
           var ov = Object.assign({}, row.user.overrides);
           if (td.classList.contains('col-drawspec') || td.classList.contains('col-inputspec')) {
@@ -776,6 +800,27 @@ function getSelectedRowId() {
   return selectedRowId;
 }
 
+// ── Toast Notifications ──────────────────────────────────
+
+function showToast(message, type) {
+  type = type || 'info';
+  var container = document.getElementById('toast-container');
+  var existing = container.querySelector('.toast');
+  if (existing) container.removeChild(existing);
+
+  var el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = message;
+  container.appendChild(el);
+
+  setTimeout(function() {
+    el.classList.add('toast-out');
+    el.addEventListener('animationend', function() {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    });
+  }, 3000);
+}
+
 // ── Export to namespace ───────────────────────────────────
 PSB.initUI = initUI;
 PSB.renderTable = renderTable;
@@ -784,3 +829,4 @@ PSB.closeSidebar = closeSidebar;
 PSB.populateSidebar = populateSidebar;
 PSB.getSelectedRowId = getSelectedRowId;
 PSB.getOpColor = getOpColor;
+PSB.showToast = showToast;

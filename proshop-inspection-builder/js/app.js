@@ -98,6 +98,30 @@ document.addEventListener('DOMContentLoaded', function() {
     bindSettingsModal();
     console.log('[PSB] All controls bound');
 
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      var mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('btn-save').click();
+      }
+      if (mod && e.key === 'e') {
+        e.preventDefault();
+        openExportModal();
+      }
+      if (e.key === 'Escape') {
+        var exportModal = document.getElementById('export-modal');
+        var settingsModal = document.getElementById('settings-modal');
+        if (!exportModal.classList.contains('hidden')) {
+          exportModal.classList.add('hidden');
+        } else if (!settingsModal.classList.contains('hidden')) {
+          document.getElementById('settings-close').click();
+        } else if (!document.getElementById('sidebar').classList.contains('hidden')) {
+          PSB.closeSidebar();
+        }
+      }
+    });
+
     // Initial render
     syncGlobalsToUI();
     applyUnitColors(state.globals.importUnits);
@@ -277,9 +301,10 @@ function bindFileButtons() {
   document.getElementById('btn-save').addEventListener('click', function() {
     var result = PSB.saveProject(state);
     if (result && result.then) {
-      result.then(function(ok) { if (ok) markClean(); });
+      result.then(function(ok) { if (ok) { markClean(); PSB.showToast('Project saved.', 'success'); } });
     } else {
       markClean();
+      PSB.showToast('Project saved.', 'success');
     }
   });
 
@@ -306,7 +331,7 @@ function bindFileButtons() {
         markClean();
         console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
       } catch (err) {
-        alert('Failed to load project file: ' + err.message);
+        PSB.showToast('Failed to load project file: ' + err.message, 'error');
       }
     };
     reader.readAsText(file);
@@ -329,7 +354,7 @@ function bindOpBar() {
   var addOp = function() {
     var val = parseInt(input.value);
     if (isNaN(val) || val <= 0) return;
-    if (val === 2000) { input.value = ''; return; } // OP2000 is export-only
+    if (val === 2000) { input.value = ''; PSB.showToast('OP2000 is included automatically in every export.', 'info'); return; }
     if (state.globals.ops.indexOf(val) !== -1) return;
 
     state.globals.ops.push(val);
@@ -373,7 +398,7 @@ function bindExportModal() {
     var exportUnits = document.getElementById('export-units').value;
 
     if (selectedOps.length === 0) {
-      alert('Select at least one OP to export.');
+      PSB.showToast('Select at least one OP to export.', 'error');
       return;
     }
 
@@ -382,6 +407,7 @@ function bindExportModal() {
     recomputeAll();
     var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
     PSB.downloadCSV(csv);
+    PSB.showToast('CSV exported.', 'success');
     document.getElementById('export-modal').classList.add('hidden');
 
     // Auto-save project file alongside the CSV export
@@ -482,7 +508,7 @@ function handleFileImport(content, fileName) {
       setFilename(fileName);
       markClean();
     } catch (err) {
-      alert('Failed to load project: ' + err.message);
+      PSB.showToast('Failed to load project: ' + err.message, 'error');
     }
     return;
   }
@@ -490,7 +516,7 @@ function handleFileImport(content, fileName) {
   // Parse CSV
   var rawRows = PSB.parseCSV(content);
   if (rawRows.length === 0) {
-    alert('No valid data found in CSV.');
+    PSB.showToast('No valid data found in CSV.', 'error');
     return;
   }
 
@@ -505,6 +531,7 @@ function handleFileImport(content, fileName) {
   setFilename(fileName);
   markDirty();
   console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
+  PSB.showToast('Imported ' + state.rows.length + ' rows from ' + fileName, 'success');
 }
 
 // ═══════════════════════════════════════════════════════════
