@@ -517,6 +517,15 @@ function handleRowUserChange(rowId, changes) {
   // Merge changes into user state
   Object.assign(row.user, changes);
 
+  // Auto-sync IPC when OPs change: on if any OP selected, off if none
+  if (changes.includeOps) {
+    var anyOpOn = false;
+    for (var k in row.user.includeOps) {
+      if (row.user.includeOps[k]) { anyOpOn = true; break; }
+    }
+    row.user.ipc = anyOpOn;
+  }
+
   // Auto-set status to 'edited' if currently 'none'
   if (row.user.status === 'none') {
     row.user.status = 'edited';

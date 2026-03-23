@@ -437,6 +437,15 @@ input.no-spinners {
   gap: 3px;
 }
 
+.col-ops .op-bubble {
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.col-ops .op-bubble:hover {
+  filter: brightness(1.2);
+}
+
 .op-add-input {
   width: 80px;
   height: 22px;
@@ -722,7 +731,7 @@ td.editable input {
 .col-su2 { width: 60px; }
 .col-su3 { width: 40px; text-align: center; }
 .col-outnom { min-width: 140px; }
-.col-pingage { min-width: 120px; }
+.col-pingage { min-width: 90px; font-size: 10px; }
 .col-inputtol { width: 80px; color: var(--text-muted); }
 .col-outtol { width: 80px; }
 .col-plating { width: 70px; }
@@ -734,9 +743,13 @@ td.has-override {
   border-left: 2px solid rgba(255, 140, 66, 0.35);
 }
 
-/* ── Secondary Unit Display ────────────────────────────── */
+/* ── Dual Unit Display ─────────────────────────────────── */
+.primary-unit {
+  color: var(--unit-primary, var(--text-primary));
+}
+
 .secondary-unit {
-  color: var(--unit-secondary, var(--text-muted));
+  color: var(--text-muted);
   font-size: 0.88em;
   opacity: 0.7;
 }
@@ -938,6 +951,35 @@ td.has-override {
   font-style: normal;
   color: var(--text-muted);
   opacity: 0.6;
+}
+
+/* Pin/Gage display area — fixed height so sidebar doesn't jump */
+.sidebar-pingage-area {
+  height: 48px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-pingage-area .preview-label {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.pingage-value {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pingage-value.active {
+  color: var(--text-primary);
 }
 
 .sidebar-controls {
