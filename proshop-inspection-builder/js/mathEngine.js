@@ -176,6 +176,34 @@ function computeGageBlock(nominal, tolPlus, tolMinus, precision) {
   };
 }
 
+/**
+ * Detect the number of decimal places in a numeric string.
+ * Preserves the original precision from engineering prints.
+ *
+ * Examples:
+ *   ".2500" → 4
+ *   "3.50"  → 2
+ *   "0.1"   → 1
+ *   "5"     → 0
+ *   "+0.010 -0.002" → null (not a simple number)
+ *   "THRU"  → null
+ *
+ * @param {string} str — the raw value string
+ * @returns {number|null} — decimal places count, or null if non-numeric
+ */
+function detectPrecision(str) {
+  if (typeof str !== 'string') return null;
+  var trimmed = str.trim();
+  if (trimmed === '') return null;
+
+  // Must be a simple numeric value (optional leading sign, digits, optional decimal)
+  if (!/^[+-]?\d*\.?\d+$/.test(trimmed)) return null;
+
+  var dotIndex = trimmed.indexOf('.');
+  if (dotIndex === -1) return 0;
+  return trimmed.length - dotIndex - 1;
+}
+
 // ── Export to namespace ───────────────────────────────────
 PSB.centerNominal = centerNominal;
 PSB.applyPlating = applyPlating;
@@ -183,3 +211,4 @@ PSB.convertUnits = convertUnits;
 PSB.formatPrecision = formatPrecision;
 PSB.computePinGage = computePinGage;
 PSB.computeGageBlock = computeGageBlock;
+PSB.detectPrecision = detectPrecision;
