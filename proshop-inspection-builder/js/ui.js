@@ -206,8 +206,9 @@ function populateSidebar(rowId) {
   // clone before setting any values, then set values on the clones in DOM.
   wireUpSidebarHandlers(rowId);
 
-  // Header
-  document.getElementById('sidebar-dimtag').textContent = 'DIM TAG# ' + (c.dimTag || '—');
+  // Header — split label and number for styling
+  document.getElementById('sidebar-dimtag').innerHTML =
+    '<span class="dimtag-label">DIM TAG# </span><span class="dimtag-number">' + esc(c.dimTag || '—') + '</span>';
   document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
 
   // OP2000 values (left column — smaller/faded, dual-unit format)

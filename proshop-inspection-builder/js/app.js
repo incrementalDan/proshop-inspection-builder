@@ -100,6 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial render
     syncGlobalsToUI();
+    applyUnitColors(state.globals.importUnits);
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     PSB.renderTable(state.rows);
     // Set version from single source
@@ -133,6 +134,7 @@ function bindNewButton() {
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     PSB.renderTable(state.rows);
     PSB.closeSidebar();
+    setFilename(null);
     markClean();
     console.log('[PSB] New file — state cleared');
   });
@@ -152,9 +154,30 @@ function bindSampleButton() {
 // GLOBAL CONTROLS
 // ═══════════════════════════════════════════════════════════
 function bindGlobalControls() {
-  // Import units
+  // Import units — iOS-style toggle
+  var unitToggle = document.getElementById('unit-toggle');
+  if (unitToggle) {
+    unitToggle.addEventListener('click', function() {
+      var isMm = unitToggle.getAttribute('aria-checked') === 'true';
+      var newUnit = isMm ? 'inch' : 'mm';
+      unitToggle.setAttribute('aria-checked', newUnit === 'mm' ? 'true' : 'false');
+      document.getElementById('import-units').value = newUnit;
+      state.globals.importUnits = newUnit;
+      applyUnitColors(newUnit);
+      recomputeAll();
+      markDirty();
+      scheduleAutoSave();
+    });
+    unitToggle.addEventListener('keydown', function(e) {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); unitToggle.click(); }
+    });
+  }
+
+  // Fallback: hidden select (for programmatic sync)
   document.getElementById('import-units').addEventListener('change', function(e) {
     state.globals.importUnits = e.target.value;
+    syncUnitToggle(e.target.value);
+    applyUnitColors(e.target.value);
     recomputeAll();
     markDirty();
     scheduleAutoSave();
@@ -194,10 +217,41 @@ function bindGlobalControls() {
 
 function syncGlobalsToUI() {
   document.getElementById('import-units').value = state.globals.importUnits;
+  syncUnitToggle(state.globals.importUnits);
+  applyUnitColors(state.globals.importUnits);
   document.getElementById('plating-thickness').value = state.globals.platingThickness || '';
   document.getElementById('plating-units').value = state.globals.platingUnits;
   document.getElementById('inch-precision').value = state.globals.inchPrecision;
   document.getElementById('mm-precision').value = state.globals.mmPrecision;
+}
+
+function syncUnitToggle(unit) {
+  var toggle = document.getElementById('unit-toggle');
+  if (toggle) toggle.setAttribute('aria-checked', unit === 'mm' ? 'true' : 'false');
+}
+
+function applyUnitColors(unit) {
+  var root = document.documentElement;
+  var style = getComputedStyle(root);
+  if (unit === 'mm') {
+    root.style.setProperty('--unit-primary', style.getPropertyValue('--unit-mm').trim());
+    root.style.setProperty('--unit-secondary', style.getPropertyValue('--unit-inch').trim());
+  } else {
+    root.style.setProperty('--unit-primary', style.getPropertyValue('--unit-inch').trim());
+    root.style.setProperty('--unit-secondary', style.getPropertyValue('--unit-mm').trim());
+  }
+}
+
+function setFilename(name) {
+  var el = document.getElementById('filename-text');
+  if (!el) return;
+  if (name) {
+    el.textContent = name;
+    el.classList.add('has-file');
+  } else {
+    el.textContent = 'No file loaded';
+    el.classList.remove('has-file');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -238,6 +292,7 @@ function bindFileButtons() {
     var file = e.target.files[0];
     if (!file) return;
     var reader = new FileReader();
+    var loadFileName = file.name;
     reader.onload = function(ev) {
       try {
         var loaded = PSB.loadProject(ev.target.result);
@@ -247,6 +302,7 @@ function bindFileButtons() {
         syncGlobalsToUI();
         PSB.renderOpBar(state.globals.ops, handleRemoveOp);
         PSB.closeSidebar();
+        setFilename(loadFileName);
         markClean();
         console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
       } catch (err) {
@@ -423,6 +479,7 @@ function handleFileImport(content, fileName) {
       syncGlobalsToUI();
       PSB.renderOpBar(state.globals.ops, handleRemoveOp);
       PSB.closeSidebar();
+      setFilename(fileName);
       markClean();
     } catch (err) {
       alert('Failed to load project: ' + err.message);
@@ -445,6 +502,7 @@ function handleFileImport(content, fileName) {
   recomputeAll();
   PSB.closeSidebar();
 
+  setFilename(fileName);
   markDirty();
   console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
 }
