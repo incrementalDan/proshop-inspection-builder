@@ -60,6 +60,7 @@ docs/proshop-field-mapping.png — ProShop UI field reference screenshot
 - `formatPrecision(value, decimalPlaces)` → returns formatted string
 - `computePinGage(nominal, tolerance)` → returns `{ go, noGo, formatted }`
 - `computeGageBlock(nominal, tolPlus, tolMinus)` → returns `{ low, high, formatted }`
+- `detectPrecision(str)` → returns decimal place count (number) or null if non-numeric
 
 ### exportEngine.js
 - `generateCSV(rows, selectedOps, globals)` → returns CSV string

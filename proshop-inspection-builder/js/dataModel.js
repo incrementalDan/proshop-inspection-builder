@@ -299,10 +299,17 @@ function recompute(row, globals) {
   var dualTolStr = tolStr + ' [' + secTolStr + ']';
 
   // ── OP2000 dual-unit display strings (UI only — Type 1+2 formatted) ──
+  // Detect original decimal precision from source strings (import or override).
+  // Primary display preserves original precision; secondary uses global setting.
+  var op2000SpecPrecision = PSB.detectPrecision(op2000DrawingSpec);
+  var op2000TolPrecision = PSB.detectPrecision(op2000Tolerance);
+  var op2kSpecPrec = op2000SpecPrecision !== null ? op2000SpecPrecision : primaryPrec;
+  var op2kTolPrec = op2000TolPrecision !== null ? op2000TolPrecision : primaryPrec;
+
   var op2kSpecNum = parseFloat(op2000DrawingSpec);
   var op2000DualSpec, op2000DualTol;
   if (!isNaN(op2kSpecNum)) {
-    var op2kSpecStr = PSB.formatPrecision(op2kSpecNum, primaryPrec);
+    var op2kSpecStr = PSB.formatPrecision(op2kSpecNum, op2kSpecPrec);
     var op2kSecSpec = PSB.convertUnits(op2kSpecNum, importUnits, secondaryUnits);
     var op2kSecSpecStr = PSB.formatPrecision(op2kSecSpec, secondaryPrec);
     op2000DualSpec = op2kSpecStr + ' [' + op2kSecSpecStr + ']';
@@ -313,7 +320,7 @@ function recompute(row, globals) {
   var isAsymTol = /\+.*[-–]/.test(op2000Tolerance);
   var op2kTolNum = parseFloat(op2000Tolerance);
   if (!isAsymTol && !isNaN(op2kTolNum) && op2kTolNum !== 0) {
-    var op2kTolStr = PSB.formatPrecision(op2kTolNum, primaryPrec);
+    var op2kTolStr = PSB.formatPrecision(op2kTolNum, op2kTolPrec);
     var op2kSecTol = PSB.convertUnits(op2kTolNum, importUnits, secondaryUnits);
     var op2kSecTolStr = PSB.formatPrecision(op2kSecTol, secondaryPrec);
     op2000DualTol = op2kTolStr + ' [' + op2kSecTolStr + ']';
@@ -397,6 +404,8 @@ function recompute(row, globals) {
     op2000Tolerance: op2000Tolerance,
     op2000DualSpec: op2000DualSpec,
     op2000DualTol: op2000DualTol,
+    op2000SpecPrecision: op2000SpecPrecision,  // original decimal places (null if non-numeric)
+    op2000TolPrecision: op2000TolPrecision,
 
     // Other OP values (derived from OP2000 base + Types 3 & 4)
     outDrawingSpec: outDrawingSpec,
