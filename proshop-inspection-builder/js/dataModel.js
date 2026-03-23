@@ -130,10 +130,23 @@ function createRow(rawData) {
     computed: {},
   };
 
-  // Auto-detect notes
+  // Auto-detect notes from drawingSpec
   var featureType = PSB.detectFeatureType(rawData.drawingSpec || '');
   if (featureType === 'note' || featureType === 'gdt' || featureType === 'thread') {
     row.user.isNote = true;
+  }
+
+  // Also detect GD&T from specUnit2 (e.g., Concentricity, Position, Flatness)
+  if (!row.user.isNote && rawData.specUnit2) {
+    var su2 = rawData.specUnit2.trim().toLowerCase();
+    var gdtSu2 = ['concentricity', 'position', 'flatness', 'perpendicular',
+      'parallel', 'surf profile', 'angular', 'total runout', 'runout'];
+    for (var i = 0; i < gdtSu2.length; i++) {
+      if (su2.indexOf(gdtSu2[i]) >= 0) {
+        row.user.isNote = true;
+        break;
+      }
+    }
   }
 
   return row;
@@ -167,14 +180,14 @@ function recompute(row, globals) {
       specUnit1: ov.specUnit1 !== null ? ov.specUnit1 : (raw.specUnit1 || ''),
       specUnit2: ov.specUnit2 !== null ? ov.specUnit2 : (raw.specUnit2 || ''),
       specUnit3: ov.specUnit3 !== null ? ov.specUnit3 : (raw.specUnit3 || ''),
-      // OP2000 fields (consistent shape with non-note rows)
+      // OP2000 fields (consistent shape with non-note rows — preserve raw values)
       op2000DrawingSpec: ov.outDrawingSpec !== null ? ov.outDrawingSpec : (raw.drawingSpec || ''),
       op2000Nominal: 0,
-      op2000Tolerance: ov.outTolerance !== null ? ov.outTolerance : '',
+      op2000Tolerance: ov.outTolerance !== null ? ov.outTolerance : (raw.tolerance || ''),
       op2000DualSpec: ov.outDrawingSpec !== null ? ov.outDrawingSpec : (raw.drawingSpec || ''),
-      op2000DualTol: ov.outTolerance !== null ? ov.outTolerance : '',
-      outNominal: ov.outNominal !== null ? ov.outNominal : '',
-      outTolerance: ov.outTolerance !== null ? ov.outTolerance : '',
+      op2000DualTol: ov.outTolerance !== null ? ov.outTolerance : (raw.tolerance || ''),
+      outNominal: ov.outNominal !== null ? ov.outNominal : (raw.nominal || ''),
+      outTolerance: ov.outTolerance !== null ? ov.outTolerance : (raw.tolerance || ''),
       inputTolerance: ov.inputTolerance !== null ? ov.inputTolerance : (raw.tolerance || ''),
       pinGage: ov.pinGageValue !== null ? ov.pinGageValue : '',
       platingAnnotation: '',
@@ -296,8 +309,10 @@ function recompute(row, globals) {
   } else {
     op2000DualSpec = op2000DrawingSpec;
   }
+  // Preserve asymmetric tolerance notation (e.g., +0.001-0) — don't dual-format
+  var isAsymTol = /\+.*[-–]/.test(op2000Tolerance);
   var op2kTolNum = parseFloat(op2000Tolerance);
-  if (!isNaN(op2kTolNum) && op2kTolNum !== 0) {
+  if (!isAsymTol && !isNaN(op2kTolNum) && op2kTolNum !== 0) {
     var op2kTolStr = PSB.formatPrecision(op2kTolNum, primaryPrec);
     var op2kSecTol = PSB.convertUnits(op2kTolNum, importUnits, secondaryUnits);
     var op2kSecTolStr = PSB.formatPrecision(op2kSecTol, secondaryPrec);
@@ -383,9 +398,19 @@ function recompute(row, globals) {
       tolPlus: secondaryTolPlus,
       tolMinus: secondaryTolMinus,
     },
-    // Export-ready values (secondary/converted units, no brackets)
-    exportNominal: PSB.formatPrecision(secondaryNom, secondaryPrec),
-    exportTolerance: PSB.formatPrecision(secondaryTolPlus, secondaryPrec),
+    // Export-ready values (converted to exportUnits, no brackets)
+    exportNominal: (function() {
+      var eu = globals.exportUnits || 'inch';
+      var ePrec = eu === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+      var eNom = PSB.convertUnits(primaryNom, importUnits, eu);
+      return PSB.formatPrecision(eNom, ePrec);
+    })(),
+    exportTolerance: (function() {
+      var eu = globals.exportUnits || 'inch';
+      var ePrec = eu === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+      var eTol = PSB.convertUnits(primaryTolPlus, importUnits, eu);
+      return PSB.formatPrecision(eTol, ePrec);
+    })(),
 
     status: user.status,
     ipc: user.ipc,

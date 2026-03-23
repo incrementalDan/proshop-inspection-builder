@@ -595,6 +595,11 @@ function setupInlineEditing(tr, row) {
           if (committed) return;
           committed = true;
           var newValue = input.value.trim();
+          // Strip "[secondary]" bracket notation from dual-display columns
+          // so overrides store the raw value, not the UI-formatted string
+          if (newValue && newValue.indexOf(' [') > 0) {
+            newValue = newValue.split(' [')[0].trim();
+          }
           td.textContent = newValue || originalValue;
 
           // Determine which field was edited
