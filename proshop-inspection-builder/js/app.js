@@ -39,6 +39,26 @@ var state = {
 };
 
 // ═══════════════════════════════════════════════════════════
+// DIRTY FLAG — tracks unsaved changes to warn before close
+// ═══════════════════════════════════════════════════════════
+var isDirty = false;
+
+function markDirty() {
+  isDirty = true;
+}
+
+function markClean() {
+  isDirty = false;
+}
+
+window.addEventListener('beforeunload', function(e) {
+  if (isDirty && state.rows.length > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
 // INITIALIZATION
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
@@ -112,6 +132,7 @@ function bindNewButton() {
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     PSB.renderTable(state.rows);
     PSB.closeSidebar();
+    markClean();
     console.log('[PSB] New file — state cleared');
   });
 }
@@ -134,6 +155,7 @@ function bindGlobalControls() {
   document.getElementById('import-units').addEventListener('change', function(e) {
     state.globals.importUnits = e.target.value;
     recomputeAll();
+    markDirty();
     scheduleAutoSave();
   });
 
@@ -141,6 +163,7 @@ function bindGlobalControls() {
   document.getElementById('plating-thickness').addEventListener('input', function(e) {
     state.globals.platingThickness = parseFloat(e.target.value) || 0;
     recomputeAll();
+    markDirty();
     scheduleAutoSave();
   });
 
@@ -148,6 +171,7 @@ function bindGlobalControls() {
   document.getElementById('plating-units').addEventListener('change', function(e) {
     state.globals.platingUnits = e.target.value;
     recomputeAll();
+    markDirty();
     scheduleAutoSave();
   });
 
@@ -155,12 +179,14 @@ function bindGlobalControls() {
   document.getElementById('inch-precision').addEventListener('input', function(e) {
     state.globals.inchPrecision = parseInt(e.target.value) || 4;
     recomputeAll();
+    markDirty();
     scheduleAutoSave();
   });
 
   document.getElementById('mm-precision').addEventListener('input', function(e) {
     state.globals.mmPrecision = parseInt(e.target.value) || 3;
     recomputeAll();
+    markDirty();
     scheduleAutoSave();
   });
 }
@@ -195,6 +221,7 @@ function bindFileButtons() {
   // Save project
   document.getElementById('btn-save').addEventListener('click', function() {
     PSB.saveProject(state);
+    markClean();
   });
 
   // Load project button
@@ -215,6 +242,7 @@ function bindFileButtons() {
         syncGlobalsToUI();
         PSB.renderOpBar(state.globals.ops, handleRemoveOp);
         PSB.closeSidebar();
+        markClean();
         console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
       } catch (err) {
         alert('Failed to load project file: ' + err.message);
@@ -249,6 +277,7 @@ function bindOpBar() {
     input.value = '';
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     recomputeAll();
+    markDirty();
     scheduleAutoSave();
   };
 
@@ -262,6 +291,7 @@ function handleRemoveOp(opNum) {
   state.globals.ops = state.globals.ops.filter(function(o) { return o !== opNum; });
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
   recomputeAll();
+  markDirty();
   scheduleAutoSave();
 }
 
@@ -292,6 +322,13 @@ function bindExportModal() {
     var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
     PSB.downloadCSV(csv);
     document.getElementById('export-modal').classList.add('hidden');
+
+    // Auto-save project file alongside the CSV export (slight delay so
+    // the browser doesn't merge the two downloads into one prompt)
+    setTimeout(function() {
+      PSB.saveProject(state);
+      markClean();
+    }, 1500);
   });
 }
 
@@ -357,6 +394,7 @@ function bindSettingsModal() {
       .sort();
 
     document.getElementById('settings-modal').classList.add('hidden');
+    markDirty();
     scheduleAutoSave();
   });
 }
@@ -375,6 +413,7 @@ function handleFileImport(content, fileName) {
       syncGlobalsToUI();
       PSB.renderOpBar(state.globals.ops, handleRemoveOp);
       PSB.closeSidebar();
+      markClean();
     } catch (err) {
       alert('Failed to load project: ' + err.message);
     }
@@ -396,6 +435,7 @@ function handleFileImport(content, fileName) {
   recomputeAll();
   PSB.closeSidebar();
 
+  markDirty();
   console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
 }
 
@@ -430,6 +470,7 @@ function handleRowUserChange(rowId, changes) {
     PSB.populateSidebar(rowId);
   }
 
+  markDirty();
   scheduleAutoSave();
 }
 
