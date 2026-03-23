@@ -40,15 +40,101 @@ function autoLoad() {
   }
 }
 
+// Persistent file handle for project saves (File System Access API)
+var projectFileHandle = null;
+
 /**
- * Save full project state as a downloadable JSON file.
+ * Save full project state as a JSON file.
+ *
+ * Uses File System Access API when available:
+ * - First save: prompts user to pick a location
+ * - Subsequent saves: silently overwrites the same file
+ *
+ * Falls back to classic blob download if the API isn't supported.
  *
  * @param {Object} state — { rows, globals }
+ * @param {Object} [opts] — { silent: true } to skip picker if handle exists
+ * @returns {Promise<boolean>} — true if saved successfully
  */
-function saveProject(state) {
+function saveProject(state, opts) {
   var serialized = serializeState(state);
   var json = JSON.stringify(serialized, null, 2);
+  opts = opts || {};
 
+  // File System Access API path (Chrome/Edge)
+  if (window.showSaveFilePicker) {
+    return saveWithFileHandle(json, opts.silent);
+  }
+
+  // Fallback: classic blob download
+  downloadBlob(json);
+  return Promise.resolve(true);
+}
+
+function saveWithFileHandle(json, silent) {
+  // If we already have a handle, write directly (no prompt)
+  if (projectFileHandle && silent) {
+    return writeToHandle(projectFileHandle, json).then(function() {
+      console.log('[PSB] Project silently saved to ' + projectFileHandle.name);
+      return true;
+    }).catch(function(err) {
+      console.warn('[PSB] Silent save failed, will re-prompt:', err);
+      projectFileHandle = null;
+      return promptAndSave(json);
+    });
+  }
+
+  // If we have a handle from a previous save, reuse it (manual save)
+  if (projectFileHandle) {
+    return writeToHandle(projectFileHandle, json).then(function() {
+      console.log('[PSB] Project saved to ' + projectFileHandle.name);
+      return true;
+    }).catch(function(err) {
+      console.warn('[PSB] Save to existing handle failed, re-prompting:', err);
+      projectFileHandle = null;
+      return promptAndSave(json);
+    });
+  }
+
+  // First time: ask user where to save
+  return promptAndSave(json);
+}
+
+function promptAndSave(json) {
+  var now = new Date();
+  var stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+
+  return window.showSaveFilePicker({
+    suggestedName: 'ProShop_Project_' + stamp + '.json',
+    types: [{
+      description: 'ProShop Project',
+      accept: { 'application/json': ['.json'] },
+    }],
+  }).then(function(handle) {
+    projectFileHandle = handle;
+    return writeToHandle(handle, json);
+  }).then(function() {
+    console.log('[PSB] Project saved to ' + projectFileHandle.name);
+    return true;
+  }).catch(function(err) {
+    if (err.name === 'AbortError') {
+      console.log('[PSB] Save cancelled by user');
+      return false;
+    }
+    console.error('[PSB] Save failed:', err);
+    return false;
+  });
+}
+
+function writeToHandle(handle, content) {
+  return handle.createWritable().then(function(writable) {
+    return writable.write(content).then(function() {
+      return writable.close();
+    });
+  });
+}
+
+function downloadBlob(json) {
   var now = new Date();
   var stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
   var filename = 'ProShop_Project_' + stamp + '.json';
@@ -63,6 +149,13 @@ function saveProject(state) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Clear the stored file handle (e.g. on New File).
+ */
+function clearProjectFileHandle() {
+  projectFileHandle = null;
 }
 
 /**
@@ -131,3 +224,4 @@ PSB.autoLoad = autoLoad;
 PSB.saveProject = saveProject;
 PSB.loadProject = loadProject;
 PSB.clearAutoSave = clearAutoSave;
+PSB.clearProjectFileHandle = clearProjectFileHandle;

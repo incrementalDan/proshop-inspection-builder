@@ -126,6 +126,7 @@ function bindNewButton() {
   document.getElementById('btn-new').addEventListener('click', function() {
     if (state.rows.length > 0 && !confirm('Clear all data and start a new file?')) return;
     PSB.clearAutoSave();
+    PSB.clearProjectFileHandle();
     state.rows = [];
     state.globals = PSB.defaultGlobals();
     syncGlobalsToUI();
@@ -220,8 +221,12 @@ function bindFileButtons() {
 
   // Save project
   document.getElementById('btn-save').addEventListener('click', function() {
-    PSB.saveProject(state);
-    markClean();
+    var result = PSB.saveProject(state);
+    if (result && result.then) {
+      result.then(function(ok) { if (ok) markClean(); });
+    } else {
+      markClean();
+    }
   });
 
   // Load project button
@@ -323,11 +328,16 @@ function bindExportModal() {
     PSB.downloadCSV(csv);
     document.getElementById('export-modal').classList.add('hidden');
 
-    // Auto-save project file alongside the CSV export (slight delay so
-    // the browser doesn't merge the two downloads into one prompt)
+    // Auto-save project file alongside the CSV export
+    // Uses silent mode — writes to the existing file handle without prompting.
+    // If no handle exists yet (first export without prior save), prompts once.
     setTimeout(function() {
-      PSB.saveProject(state);
-      markClean();
+      var result = PSB.saveProject(state, { silent: true });
+      if (result && result.then) {
+        result.then(function(ok) { if (ok) markClean(); });
+      } else {
+        markClean();
+      }
     }, 1500);
   });
 }
