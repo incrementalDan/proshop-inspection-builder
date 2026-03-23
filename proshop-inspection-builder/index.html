@@ -4,69 +4,78 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=14">
+  <link rel="stylesheet" href="css/styles.css?v=15">
 </head>
 <body>
 
   <!-- ═══════════════════════════════════════════════════ -->
-  <!-- HEADER BAR — Global settings, always visible       -->
+  <!-- HEADER BAR — Title, filename, actions              -->
   <!-- ═══════════════════════════════════════════════════ -->
   <header id="global-header">
     <div class="header-left">
       <h1 class="app-title">ProShop Inspection Builder</h1>
       <span class="app-version">v1.0</span>
     </div>
-    <div class="header-controls">
-      <div class="control-group">
-        <label>Import Units</label>
-        <select id="import-units">
-          <option value="mm">mm</option>
-          <option value="inch">inch</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label>Plating Thickness</label>
-        <input type="number" id="plating-thickness" class="no-spinners" step="0.0001" value="0" min="0" placeholder="0.0000">
-      </div>
-      <div class="control-group">
-        <label>Plating Units</label>
-        <select id="plating-units">
-          <option value="mm">mm</option>
-          <option value="inch">inch</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label>Inch Prec.</label>
-        <input type="number" id="inch-precision" value="4" min="1" max="6" step="1">
-      </div>
-      <div class="control-group">
-        <label>MM Prec.</label>
-        <input type="number" id="mm-precision" value="3" min="1" max="6" step="1">
-      </div>
-      <div class="header-actions">
-        <button id="btn-new" class="btn btn-secondary" title="Clear all data and start fresh">New</button>
-        <button id="btn-sample" class="btn btn-secondary" title="Load sample data for testing">Sample</button>
-        <button id="btn-import" class="btn btn-primary">Import CSV</button>
-        <button id="btn-export" class="btn btn-accent">Export CSV</button>
-        <button id="btn-save" class="btn btn-secondary">Save Project</button>
-        <button id="btn-load" class="btn btn-secondary">Load Project</button>
-        <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
-        <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">◑</button>
-      </div>
+    <div id="filename-banner" class="filename-banner">
+      <span id="filename-text" class="filename-text">No file loaded</span>
     </div>
-    <!-- Hidden file inputs -->
+    <div class="header-actions">
+      <button id="btn-new" class="btn btn-secondary" title="Clear all data and start fresh">New</button>
+      <button id="btn-sample" class="btn btn-secondary" title="Load sample data for testing">Sample</button>
+      <button id="btn-import" class="btn btn-primary">Import CSV</button>
+      <button id="btn-export" class="btn btn-accent">Export CSV</button>
+      <button id="btn-save" class="btn btn-secondary">Save Project</button>
+      <button id="btn-load" class="btn btn-secondary">Load Project</button>
+      <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
+      <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">◑</button>
+    </div>
+    <!-- Hidden inputs -->
     <input type="file" id="file-import-csv" accept=".csv" hidden>
     <input type="file" id="file-load-project" accept=".json" hidden>
+    <select id="import-units" hidden>
+      <option value="mm">mm</option>
+      <option value="inch">inch</option>
+    </select>
   </header>
 
   <!-- ═══════════════════════════════════════════════════ -->
-  <!-- OP BAR — Custom ops management                     -->
+  <!-- OP BAR + Global Settings — inline row              -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div id="op-bar">
     <span class="op-bar-label">OPs:</span>
     <div id="op-tags"></div>
     <input type="text" id="op-add-input" placeholder="Add OP..." class="op-add-input">
     <button id="btn-add-op" class="btn btn-small">+</button>
+
+    <div class="global-inputs">
+      <div class="control-group">
+        <label>Import Units</label>
+        <div id="unit-toggle" class="unit-toggle" tabindex="0" role="switch" aria-checked="true">
+          <span class="unit-toggle-option unit-toggle-mm">mm</span>
+          <span class="unit-toggle-option unit-toggle-in">in</span>
+          <span class="unit-toggle-thumb"></span>
+        </div>
+      </div>
+      <div class="control-group">
+        <label>Plating</label>
+        <input type="number" id="plating-thickness" class="no-spinners" step="0.0001" value="0" min="0" placeholder="0.0000">
+      </div>
+      <div class="control-group">
+        <label>Plat. Units</label>
+        <select id="plating-units">
+          <option value="mm">mm</option>
+          <option value="inch">inch</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>In Prec.</label>
+        <input type="number" id="inch-precision" value="4" min="1" max="6" step="1">
+      </div>
+      <div class="control-group">
+        <label>MM Prec.</label>
+        <input type="number" id="mm-precision" value="3" min="1" max="6" step="1">
+      </div>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════ -->
@@ -303,13 +312,13 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=14"></script>
-  <script src="js/parser.js?v=14"></script>
-  <script src="js/dataModel.js?v=14"></script>
-  <script src="js/exportEngine.js?v=14"></script>
-  <script src="js/storage.js?v=14"></script>
-  <script src="js/ui.js?v=14"></script>
-  <script src="js/app.js?v=14"></script>
+  <script src="js/mathEngine.js?v=15"></script>
+  <script src="js/parser.js?v=15"></script>
+  <script src="js/dataModel.js?v=15"></script>
+  <script src="js/exportEngine.js?v=15"></script>
+  <script src="js/storage.js?v=15"></script>
+  <script src="js/ui.js?v=15"></script>
+  <script src="js/app.js?v=15"></script>
 
 </body>
 </html>
