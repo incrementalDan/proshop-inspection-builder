@@ -45,10 +45,24 @@ var isDirty = false;
 
 function markDirty() {
   isDirty = true;
+  if (!document.title.startsWith('* ')) {
+    document.title = '* ' + document.title;
+  }
+  var fnEl = document.getElementById('filename-text');
+  if (fnEl && !fnEl.textContent.endsWith(' \u2022')) {
+    fnEl.textContent = fnEl.textContent + ' \u2022';
+  }
+  var saveBtn = document.getElementById('btn-save');
+  if (saveBtn) saveBtn.classList.add('btn-dirty');
 }
 
 function markClean() {
   isDirty = false;
+  document.title = document.title.replace(/^\* /, '');
+  var fnEl = document.getElementById('filename-text');
+  if (fnEl) fnEl.textContent = fnEl.textContent.replace(/ \u2022$/, '');
+  var saveBtn = document.getElementById('btn-save');
+  if (saveBtn) saveBtn.classList.remove('btn-dirty');
 }
 
 window.addEventListener('beforeunload', function(e) {
@@ -110,6 +124,11 @@ document.addEventListener('DOMContentLoaded', function() {
         openExportModal();
       }
       if (e.key === 'Escape') {
+        var confirmModal = document.getElementById('confirm-modal');
+        if (!confirmModal.classList.contains('hidden')) {
+          confirmModal.classList.add('hidden');
+          return;
+        }
         var exportModal = document.getElementById('export-modal');
         var settingsModal = document.getElementById('settings-modal');
         if (!exportModal.classList.contains('hidden')) {
@@ -149,18 +168,33 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════════
 function bindNewButton() {
   document.getElementById('btn-new').addEventListener('click', function() {
-    if (state.rows.length > 0 && !confirm('Clear all data and start a new file?')) return;
-    PSB.clearAutoSave();
-    PSB.clearProjectFileHandle();
-    state.rows = [];
-    state.globals = PSB.defaultGlobals();
-    syncGlobalsToUI();
-    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-    PSB.renderTable(state.rows);
-    PSB.closeSidebar();
-    setFilename(null);
-    markClean();
-    console.log('[PSB] New file — state cleared');
+    var doNew = function() {
+      PSB.clearAutoSave();
+      PSB.clearProjectFileHandle();
+      state.rows = [];
+      state.globals = PSB.defaultGlobals();
+      syncGlobalsToUI();
+      PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+      PSB.renderTable(state.rows);
+      PSB.closeSidebar();
+      setFilename(null);
+      markClean();
+      console.log('[PSB] New file — state cleared');
+    };
+
+    if (state.rows.length > 0) {
+      var fnEl = document.getElementById('filename-text');
+      var currentName = fnEl ? fnEl.textContent.replace(/ \u2022$/, '') : 'current file';
+      PSB.showConfirmModal({
+        title: 'Clear All Data?',
+        message: 'This will clear <strong>' + state.rows.length + '</strong> rows from <strong>' + PSB.esc(currentName) + '</strong>. This cannot be undone.',
+        confirmLabel: 'Clear All Data',
+        confirmClass: 'btn-danger',
+        onConfirm: doNew
+      });
+    } else {
+      doNew();
+    }
   });
 }
 
@@ -495,43 +529,51 @@ function bindSettingsModal() {
 // FILE IMPORT HANDLER
 // ═══════════════════════════════════════════════════════════
 function handleFileImport(content, fileName) {
-  if (fileName.endsWith('.json')) {
-    // Load project file
-    try {
-      var loaded = PSB.loadProject(content);
-      state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-      state.rows = loaded.rows;
-      recomputeAll();
-      syncGlobalsToUI();
-      PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-      PSB.closeSidebar();
-      setFilename(fileName);
-      markClean();
-    } catch (err) {
-      PSB.showToast('Failed to load project: ' + err.message, 'error');
+  var doImport = function() {
+    if (fileName.endsWith('.json')) {
+      try {
+        var loaded = PSB.loadProject(content);
+        state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
+        state.rows = loaded.rows;
+        recomputeAll();
+        syncGlobalsToUI();
+        PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+        PSB.closeSidebar();
+        setFilename(fileName);
+        markClean();
+      } catch (err) {
+        PSB.showToast('Failed to load project: ' + err.message, 'error');
+      }
+      return;
     }
-    return;
+
+    var rawRows = PSB.parseCSV(content);
+    if (rawRows.length === 0) {
+      PSB.showToast('No valid data found in CSV.', 'error');
+      return;
+    }
+
+    PSB.resetIdCounter();
+    state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
+    recomputeAll();
+    PSB.closeSidebar();
+    setFilename(fileName);
+    markDirty();
+    console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
+    PSB.showToast('Imported ' + state.rows.length + ' rows from ' + fileName, 'success');
+  };
+
+  if (state.rows.length > 0) {
+    PSB.showConfirmModal({
+      title: 'Replace Existing Data?',
+      message: 'You have <strong>' + state.rows.length + '</strong> rows with edits. Importing will replace all data.',
+      confirmLabel: 'Replace',
+      confirmClass: 'btn-danger',
+      onConfirm: doImport
+    });
+  } else {
+    doImport();
   }
-
-  // Parse CSV
-  var rawRows = PSB.parseCSV(content);
-  if (rawRows.length === 0) {
-    PSB.showToast('No valid data found in CSV.', 'error');
-    return;
-  }
-
-  // Create row objects
-  PSB.resetIdCounter();
-  state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
-
-  // Recompute all and render
-  recomputeAll();
-  PSB.closeSidebar();
-
-  setFilename(fileName);
-  markDirty();
-  console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
-  PSB.showToast('Imported ' + state.rows.length + ' rows from ' + fileName, 'success');
 }
 
 // ═══════════════════════════════════════════════════════════

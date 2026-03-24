@@ -263,6 +263,28 @@ input.no-spinners {
   background: var(--bg-tertiary);
 }
 
+.btn-dirty {
+  background: var(--accent-orange);
+  color: white;
+  border-color: var(--accent-orange);
+  animation: pulse-save 1.5s ease-in-out 1;
+}
+
+@keyframes pulse-save {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 8px var(--accent-orange); }
+}
+
+.btn-danger {
+  background: var(--accent-red);
+  color: white;
+  border-color: var(--accent-red);
+}
+
+.btn-danger:hover {
+  filter: brightness(1.15);
+}
+
 .btn-icon {
   width: 30px;
   padding: 0;
@@ -1203,6 +1225,13 @@ td.has-override {
   color: var(--text-muted);
   font-style: italic;
   margin-bottom: 6px;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 /* ── Utility ───────────────────────────────────────────── */
