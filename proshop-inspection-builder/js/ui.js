@@ -379,6 +379,12 @@ function wireUpSidebarHandlers(rowId) {
     onRowUserChange(rowId, { inspectionFrequency: e.target.value });
   });
 
+  // Editable sidebar preview values — double-click to edit, same override logic as table
+  setupSidebarValueEdit('sidebar-out-spec', 'outDrawingSpec', rowId);
+  setupSidebarValueEdit('sidebar-out-nominal', 'outNominal', rowId);
+  setupSidebarValueEdit('sidebar-out-tol', 'outTolerance', rowId);
+  setupSidebarValueEdit('sidebar-pingage-value', 'pinGageValue', rowId);
+
   // Output Tag — double-click to edit (Rule 6: overrideable)
   var otEl = document.getElementById('sidebar-output-tag');
   var otClone = otEl.cloneNode(true);
@@ -610,6 +616,64 @@ function setupTableHeaderClicks() {
       });
     })(headers[i]);
   }
+}
+
+// ── Sidebar Value Editing ──────────────────────────────
+
+function setupSidebarValueEdit(elementId, overrideKey, rowId) {
+  var el = document.getElementById(elementId);
+  if (!el) return;
+  var clone = el.cloneNode(true);
+  el.parentNode.replaceChild(clone, el);
+  clone.classList.add('sidebar-editable');
+
+  clone.addEventListener('dblclick', function(e) {
+    e.stopPropagation();
+    if (clone.querySelector('input')) return;
+
+    var originalValue = clone.textContent;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = originalValue;
+    input.className = 'inline-edit-input';
+    clone.textContent = '';
+    clone.appendChild(input);
+    input.focus();
+    input.select();
+
+    var committed = false;
+    var commit = function() {
+      if (committed) return;
+      committed = true;
+      var newValue = input.value.trim();
+      // Strip "[secondary]" bracket notation (same as table inline edit)
+      if (newValue && newValue.indexOf(' [') > 0) {
+        newValue = newValue.split(' [')[0].trim();
+      }
+      // Strip leading ± for tolerance values
+      if (newValue && newValue.charAt(0) === '\u00b1') {
+        newValue = newValue.substring(1);
+      }
+      clone.textContent = newValue || originalValue;
+
+      var state = getAppState();
+      var row = state.rows.find(function(r) { return r.id === rowId; });
+      if (row) {
+        var ov = Object.assign({}, row.user.overrides);
+        ov[overrideKey] = newValue || null;
+        onRowUserChange(rowId, { overrides: ov });
+      }
+    };
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', function(ke) {
+      if (ke.key === 'Enter') input.blur();
+      if (ke.key === 'Escape') {
+        committed = true;
+        clone.textContent = originalValue;
+      }
+    });
+  });
 }
 
 // ── Inline Editing ────────────────────────────────────
