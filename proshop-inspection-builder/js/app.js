@@ -45,10 +45,24 @@ var isDirty = false;
 
 function markDirty() {
   isDirty = true;
+  if (!document.title.startsWith('* ')) {
+    document.title = '* ' + document.title;
+  }
+  var fnEl = document.getElementById('filename-text');
+  if (fnEl && !fnEl.textContent.endsWith(' \u2022')) {
+    fnEl.textContent = fnEl.textContent + ' \u2022';
+  }
+  var saveBtn = document.getElementById('btn-save');
+  if (saveBtn) saveBtn.classList.add('btn-dirty');
 }
 
 function markClean() {
   isDirty = false;
+  document.title = document.title.replace(/^\* /, '');
+  var fnEl = document.getElementById('filename-text');
+  if (fnEl) fnEl.textContent = fnEl.textContent.replace(/ \u2022$/, '');
+  var saveBtn = document.getElementById('btn-save');
+  if (saveBtn) saveBtn.classList.remove('btn-dirty');
 }
 
 window.addEventListener('beforeunload', function(e) {
@@ -98,6 +112,35 @@ document.addEventListener('DOMContentLoaded', function() {
     bindSettingsModal();
     console.log('[PSB] All controls bound');
 
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      var mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('btn-save').click();
+      }
+      if (mod && e.key === 'e') {
+        e.preventDefault();
+        openExportModal();
+      }
+      if (e.key === 'Escape') {
+        var confirmModal = document.getElementById('confirm-modal');
+        if (!confirmModal.classList.contains('hidden')) {
+          confirmModal.classList.add('hidden');
+          return;
+        }
+        var exportModal = document.getElementById('export-modal');
+        var settingsModal = document.getElementById('settings-modal');
+        if (!exportModal.classList.contains('hidden')) {
+          exportModal.classList.add('hidden');
+        } else if (!settingsModal.classList.contains('hidden')) {
+          document.getElementById('settings-close').click();
+        } else if (!document.getElementById('sidebar').classList.contains('hidden')) {
+          PSB.closeSidebar();
+        }
+      }
+    });
+
     // Initial render
     syncGlobalsToUI();
     applyUnitColors(state.globals.importUnits);
@@ -125,18 +168,33 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════════
 function bindNewButton() {
   document.getElementById('btn-new').addEventListener('click', function() {
-    if (state.rows.length > 0 && !confirm('Clear all data and start a new file?')) return;
-    PSB.clearAutoSave();
-    PSB.clearProjectFileHandle();
-    state.rows = [];
-    state.globals = PSB.defaultGlobals();
-    syncGlobalsToUI();
-    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-    PSB.renderTable(state.rows);
-    PSB.closeSidebar();
-    setFilename(null);
-    markClean();
-    console.log('[PSB] New file — state cleared');
+    var doNew = function() {
+      PSB.clearAutoSave();
+      PSB.clearProjectFileHandle();
+      state.rows = [];
+      state.globals = PSB.defaultGlobals();
+      syncGlobalsToUI();
+      PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+      PSB.renderTable(state.rows);
+      PSB.closeSidebar();
+      setFilename(null);
+      markClean();
+      console.log('[PSB] New file — state cleared');
+    };
+
+    if (state.rows.length > 0) {
+      var fnEl = document.getElementById('filename-text');
+      var currentName = fnEl ? fnEl.textContent.replace(/ \u2022$/, '') : 'current file';
+      PSB.showConfirmModal({
+        title: 'Clear All Data?',
+        message: 'This will clear <strong>' + state.rows.length + '</strong> rows from <strong>' + PSB.esc(currentName) + '</strong>. This cannot be undone.',
+        confirmLabel: 'Clear All Data',
+        confirmClass: 'btn-danger',
+        onConfirm: doNew
+      });
+    } else {
+      doNew();
+    }
   });
 }
 
@@ -277,9 +335,10 @@ function bindFileButtons() {
   document.getElementById('btn-save').addEventListener('click', function() {
     var result = PSB.saveProject(state);
     if (result && result.then) {
-      result.then(function(ok) { if (ok) markClean(); });
+      result.then(function(ok) { if (ok) { markClean(); PSB.showToast('Project saved.', 'success'); } });
     } else {
       markClean();
+      PSB.showToast('Project saved.', 'success');
     }
   });
 
@@ -306,7 +365,7 @@ function bindFileButtons() {
         markClean();
         console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
       } catch (err) {
-        alert('Failed to load project file: ' + err.message);
+        PSB.showToast('Failed to load project file: ' + err.message, 'error');
       }
     };
     reader.readAsText(file);
@@ -329,7 +388,7 @@ function bindOpBar() {
   var addOp = function() {
     var val = parseInt(input.value);
     if (isNaN(val) || val <= 0) return;
-    if (val === 2000) { input.value = ''; return; } // OP2000 is export-only
+    if (val === 2000) { input.value = ''; PSB.showToast('OP2000 is included automatically in every export.', 'info'); return; }
     if (state.globals.ops.indexOf(val) !== -1) return;
 
     state.globals.ops.push(val);
@@ -373,7 +432,7 @@ function bindExportModal() {
     var exportUnits = document.getElementById('export-units').value;
 
     if (selectedOps.length === 0) {
-      alert('Select at least one OP to export.');
+      PSB.showToast('Select at least one OP to export.', 'error');
       return;
     }
 
@@ -382,6 +441,7 @@ function bindExportModal() {
     recomputeAll();
     var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
     PSB.downloadCSV(csv);
+    PSB.showToast('CSV exported.', 'success');
     document.getElementById('export-modal').classList.add('hidden');
 
     // Auto-save project file alongside the CSV export
@@ -469,42 +529,51 @@ function bindSettingsModal() {
 // FILE IMPORT HANDLER
 // ═══════════════════════════════════════════════════════════
 function handleFileImport(content, fileName) {
-  if (fileName.endsWith('.json')) {
-    // Load project file
-    try {
-      var loaded = PSB.loadProject(content);
-      state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-      state.rows = loaded.rows;
-      recomputeAll();
-      syncGlobalsToUI();
-      PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-      PSB.closeSidebar();
-      setFilename(fileName);
-      markClean();
-    } catch (err) {
-      alert('Failed to load project: ' + err.message);
+  var doImport = function() {
+    if (fileName.endsWith('.json')) {
+      try {
+        var loaded = PSB.loadProject(content);
+        state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
+        state.rows = loaded.rows;
+        recomputeAll();
+        syncGlobalsToUI();
+        PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+        PSB.closeSidebar();
+        setFilename(fileName);
+        markClean();
+      } catch (err) {
+        PSB.showToast('Failed to load project: ' + err.message, 'error');
+      }
+      return;
     }
-    return;
+
+    var rawRows = PSB.parseCSV(content);
+    if (rawRows.length === 0) {
+      PSB.showToast('No valid data found in CSV.', 'error');
+      return;
+    }
+
+    PSB.resetIdCounter();
+    state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
+    recomputeAll();
+    PSB.closeSidebar();
+    setFilename(fileName);
+    markDirty();
+    console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
+    PSB.showToast('Imported ' + state.rows.length + ' rows from ' + fileName, 'success');
+  };
+
+  if (state.rows.length > 0) {
+    PSB.showConfirmModal({
+      title: 'Replace Existing Data?',
+      message: 'You have <strong>' + state.rows.length + '</strong> rows with edits. Importing will replace all data.',
+      confirmLabel: 'Replace',
+      confirmClass: 'btn-danger',
+      onConfirm: doImport
+    });
+  } else {
+    doImport();
   }
-
-  // Parse CSV
-  var rawRows = PSB.parseCSV(content);
-  if (rawRows.length === 0) {
-    alert('No valid data found in CSV.');
-    return;
-  }
-
-  // Create row objects
-  PSB.resetIdCounter();
-  state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
-
-  // Recompute all and render
-  recomputeAll();
-  PSB.closeSidebar();
-
-  setFilename(fileName);
-  markDirty();
-  console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
 }
 
 // ═══════════════════════════════════════════════════════════

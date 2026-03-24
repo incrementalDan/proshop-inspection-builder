@@ -316,6 +316,26 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════ -->
+  <!-- CONFIRM MODAL (shared by import collision + New)  -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="confirm-modal-title">Confirm</h2>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message"></p>
+        <div class="confirm-modal-actions">
+          <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="confirm-modal-ok" class="btn btn-primary">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
   <script src="js/mathEngine.js?v=16"></script>

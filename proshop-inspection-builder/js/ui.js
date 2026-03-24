@@ -24,6 +24,12 @@ var onRowUserChange = null;   // (rowId, userChanges) => void
 var onFileImport = null;      // (fileContent, fileName) => void
 var getAppState = null;       // () => { rows, globals }
 
+// Edit flash: tracks which cell should flash after re-render
+var flashCellKey = null; // "rowId|col-classname"
+
+// Tab navigation: tracks which cell to auto-enter edit mode after re-render
+var navigateTarget = null; // { rowId, colClass, reverse }
+
 // ── OP Color Palette ──────────────────────────────────────
 // CSS vars: --op-color-0 (OP2000/orange), --op-color-1..7
 var OP_COLORS = [
@@ -125,6 +131,25 @@ function renderTable(rows) {
     setupOpBubbleClicks(tr, row);
 
     tbody.appendChild(tr);
+
+    // Apply edit flash if this row/column was just edited
+    if (flashCellKey) {
+      var parts = flashCellKey.split('|');
+      if (row.id === parseInt(parts[0])) {
+        var flashTd = tr.querySelector('.' + parts[1]);
+        if (flashTd) {
+          flashTd.classList.add('edit-flash');
+          setTimeout(function() { flashTd.classList.remove('edit-flash'); }, 600);
+        }
+        flashCellKey = null;
+      }
+    }
+  }
+
+  // Resolve tab-navigation target after full table is built
+  if (navigateTarget) {
+    resolveNavigateTarget(tbody, displayRows);
+    navigateTarget = null;
   }
 }
 
@@ -618,6 +643,14 @@ function setupInlineEditing(tr, row) {
           }
           td.textContent = newValue || originalValue;
 
+          // Set flash target for after re-render
+          var colClass = '';
+          var classes = td.className.split(' ');
+          for (var ci = 0; ci < classes.length; ci++) {
+            if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
+          }
+          if (colClass) flashCellKey = row.id + '|' + colClass;
+
           // Determine which field was edited
           var ov = Object.assign({}, row.user.overrides);
           if (td.classList.contains('col-drawspec') || td.classList.contains('col-inputspec')) {
@@ -644,6 +677,20 @@ function setupInlineEditing(tr, row) {
           if (ke.key === 'Escape') {
             committed = true; // Prevent commit on blur
             td.textContent = originalValue;
+          }
+          if (ke.key === 'Tab') {
+            ke.preventDefault();
+            var colClass = '';
+            var classes = td.className.split(' ');
+            for (var ci = 0; ci < classes.length; ci++) {
+              if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
+            }
+            navigateTarget = {
+              rowId: row.id,
+              colClass: colClass,
+              reverse: ke.shiftKey
+            };
+            input.blur();
           }
         });
       });
@@ -776,6 +823,96 @@ function getSelectedRowId() {
   return selectedRowId;
 }
 
+// ── Toast Notifications ──────────────────────────────────
+
+function showToast(message, type) {
+  type = type || 'info';
+  var container = document.getElementById('toast-container');
+  var existing = container.querySelector('.toast');
+  if (existing) container.removeChild(existing);
+
+  var el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = message;
+  container.appendChild(el);
+
+  setTimeout(function() {
+    el.classList.add('toast-out');
+    el.addEventListener('animationend', function() {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    });
+  }, 3000);
+}
+
+// ── Tab Navigation Helper ─────────────────────────────────
+
+function resolveNavigateTarget(tbody, displayRows) {
+  var nav = navigateTarget;
+  var editableCols = ['col-su1', 'col-drawspec', 'col-inputspec', 'col-su2', 'col-su3',
+                      'col-outnom', 'col-pingage', 'col-inputtol', 'col-outtol'];
+
+  var rowIdx = -1;
+  for (var ri = 0; ri < displayRows.length; ri++) {
+    if (displayRows[ri].id === nav.rowId) { rowIdx = ri; break; }
+  }
+  if (rowIdx < 0) return;
+
+  var colIdx = editableCols.indexOf(nav.colClass);
+  if (colIdx < 0) return;
+
+  if (nav.reverse) {
+    colIdx--;
+    if (colIdx < 0) { colIdx = editableCols.length - 1; rowIdx--; }
+  } else {
+    colIdx++;
+    if (colIdx >= editableCols.length) { colIdx = 0; rowIdx++; }
+  }
+
+  if (rowIdx < 0 || rowIdx >= displayRows.length) return;
+
+  var targetRowId = displayRows[rowIdx].id;
+  var targetColClass = editableCols[colIdx];
+
+  var targetTr = tbody.querySelector('tr[data-row-id="' + targetRowId + '"]');
+  if (!targetTr) return;
+  var targetTd = targetTr.querySelector('.' + targetColClass);
+  if (!targetTd) return;
+
+  setTimeout(function() {
+    targetTd.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  }, 0);
+}
+
+// ── Confirm Modal ─────────────────────────────────────────
+
+function showConfirmModal(opts) {
+  var modal = document.getElementById('confirm-modal');
+  document.getElementById('confirm-modal-title').textContent = opts.title || 'Confirm';
+  document.getElementById('confirm-modal-message').innerHTML = opts.message || '';
+
+  var okBtn = document.getElementById('confirm-modal-ok');
+  var cancelBtn = document.getElementById('confirm-modal-cancel');
+
+  okBtn.textContent = opts.confirmLabel || 'Confirm';
+  okBtn.className = 'btn ' + (opts.confirmClass || 'btn-primary');
+
+  // Clone buttons to remove old listeners
+  var okClone = okBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(okClone, okBtn);
+  var cancelClone = cancelBtn.cloneNode(true);
+  cancelBtn.parentNode.replaceChild(cancelClone, cancelBtn);
+
+  modal.classList.remove('hidden');
+
+  cancelClone.addEventListener('click', function() {
+    modal.classList.add('hidden');
+  });
+  okClone.addEventListener('click', function() {
+    modal.classList.add('hidden');
+    if (opts.onConfirm) opts.onConfirm();
+  });
+}
+
 // ── Export to namespace ───────────────────────────────────
 PSB.initUI = initUI;
 PSB.renderTable = renderTable;
@@ -784,3 +921,6 @@ PSB.closeSidebar = closeSidebar;
 PSB.populateSidebar = populateSidebar;
 PSB.getSelectedRowId = getSelectedRowId;
 PSB.getOpColor = getOpColor;
+PSB.showToast = showToast;
+PSB.showConfirmModal = showConfirmModal;
+PSB.esc = esc;
