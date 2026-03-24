@@ -595,6 +595,11 @@ function handleRowUserChange(rowId, changes) {
     row.user.ipc = anyOpOn;
   }
 
+  // Auto-set equipment to GO / NO-GO when pin/gage is enabled with no equipment
+  if (changes.pinGageEnabled && row.user.pinGageEnabled && !row.user.inspectionEquipment) {
+    row.user.inspectionEquipment = 'GO / NO-GO';
+  }
+
   // Auto-set status to 'edited' if currently 'none'
   if (row.user.status === 'none') {
     row.user.status = 'edited';

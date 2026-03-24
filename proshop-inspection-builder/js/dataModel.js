@@ -333,8 +333,13 @@ function recompute(row, globals) {
   if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
     pinGageStr = user.overrides.pinGageValue;
   } else if (user.pinGageEnabled) {
-    var pg = PSB.computePinGage(secondaryNom, secondaryTolPlus, secondaryPrec);
-    pinGageStr = pg.formatted;
+    if (user.inspectionEquipment === 'Gage Block') {
+      var gb = PSB.computeGageBlock(secondaryNom, secondaryTolPlus, secondaryTolMinus, secondaryPrec);
+      pinGageStr = gb.formatted;
+    } else {
+      var pg = PSB.computePinGage(secondaryNom, secondaryTolPlus, secondaryPrec);
+      pinGageStr = pg.formatted;
+    }
   }
 
   // ── Build output display values (other OPs) ──────────────
