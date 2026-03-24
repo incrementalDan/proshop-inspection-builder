@@ -63,7 +63,10 @@ User:
 - inspectionFrequency
 - inspectionEquipment
 - pinGageEnabled
-- overrides (outDrawingSpec, outTolerance, pinGageValue)
+- overrides:
+  - outDrawingSpec, outTolerance — OP2000 base overrides (feed into numeric pipeline, drive OUT values)
+  - outputSpec, outputTolerance — independent OUT overrides (bypass pipeline, cleared when OP2000 changes)
+  - pinGageValue, specUnit1-3, outNominal, inputTolerance, outputTag
 - status
 
 Computed:

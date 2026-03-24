@@ -180,14 +180,14 @@ function buildRowHTML(row) {
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
     '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
-    '<td class="col-drawspec editable">' + formatDualDisplay(c.outDrawingSpec) + '</td>' +
+    '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) + '</td>' +
     '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.op2000DualSpec) + '</td>' +
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
     '<td class="col-outnom editable">' + formatDualDisplay(c.outNominal) + '</td>' +
     '<td class="col-pingage editable">' + esc(addLeadingZero(c.pinGage)) + '</td>' +
     '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.op2000DualTol)) + '</td>' +
-    '<td class="col-outtol editable">' + formatDualDisplay(tolDisplay(c.outTolerance)) + '</td>' +
+    '<td class="col-outtol editable' + (ov.outputTolerance !== null ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.outTolerance)) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
     '<td class="col-ops">' + opBubblesHTML + '</td>';
 }
@@ -379,10 +379,14 @@ function wireUpSidebarHandlers(rowId) {
     onRowUserChange(rowId, { inspectionFrequency: e.target.value });
   });
 
-  // Editable sidebar preview values — double-click to edit, same override logic as table
-  setupSidebarValueEdit('sidebar-out-spec', 'outDrawingSpec', rowId);
+  // Editable sidebar preview values — double-click to edit
+  // OP2000 values: set base overrides, clear independent OUT overrides + toast
+  setupSidebarValueEdit('sidebar-op2000-spec', 'outDrawingSpec', rowId, 'outputSpec');
+  setupSidebarValueEdit('sidebar-op2000-tol', 'outTolerance', rowId, 'outputTolerance');
+  // OUT values: set independent overrides only, don't affect OP2000
+  setupSidebarValueEdit('sidebar-out-spec', 'outputSpec', rowId);
   setupSidebarValueEdit('sidebar-out-nominal', 'outNominal', rowId);
-  setupSidebarValueEdit('sidebar-out-tol', 'outTolerance', rowId);
+  setupSidebarValueEdit('sidebar-out-tol', 'outputTolerance', rowId);
   setupSidebarValueEdit('sidebar-pingage-value', 'pinGageValue', rowId);
 
   // Output Tag — double-click to edit (Rule 6: overrideable)
@@ -620,7 +624,7 @@ function setupTableHeaderClicks() {
 
 // ── Sidebar Value Editing ──────────────────────────────
 
-function setupSidebarValueEdit(elementId, overrideKey, rowId) {
+function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
   var el = document.getElementById(elementId);
   if (!el) return;
   var clone = el.cloneNode(true);
@@ -661,6 +665,11 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId) {
       if (row) {
         var ov = Object.assign({}, row.user.overrides);
         ov[overrideKey] = newValue || null;
+        // When editing OP2000 base, clear independent OUT override + toast
+        if (clearKey && ov[clearKey] !== null) {
+          ov[clearKey] = null;
+          showToast('OP2000 changed — OUT override cleared', 'info');
+        }
         onRowUserChange(rowId, { overrides: ov });
       }
     };
@@ -716,11 +725,29 @@ function setupInlineEditing(tr, row) {
           if (colClass) flashCellKey = row.id + '|' + colClass;
 
           // Determine which field was edited
+          // OP2000 columns → set base override + clear OUT independent override
+          // OUT columns → set independent OUT override only
           var ov = Object.assign({}, row.user.overrides);
-          if (td.classList.contains('col-drawspec') || td.classList.contains('col-inputspec')) {
+          if (td.classList.contains('col-inputspec')) {
+            // OP2000 Spec — drives pipeline, clears independent OUT spec
+            if (ov.outputSpec !== null) {
+              ov.outputSpec = null;
+              showToast('OP2000 Spec changed — OUT Spec override cleared', 'info');
+            }
             ov.outDrawingSpec = newValue || null;
-          } else if (td.classList.contains('col-outtol') || td.classList.contains('col-inputtol')) {
+          } else if (td.classList.contains('col-drawspec')) {
+            // OUT Spec — independent override, does not affect OP2000
+            ov.outputSpec = newValue || null;
+          } else if (td.classList.contains('col-inputtol')) {
+            // OP2000 Tol — drives pipeline, clears independent OUT tol
+            if (ov.outputTolerance !== null) {
+              ov.outputTolerance = null;
+              showToast('OP2000 Tol changed — OUT Tol override cleared', 'info');
+            }
             ov.outTolerance = newValue || null;
+          } else if (td.classList.contains('col-outtol')) {
+            // OUT Tol — independent override, does not affect OP2000
+            ov.outputTolerance = newValue || null;
           } else if (td.classList.contains('col-pingage')) {
             ov.pinGageValue = newValue || null;
           } else if (td.classList.contains('col-su1')) {
