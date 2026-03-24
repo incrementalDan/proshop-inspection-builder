@@ -111,7 +111,12 @@ There are 4 types of transformations applied from import data to export data. Th
 Cleans up messy Ground Control import data by placing values in the correct ProShop columns. Tolerance data sometimes ends up in Drawing Spec; spec unit identifiers sometimes appear in the wrong field. Parsing corrects column placement and formatting without altering the underlying data. Implemented by `parseSpecUnits()`, `parseTolerance()`, `detectFeatureType()`.
 
 **Type 2 — Manual Overrides**
-User corrections for data that was originally incorrect or misread by Ground Control. Stored in `row.user.overrides`. Primarily applies to Drawing Spec and Tolerance but can apply to any editable field (SU1, SU2, SU3, Output Nominal, Input Tolerance, Pin Gage).
+User corrections for data that was originally incorrect or misread by Ground Control. Stored in `row.user.overrides`.
+
+Override architecture for Spec/Tol:
+- `outDrawingSpec` / `outTolerance` — OP2000 base overrides. These feed into the NUMERIC pipeline (update nominal/tolerance values), so all downstream calculations (centering, plating, OUT values) derive from the corrected base. Editing OP2000 Spec/Tol in the table or sidebar sets these keys.
+- `outputSpec` / `outputTolerance` — Independent OUT overrides. These bypass the pipeline entirely and set OUT display values directly. When an OP2000 base override is edited, any existing independent OUT override is cleared (with a toast notification).
+- Other editable fields: SU1, SU2, SU3, Output Nominal, Input Tolerance, Pin Gage.
 
 **Type 3 — Modifiers**
 Sidebar-driven transformations: plating adjustments, unit conversion, inspection frequency tagging, pin/gage computation. Applied after types 1, 2, and 4.
@@ -128,7 +133,10 @@ Raw CSV → Parse (Type 1) → Override (Type 2) → [OP2000 values]
                                                       ↓
                                           Modifiers (Type 3)
                                                       ↓
-                                              [Other OP values]
+                                    [Other OP values (derived)]
+                                                      ↓
+                              Independent OUT override? → [use override]
+                                         else          → [use derived]
 ```
 
 The OP2000 computed values are the **base** from which all other OP values are derived. Types 3 and 4 build on top of the OP2000 values — they are not independent calculations from raw data. This ensures overrides always propagate correctly to every OP.
@@ -318,3 +326,6 @@ This is an ordering / readability tool, not a math function.
 - Do NOT lose the original raw data when user edits — raw is immutable
 - Do NOT use frameworks or build tools — this must open from index.html directly
 - Do NOT put plating adjustment on tolerance — only on nominal
+- OP2000 overrides (`outDrawingSpec`/`outTolerance`) MUST feed into the numeric pipeline — they update the nominal/tolerance values used for centering, plating, and OUT derivation
+- OUT overrides (`outputSpec`/`outputTolerance`) are INDEPENDENT — they bypass the pipeline. Editing OP2000 clears them.
+- Data flow is ONE-WAY: OP2000 → OUT. Editing OUT spec/tol NEVER changes OP2000 values.

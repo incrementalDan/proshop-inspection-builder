@@ -104,8 +104,10 @@ function defaultUserState() {
     pinGageEnabled: false,
     status: 'none',          // 'none', 'edited', 'complete'
     overrides: {
-      outDrawingSpec: null,  // null = use computed, string = manual override
-      outTolerance: null,
+      outDrawingSpec: null,  // OP2000 base spec override (drives OUT spec via pipeline)
+      outTolerance: null,    // OP2000 base tolerance override (drives OUT tol via pipeline)
+      outputSpec: null,      // Independent OUT spec override (cleared when OP2000 spec changes)
+      outputTolerance: null, // Independent OUT tol override (cleared when OP2000 tol changes)
       pinGageValue: null,
       specUnit1: null,
       specUnit2: null,
@@ -224,14 +226,30 @@ function recompute(row, globals) {
 
   // ══════════════════════════════════════════════════════════
   // Type 2 — Manual Overrides: apply user corrections
-  // After this point we have the OP2000 base values.
+  // OP2000 overrides feed into the numeric pipeline so OUT
+  // values are derived correctly from the corrected base.
   // ══════════════════════════════════════════════════════════
   var op2000SpecUnit1 = user.overrides.specUnit1 !== null ? user.overrides.specUnit1 : (raw.specUnit1 || specUnits.su1 || '');
   var op2000SpecUnit2 = user.overrides.specUnit2 !== null ? user.overrides.specUnit2 : (raw.specUnit2 || specUnits.su2 || '');
   var op2000SpecUnit3 = user.overrides.specUnit3 !== null ? user.overrides.specUnit3 : (raw.specUnit3 || specUnits.su3 || '');
   var op2000DrawingSpec = user.overrides.outDrawingSpec !== null ? user.overrides.outDrawingSpec : (raw.drawingSpec || '');
-  var op2000Nominal = nominal;  // numeric, from parsed raw
   var op2000Tolerance = user.overrides.outTolerance !== null ? user.overrides.outTolerance : (raw.tolerance || '');
+
+  // Feed OP2000 spec override into the numeric nominal so pipeline derives correctly
+  if (user.overrides.outDrawingSpec !== null) {
+    var ovSpecAsNum = parseFloat(user.overrides.outDrawingSpec);
+    if (!isNaN(ovSpecAsNum)) nominal = ovSpecAsNum;
+  }
+  var op2000Nominal = nominal;
+
+  // Feed OP2000 tolerance override into numeric pipeline
+  if (user.overrides.outTolerance !== null) {
+    var ovTolAsNum = parseFloat(user.overrides.outTolerance);
+    if (!isNaN(ovTolAsNum)) {
+      tolPlus = ovTolAsNum;
+      tolMinus = ovTolAsNum;
+    }
+  }
   var op2000InputTolerance = user.overrides.inputTolerance !== null ? user.overrides.inputTolerance : (raw.tolerance || '');
 
   // Store originals (pre-math) for reference
@@ -344,34 +362,35 @@ function recompute(row, globals) {
   }
 
   // ── Build output display values (other OPs) ──────────────
+  // Priority: 1) Independent OUT override, 2) Derived from pipeline (OP2000 base + modifiers)
   var outDrawingSpec;
-  if (user.overrides.outDrawingSpec !== null) {
-    var ovSpecNum = parseFloat(user.overrides.outDrawingSpec);
-    if (!isNaN(ovSpecNum)) {
-      var ovSpecStr = PSB.formatPrecision(ovSpecNum, primaryPrec);
-      var ovSecSpec = PSB.convertUnits(ovSpecNum, importUnits, secondaryUnits);
-      var ovSecSpecStr = PSB.formatPrecision(ovSecSpec, secondaryPrec);
-      outDrawingSpec = ovSpecStr + ' [' + ovSecSpecStr + ']';
+  if (user.overrides.outputSpec !== null) {
+    // Independent OUT spec override
+    var ovsNum = parseFloat(user.overrides.outputSpec);
+    if (!isNaN(ovsNum)) {
+      outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [' +
+        PSB.formatPrecision(PSB.convertUnits(ovsNum, importUnits, secondaryUnits), secondaryPrec) + ']';
     } else {
-      outDrawingSpec = user.overrides.outDrawingSpec;
+      outDrawingSpec = user.overrides.outputSpec;
     }
   } else {
+    // Derived from pipeline: nominal (with centering + plating applied)
     outDrawingSpec = dualNomStr;
   }
 
   var outTolerance;
-  if (user.overrides.outTolerance !== null) {
-    var ovTolNum = parseFloat(user.overrides.outTolerance);
-    var isAsymOvTol = /\+.*[-–]/.test(user.overrides.outTolerance);
-    if (!isAsymOvTol && !isNaN(ovTolNum) && ovTolNum !== 0) {
-      var ovTolStr = PSB.formatPrecision(ovTolNum, primaryPrec);
-      var ovSecTol = PSB.convertUnits(ovTolNum, importUnits, secondaryUnits);
-      var ovSecTolStr = PSB.formatPrecision(ovSecTol, secondaryPrec);
-      outTolerance = ovTolStr + ' [' + ovSecTolStr + ']';
+  if (user.overrides.outputTolerance !== null) {
+    // Independent OUT tolerance override
+    var ovtNum = parseFloat(user.overrides.outputTolerance);
+    var isAsymOvt = /\+.*[-–]/.test(user.overrides.outputTolerance);
+    if (!isAsymOvt && !isNaN(ovtNum) && ovtNum !== 0) {
+      outTolerance = PSB.formatPrecision(ovtNum, primaryPrec) + ' [' +
+        PSB.formatPrecision(PSB.convertUnits(ovtNum, importUnits, secondaryUnits), secondaryPrec) + ']';
     } else {
-      outTolerance = user.overrides.outTolerance;
+      outTolerance = user.overrides.outputTolerance;
     }
   } else {
+    // Derived from pipeline: tolerance (with centering applied)
     outTolerance = dualTolStr;
   }
 
