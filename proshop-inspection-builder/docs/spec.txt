@@ -199,14 +199,18 @@ Not apply to tolerance
 	•	MM precision
 
 
-7. Pin / Gage
+7. Pin / Gage (equipment-dependent)
 
-Pin:
+Format depends on the selected Inspection Equipment:
+
+Pin (when equipment = GO / NO-GO):
 GO = nominal - tol
 NO GO = nominal + tol
 Format: P(ØGO+ | ØNOGO-)
 
-Gage Block:
+Gage Block (when equipment = Gage Block):
+low = nominal - tolMinus
+high = nominal + tolPlus
 Format: G(low | high)
 
 Stored as editable value.
@@ -214,6 +218,8 @@ Stored as editable value.
 	•	Only computed if enabled
 	•	Stored as editable value
 	•	Export uses stored value (not recomputed)
+	•	When pin/gage is enabled with no equipment selected, auto-set to GO / NO-GO
+	•	User can override equipment to Gage Block, which changes format from P() to G()
 
 8. UI
 

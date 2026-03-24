@@ -173,13 +173,11 @@ Drawing spec = final post-plating dimension. We compute the pre-plating machinin
 - `-2x External`: SUBTRACT 2× plating from nominal (2 sides, e.g. OD — part grows, machine smaller)
 - **NEVER apply plating to tolerance — only to nominal**
 
-### Pin Gage
-- GO = nominal - tolerance
-- NO GO = nominal + tolerance
-- Format: `P(Ø{GO}+ | Ø{NOGO}-)`
-
-### Gage Block
-- Format: `G({low} | {high})`
+### Pin / Gage (equipment-dependent)
+The Pin/Gage column format depends on the selected Inspection Equipment:
+- **GO / NO-GO** → Pin format: `P(Ø{GO}+ | Ø{NOGO}-)` where GO = nominal - tolerance, NO GO = nominal + tolerance
+- **Gage Block** → Gage format: `G({low} | {high})` where low = nominal - tolMinus, high = nominal + tolPlus
+- When pin/gage is enabled with no equipment selected, auto-set equipment to "GO / NO-GO" (user can override to "Gage Block")
 
 ## Global Settings (stored in app state, shown in header bar)
 - Import Units: mm or inch
