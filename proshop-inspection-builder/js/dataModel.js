@@ -329,15 +329,16 @@ function recompute(row, globals) {
   }
 
   // ── Pin/Gage computation ─────────────────────────────────
+  // Uses primary (import) units — these are the units the user works in
   var pinGageStr = '';
   if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
     pinGageStr = user.overrides.pinGageValue;
   } else if (user.pinGageEnabled) {
     if (user.inspectionEquipment === 'Gage Block') {
-      var gb = PSB.computeGageBlock(secondaryNom, secondaryTolPlus, secondaryTolMinus, secondaryPrec);
+      var gb = PSB.computeGageBlock(primaryNom, primaryTolPlus, primaryTolMinus, primaryPrec);
       pinGageStr = gb.formatted;
     } else {
-      var pg = PSB.computePinGage(secondaryNom, secondaryTolPlus, secondaryPrec);
+      var pg = PSB.computePinGage(primaryNom, primaryTolPlus, primaryPrec);
       pinGageStr = pg.formatted;
     }
   }

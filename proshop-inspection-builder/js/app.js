@@ -633,6 +633,15 @@ function recomputeAll() {
     PSB.recompute(state.rows[i], state.globals);
   }
   PSB.renderTable(state.rows);
+
+  // Refresh sidebar if a row is selected so values stay in sync
+  var selId = PSB.getSelectedRowId();
+  if (selId !== null) {
+    var tr = document.querySelector('#table-body tr[data-row-id="' + selId + '"]');
+    if (tr) tr.classList.add('selected');
+    PSB.populateSidebar(selId);
+  }
+
   scheduleAutoSave();
 }
 
