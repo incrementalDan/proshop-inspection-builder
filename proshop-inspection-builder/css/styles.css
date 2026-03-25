@@ -5,17 +5,17 @@
 
 /* ── CSS Variables (Theme) ─────────────────────────────── */
 :root {
-  /* Dark theme (default) */
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --bg-surface: #1e2746;
-  --bg-hover: #253361;
-  --bg-selected: #2a3f6e;
+  /* Dark theme (default) — gray-blue tones inspired by VS Code */
+  --bg-primary: #1e2030;
+  --bg-secondary: #1b1d2e;
+  --bg-tertiary: #2a3050;
+  --bg-surface: #252840;
+  --bg-hover: #2e3350;
+  --bg-selected: #333a5c;
 
-  --text-primary: #e8e8e8;
-  --text-secondary: #a0a8c0;
-  --text-muted: #6b7394;
+  --text-primary: #e8eaf0;
+  --text-secondary: #a8b0c8;
+  --text-muted: #6e7894;
   --text-inverse: #1a1a2e;
 
   --accent-blue: #4a9eff;
@@ -38,13 +38,13 @@
   --op-color-6: #ffc107;   /* 6th — yellow */
   --op-color-7: #ff6e40;   /* 7th — deep orange */
 
-  --border-color: #2a3354;
-  --border-light: #354170;
+  --border-color: #2e3350;
+  --border-light: #3a4060;
 
-  --row-even: #1c2540;
-  --row-odd: #212d4a;
-  --row-selected: #2a4070;
-  --row-note: #2a2535;
+  --row-even: #21243a;
+  --row-odd: #262a42;
+  --row-selected: #303860;
+  --row-note: #2a2738;
 
   --status-none: transparent;
   --status-edited: #ffc107;
@@ -628,7 +628,7 @@ input.no-spinners {
   border-bottom: 2px solid var(--unit-primary, var(--accent-blue));
   padding: 6px 10px;
   text-align: left;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -655,7 +655,7 @@ input.no-spinners {
 #data-table td {
   padding: 5px 10px;
   border-bottom: 1px solid var(--border-color);
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--font-mono);
   white-space: nowrap;
 }
@@ -687,7 +687,7 @@ input.no-spinners {
 #data-table tbody tr.is-note td {
   white-space: normal;
   word-break: break-word;
-  font-size: 11px;
+  font-size: 12px;
   max-width: 200px;
 }
 
@@ -740,7 +740,7 @@ td.editable input {
   background: transparent;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -753,7 +753,7 @@ td.editable input {
 .col-su2 { width: 60px; }
 .col-su3 { width: 40px; text-align: center; }
 .col-outnom { min-width: 140px; }
-.col-pingage { min-width: 90px; font-size: 10px; }
+.col-pingage { min-width: 90px; font-size: 11px; }
 .col-inputtol { width: 80px; color: var(--text-muted); }
 .col-outtol { width: 80px; }
 .col-plating { width: 70px; }
