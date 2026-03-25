@@ -312,6 +312,23 @@ function setFilename(name) {
   }
 }
 
+function applyLoadedProject(jsonString, fileName) {
+  try {
+    var loaded = PSB.loadProject(jsonString);
+    state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
+    state.rows = loaded.rows;
+    recomputeAll();
+    syncGlobalsToUI();
+    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+    PSB.closeSidebar();
+    setFilename(fileName);
+    markClean();
+    console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
+  } catch (err) {
+    PSB.showToast('Failed to load project file: ' + err.message, 'error');
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
 // FILE IMPORT / EXPORT / SAVE / LOAD BUTTONS
 // ═══════════════════════════════════════════════════════════
@@ -335,16 +352,33 @@ function bindFileButtons() {
   document.getElementById('btn-save').addEventListener('click', function() {
     var result = PSB.saveProject(state);
     if (result && result.then) {
-      result.then(function(ok) { if (ok) { markClean(); PSB.showToast('Project saved.', 'success'); } });
+      result.then(function(ok) {
+        if (ok) {
+          markClean();
+          // Update filename display to match saved file
+          var fname = PSB.getProjectFileName();
+          if (fname) setFilename(fname);
+          PSB.showToast('Project saved.', 'success');
+        }
+      });
     } else {
       markClean();
       PSB.showToast('Project saved.', 'success');
     }
   });
 
-  // Load project button
+  // Load project button — uses File System Access API to get a handle
+  // so subsequent saves overwrite the same file without prompting.
   document.getElementById('btn-load').addEventListener('click', function() {
-    document.getElementById('file-load-project').click();
+    PSB.openProjectWithHandle().then(function(result) {
+      if (result) {
+        applyLoadedProject(result.jsonString, result.fileName);
+      } else if (!window.showOpenFilePicker) {
+        // Fallback for browsers without File System Access API
+        document.getElementById('file-load-project').click();
+      }
+      // null with API = user cancelled, do nothing
+    });
   });
 
   document.getElementById('file-load-project').addEventListener('change', function(e) {
@@ -353,20 +387,7 @@ function bindFileButtons() {
     var reader = new FileReader();
     var loadFileName = file.name;
     reader.onload = function(ev) {
-      try {
-        var loaded = PSB.loadProject(ev.target.result);
-        state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-        state.rows = loaded.rows;
-        recomputeAll();
-        syncGlobalsToUI();
-        PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-        PSB.closeSidebar();
-        setFilename(loadFileName);
-        markClean();
-        console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
-      } catch (err) {
-        PSB.showToast('Failed to load project file: ' + err.message, 'error');
-      }
+      applyLoadedProject(ev.target.result, loadFileName);
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -444,17 +465,11 @@ function bindExportModal() {
     PSB.showToast('CSV exported.', 'success');
     document.getElementById('export-modal').classList.add('hidden');
 
-    // Auto-save project file alongside the CSV export
-    // Uses silent mode — writes to the existing file handle without prompting.
-    // If no handle exists yet (first export without prior save), prompts once.
-    setTimeout(function() {
-      var result = PSB.saveProject(state, { silent: true });
-      if (result && result.then) {
-        result.then(function(ok) { if (ok) markClean(); });
-      } else {
-        markClean();
-      }
-    }, 1500);
+    // Auto-save project alongside CSV export — only if already saved once.
+    // Never prompts. If no file handle, sessionStorage has the data.
+    if (PSB.hasFileHandle()) {
+      PSB.autoSaveToDisk(state).then(function(ok) { if (ok) markClean(); });
+    }
   });
 }
 
@@ -649,10 +664,22 @@ function recomputeAll() {
 // AUTO-SAVE (debounced)
 // ═══════════════════════════════════════════════════════════
 var autoSaveTimer = null;
+var diskSaveTimer = null;
 
 function scheduleAutoSave() {
+  // Quick save to sessionStorage (1s debounce)
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(function() {
     PSB.autoSave(state);
   }, 1000);
+
+  // Persist to disk if file handle exists (3s debounce)
+  if (diskSaveTimer) clearTimeout(diskSaveTimer);
+  diskSaveTimer = setTimeout(function() {
+    if (PSB.hasFileHandle()) {
+      PSB.autoSaveToDisk(state).then(function(ok) {
+        if (ok) markClean();
+      });
+    }
+  }, 3000);
 }

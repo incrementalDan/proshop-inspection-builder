@@ -2,7 +2,8 @@
  * storage.js — Save / Load Project State
  *
  * Saves full app state (rows + globals) as JSON.
- * Uses localStorage for auto-save, JSON file download for manual save.
+ * Uses sessionStorage for quick auto-save, File System Access API for
+ * persistent file saves (with automatic silent overwrites after first save).
  */
 
 window.PSB = window.PSB || {};
@@ -10,7 +11,7 @@ window.PSB = window.PSB || {};
 var STORAGE_KEY = 'proshop_inspection_builder';
 
 /**
- * Auto-save current state to localStorage.
+ * Auto-save current state to sessionStorage (fast, in-memory).
  *
  * @param {Object} state — { rows, globals }
  */
@@ -47,8 +48,8 @@ var projectFileHandle = null;
  * Save full project state as a JSON file.
  *
  * Uses File System Access API when available:
- * - First save: prompts user to pick a location
- * - Subsequent saves: silently overwrites the same file
+ * - First save: prompts user to pick a location and filename
+ * - Subsequent saves: silently overwrites the same file (no prompt)
  *
  * Falls back to classic blob download if the API isn't supported.
  *
@@ -72,40 +73,37 @@ function saveProject(state, opts) {
 }
 
 function saveWithFileHandle(json, silent) {
-  // If we already have a handle, write directly (no prompt)
-  if (projectFileHandle && silent) {
-    return writeToHandle(projectFileHandle, json).then(function() {
-      console.log('[PSB] Project silently saved to ' + projectFileHandle.name);
-      return true;
-    }).catch(function(err) {
-      console.warn('[PSB] Silent save failed, will re-prompt:', err);
-      projectFileHandle = null;
-      return promptAndSave(json);
-    });
-  }
-
-  // If we have a handle from a previous save, reuse it (manual save)
+  // If we have a handle, write directly (no prompt)
   if (projectFileHandle) {
     return writeToHandle(projectFileHandle, json).then(function() {
       console.log('[PSB] Project saved to ' + projectFileHandle.name);
       return true;
     }).catch(function(err) {
-      console.warn('[PSB] Save to existing handle failed, re-prompting:', err);
+      console.warn('[PSB] Save to handle failed:', err);
+      // Silent saves should not re-prompt — just fail quietly
+      if (silent) {
+        projectFileHandle = null;
+        return false;
+      }
+      // Manual save: re-prompt so the user can pick a new location
       projectFileHandle = null;
       return promptAndSave(json);
     });
   }
 
-  // First time: ask user where to save
+  // No handle yet
+  if (silent) {
+    // Silent save with no handle — skip entirely (sessionStorage has data)
+    return Promise.resolve(false);
+  }
+
+  // First time manual save: ask user where to save
   return promptAndSave(json);
 }
 
 function promptAndSave(json) {
-  var now = new Date();
-  var stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-
   return window.showSaveFilePicker({
-    suggestedName: 'ProShop_Project_' + stamp + '.json',
+    suggestedName: 'ProShop_Project.json',
     types: [{
       description: 'ProShop Project',
       accept: { 'application/json': ['.json'] },
@@ -135,20 +133,52 @@ function writeToHandle(handle, content) {
 }
 
 function downloadBlob(json) {
-  var now = new Date();
-  var stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  var filename = 'ProShop_Project_' + stamp + '.json';
-
   var blob = new Blob([json], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
   var link = document.createElement('a');
   link.href = url;
-  link.download = filename;
+  link.download = 'ProShop_Project.json';
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Auto-save to disk (silent). Only writes if a file handle exists.
+ * Never prompts the user. Safe to call frequently (caller should debounce).
+ *
+ * @param {Object} state — { rows, globals }
+ * @returns {Promise<boolean>}
+ */
+function autoSaveToDisk(state) {
+  if (!projectFileHandle) return Promise.resolve(false);
+  var serialized = serializeState(state);
+  var json = JSON.stringify(serialized, null, 2);
+  return writeToHandle(projectFileHandle, json).then(function() {
+    console.log('[PSB] Auto-saved to disk: ' + projectFileHandle.name);
+    return true;
+  }).catch(function(err) {
+    console.warn('[PSB] Disk auto-save failed:', err);
+    return false;
+  });
+}
+
+/**
+ * Check if a persistent file handle exists (project has been saved at least once).
+ * @returns {boolean}
+ */
+function hasFileHandle() {
+  return projectFileHandle !== null;
+}
+
+/**
+ * Get the current project filename from the file handle.
+ * @returns {string|null}
+ */
+function getProjectFileName() {
+  return projectFileHandle ? projectFileHandle.name : null;
 }
 
 /**
@@ -159,7 +189,42 @@ function clearProjectFileHandle() {
 }
 
 /**
- * Load project state from a JSON string (from file upload).
+ * Open a project file using the File System Access API.
+ * Stores the file handle so subsequent saves overwrite the same file.
+ *
+ * Falls back to returning null if API not available (caller uses <input> fallback).
+ *
+ * @returns {Promise<{jsonString: string, fileName: string}|null>}
+ */
+function openProjectWithHandle() {
+  if (!window.showOpenFilePicker) return Promise.resolve(null);
+
+  return window.showOpenFilePicker({
+    types: [{
+      description: 'ProShop Project',
+      accept: { 'application/json': ['.json'] },
+    }],
+    multiple: false,
+  }).then(function(handles) {
+    var handle = handles[0];
+    projectFileHandle = handle;
+    return handle.getFile();
+  }).then(function(file) {
+    return file.text().then(function(text) {
+      return { jsonString: text, fileName: file.name };
+    });
+  }).catch(function(err) {
+    if (err.name === 'AbortError') {
+      console.log('[PSB] Open cancelled by user');
+      return null;
+    }
+    console.error('[PSB] Open failed:', err);
+    return null;
+  });
+}
+
+/**
+ * Load project state from a JSON string.
  *
  * @param {string} jsonString
  * @returns {Object} — { rows, globals }
@@ -225,3 +290,7 @@ PSB.saveProject = saveProject;
 PSB.loadProject = loadProject;
 PSB.clearAutoSave = clearAutoSave;
 PSB.clearProjectFileHandle = clearProjectFileHandle;
+PSB.autoSaveToDisk = autoSaveToDisk;
+PSB.hasFileHandle = hasFileHandle;
+PSB.getProjectFileName = getProjectFileName;
+PSB.openProjectWithHandle = openProjectWithHandle;
