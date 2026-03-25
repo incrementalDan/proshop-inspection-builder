@@ -396,7 +396,9 @@ function recompute(row, globals) {
 
   var outNominal = dualNomStr;
   if (platingAnnotation) {
-    outNominal = dualNomStr + ' ' + platingAnnotation;
+    // Insert annotation before bracket notation so formatDualDisplay() colors correctly
+    // e.g. "33.000 (+2xI) [1.2992]" instead of "33.000 [1.2992] (+2xI)"
+    outNominal = nominalStr + ' ' + platingAnnotation + ' [' + secNomStr + ']';
   }
 
   // ── Output Tag (overrideable per Rule 6) ─────────────────

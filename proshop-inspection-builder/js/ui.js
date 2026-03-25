@@ -184,7 +184,6 @@ function buildRowHTML(row) {
     '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.op2000DualSpec) + '</td>' +
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
-    '<td class="col-outnom editable">' + formatDualDisplay(c.outNominal) + '</td>' +
     '<td class="col-pingage editable">' + esc(addLeadingZero(c.pinGage)) + '</td>' +
     '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.op2000DualTol)) + '</td>' +
     '<td class="col-outtol editable' + (ov.outputTolerance !== null ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.outTolerance)) + '</td>' +
@@ -756,8 +755,6 @@ function setupInlineEditing(tr, row) {
             ov.specUnit2 = newValue || null;
           } else if (td.classList.contains('col-su3')) {
             ov.specUnit3 = newValue || null;
-          } else if (td.classList.contains('col-outnom')) {
-            ov.outNominal = newValue || null;
           }
           onRowUserChange(row.id, { overrides: ov });
         };
@@ -940,7 +937,7 @@ function showToast(message, type) {
 function resolveNavigateTarget(tbody, displayRows) {
   var nav = navigateTarget;
   var editableCols = ['col-su1', 'col-drawspec', 'col-inputspec', 'col-su2', 'col-su3',
-                      'col-outnom', 'col-pingage', 'col-inputtol', 'col-outtol'];
+                      'col-pingage', 'col-inputtol', 'col-outtol'];
 
   var rowIdx = -1;
   for (var ri = 0; ri < displayRows.length; ri++) {
