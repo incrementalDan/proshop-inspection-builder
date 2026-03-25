@@ -455,7 +455,7 @@ input.no-spinners {
 
 .col-ops .op-bubbles {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 3px;
 }
 
@@ -752,7 +752,6 @@ td.editable input {
 .col-inputspec { min-width: 100px; color: var(--text-muted); }
 .col-su2 { width: 60px; }
 .col-su3 { width: 40px; text-align: center; }
-.col-outnom { min-width: 140px; }
 .col-pingage { min-width: 90px; font-size: 11px; }
 .col-inputtol { width: 80px; color: var(--text-muted); }
 .col-outtol { width: 80px; }
