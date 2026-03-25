@@ -5,18 +5,18 @@
 
 /* ── CSS Variables (Theme) ─────────────────────────────── */
 :root {
-  /* Dark theme (default) — neutral gray with subtle blue tint, VS Code-inspired */
-  --bg-primary: #1e1e2a;
-  --bg-secondary: #1a1a24;
-  --bg-tertiary: #2a2a36;
-  --bg-surface: #24242e;
-  --bg-hover: #2e2e3a;
-  --bg-selected: #37374a;
+  /* Dark theme (default) — medium-dark, neutral gray with subtle blue tint */
+  --bg-primary: #2b2b36;
+  --bg-secondary: #262630;
+  --bg-tertiary: #383844;
+  --bg-surface: #31313c;
+  --bg-hover: #3c3c4a;
+  --bg-selected: #464658;
 
-  --text-primary: #d4d4d4;
-  --text-secondary: #9e9eb0;
-  --text-muted: #6e6e82;
-  --text-inverse: #1a1a24;
+  --text-primary: #dadadc;
+  --text-secondary: #a8a8b8;
+  --text-muted: #7c7c90;
+  --text-inverse: #262630;
 
   --accent-blue: #4a9eff;
   --accent-orange: #ff8c42;
@@ -38,13 +38,13 @@
   --op-color-6: #ffc107;   /* 6th — yellow */
   --op-color-7: #ff6e40;   /* 7th — deep orange */
 
-  --border-color: #2d2d3a;
-  --border-light: #3a3a48;
+  --border-color: #3a3a48;
+  --border-light: #48485a;
 
-  --row-even: #1e1e28;
-  --row-odd: #23232e;
-  --row-selected: #2e3448;
-  --row-note: #262430;
+  --row-even: #292934;
+  --row-odd: #2e2e3a;
+  --row-selected: #3a4256;
+  --row-note: #33303c;
 
   --status-none: transparent;
   --status-edited: #ffc107;
@@ -57,9 +57,9 @@
   --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --font-sans: 'Futura', 'Helvetica Neue', 'Helvetica', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.25);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.35);
 
   --radius-sm: 6px;
   --radius-md: 8px;
