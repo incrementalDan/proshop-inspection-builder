@@ -5,18 +5,18 @@
 
 /* ── CSS Variables (Theme) ─────────────────────────────── */
 :root {
-  /* Dark theme (default) — gray-blue tones inspired by VS Code */
-  --bg-primary: #1e2030;
-  --bg-secondary: #1b1d2e;
-  --bg-tertiary: #2a3050;
-  --bg-surface: #252840;
-  --bg-hover: #2e3350;
-  --bg-selected: #333a5c;
+  /* Dark theme (default) — neutral gray with subtle blue tint, VS Code-inspired */
+  --bg-primary: #1e1e2a;
+  --bg-secondary: #1a1a24;
+  --bg-tertiary: #2a2a36;
+  --bg-surface: #24242e;
+  --bg-hover: #2e2e3a;
+  --bg-selected: #37374a;
 
-  --text-primary: #e8eaf0;
-  --text-secondary: #a8b0c8;
-  --text-muted: #6e7894;
-  --text-inverse: #1a1a2e;
+  --text-primary: #d4d4d4;
+  --text-secondary: #9e9eb0;
+  --text-muted: #6e6e82;
+  --text-inverse: #1a1a24;
 
   --accent-blue: #4a9eff;
   --accent-orange: #ff8c42;
@@ -38,13 +38,13 @@
   --op-color-6: #ffc107;   /* 6th — yellow */
   --op-color-7: #ff6e40;   /* 7th — deep orange */
 
-  --border-color: #2e3350;
-  --border-light: #3a4060;
+  --border-color: #2d2d3a;
+  --border-light: #3a3a48;
 
-  --row-even: #21243a;
-  --row-odd: #262a42;
-  --row-selected: #303860;
-  --row-note: #2a2738;
+  --row-even: #1e1e28;
+  --row-odd: #23232e;
+  --row-selected: #2e3448;
+  --row-note: #262430;
 
   --status-none: transparent;
   --status-edited: #ffc107;
