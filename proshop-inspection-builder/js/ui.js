@@ -443,14 +443,17 @@ function wireUpSidebarHandlers(rowId) {
       if (committed) return;
       committed = true;
       var newValue = input.value.trim();
-      otClone.textContent = newValue || originalValue;
+      // No-op if nothing actually changed
       var state = getAppState();
       var row = state.rows.find(function(r) { return r.id === rowId; });
-      if (row) {
-        var ov = Object.assign({}, row.user.overrides);
-        ov.outputTag = newValue || null;
-        onRowUserChange(rowId, { overrides: ov });
+      if (!row || (newValue || null) === (row.user.overrides.outputTag || null)) {
+        otClone.textContent = originalValue;
+        return;
       }
+      otClone.textContent = newValue || originalValue;
+      var ov = Object.assign({}, row.user.overrides);
+      ov.outputTag = newValue || null;
+      onRowUserChange(rowId, { overrides: ov });
     };
     input.addEventListener('blur', commit);
     input.addEventListener('keydown', function(ke) {
@@ -691,20 +694,27 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
       if (newValue && newValue.charAt(0) === '\u00b1') {
         newValue = newValue.substring(1);
       }
-      clone.textContent = newValue || originalValue;
 
       var state = getAppState();
       var row = state.rows.find(function(r) { return r.id === rowId; });
-      if (row) {
-        var ov = Object.assign({}, row.user.overrides);
-        ov[overrideKey] = newValue || null;
-        // When editing OP2000 base, clear independent OUT override + toast
-        if (clearKey && ov[clearKey] !== null) {
-          ov[clearKey] = null;
-          showToast('OP2000 changed — OUT override cleared', 'info');
-        }
-        onRowUserChange(rowId, { overrides: ov });
+      if (!row) { clone.textContent = originalValue; return; }
+
+      // No-op if nothing actually changed
+      var currentVal = row.user.overrides[overrideKey] || null;
+      if ((newValue || null) === currentVal) {
+        clone.textContent = originalValue;
+        return;
       }
+
+      clone.textContent = newValue || originalValue;
+      var ov = Object.assign({}, row.user.overrides);
+      ov[overrideKey] = newValue || null;
+      // When editing OP2000 base, clear independent OUT override + toast
+      if (clearKey && ov[clearKey] !== null) {
+        ov[clearKey] = null;
+        showToast('OP2000 changed — OUT override cleared', 'info');
+      }
+      onRowUserChange(rowId, { overrides: ov });
     };
 
     input.addEventListener('blur', commit);
@@ -747,6 +757,19 @@ function setupInlineEditing(tr, row) {
           if (newValue && newValue.indexOf(' [') > 0) {
             newValue = newValue.split(' [')[0].trim();
           }
+
+          // Strip the same notation from originalValue for comparison
+          var originalStripped = originalValue;
+          if (originalStripped && originalStripped.indexOf(' [') > 0) {
+            originalStripped = originalStripped.split(' [')[0].trim();
+          }
+
+          // No-op if nothing actually changed
+          if (newValue === originalStripped) {
+            td.textContent = originalValue;
+            return;
+          }
+
           td.textContent = newValue || originalValue;
 
           // Set flash target for after re-render
