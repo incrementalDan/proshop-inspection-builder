@@ -64,15 +64,15 @@ function saveProject(state, opts) {
 
   // File System Access API path (Chrome/Edge)
   if (window.showSaveFilePicker) {
-    return saveWithFileHandle(json, opts.silent);
+    return saveWithFileHandle(json, opts.silent, opts.suggestedName);
   }
 
   // Fallback: classic blob download
-  downloadBlob(json);
+  downloadBlob(json, opts.suggestedName);
   return Promise.resolve(true);
 }
 
-function saveWithFileHandle(json, silent) {
+function saveWithFileHandle(json, silent, suggestedName) {
   // If we have a handle, write directly (no prompt)
   if (projectFileHandle) {
     return writeToHandle(projectFileHandle, json).then(function() {
@@ -87,7 +87,7 @@ function saveWithFileHandle(json, silent) {
       }
       // Manual save: re-prompt so the user can pick a new location
       projectFileHandle = null;
-      return promptAndSave(json);
+      return promptAndSave(json, suggestedName);
     });
   }
 
@@ -98,12 +98,12 @@ function saveWithFileHandle(json, silent) {
   }
 
   // First time manual save: ask user where to save
-  return promptAndSave(json);
+  return promptAndSave(json, suggestedName);
 }
 
-function promptAndSave(json) {
+function promptAndSave(json, suggestedName) {
   return window.showSaveFilePicker({
-    suggestedName: 'ProShop_Project.json',
+    suggestedName: suggestedName || 'ProShop_Project.json',
     types: [{
       description: 'ProShop Project',
       accept: { 'application/json': ['.json'] },
@@ -132,12 +132,12 @@ function writeToHandle(handle, content) {
   });
 }
 
-function downloadBlob(json) {
+function downloadBlob(json, suggestedName) {
   var blob = new Blob([json], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
   var link = document.createElement('a');
   link.href = url;
-  link.download = 'ProShop_Project.json';
+  link.download = suggestedName || 'ProShop_Project.json';
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
