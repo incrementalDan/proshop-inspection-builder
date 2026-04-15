@@ -39,6 +39,9 @@ var state = {
   auditLog: [],
 };
 
+// Track imported filename for save suggestion
+var importedFileName = null;
+
 // ═══════════════════════════════════════════════════════════
 // DIRTY FLAG — tracks unsaved changes to warn before close
 // ═══════════════════════════════════════════════════════════
@@ -220,6 +223,7 @@ function bindNewButton() {
       state.rows = [];
       state.globals = PSB.defaultGlobals();
       state.auditLog = [];
+      importedFileName = null;
       syncGlobalsToUI();
       PSB.renderOpBar(state.globals.ops, handleRemoveOp);
       PSB.renderTable(state.rows);
@@ -365,6 +369,13 @@ function applyUnitColors(unit) {
   }
 }
 
+function getSuggestedSaveName() {
+  if (!importedFileName) return 'ProShop_Project - InspecProject.json';
+  // Strip extension, append " - InspecProject.json"
+  var base = importedFileName.replace(/\.(csv|json)$/i, '');
+  return base + ' - InspecProject.json';
+}
+
 function setFilename(name) {
   var el = document.getElementById('filename-text');
   if (!el) return;
@@ -383,6 +394,7 @@ function applyLoadedProject(jsonString, fileName) {
     state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
     state.rows = loaded.rows;
     state.auditLog = loaded.auditLog || [];
+    importedFileName = fileName;
     PSB.clearUndoRedo();
     recomputeAll();
     syncGlobalsToUI();
@@ -417,7 +429,7 @@ function bindFileButtons() {
 
   // Save project
   document.getElementById('btn-save').addEventListener('click', function() {
-    var result = PSB.saveProject(state);
+    var result = PSB.saveProject(state, { suggestedName: getSuggestedSaveName() });
     if (result && result.then) {
       result.then(function(ok) {
         if (ok) {
@@ -624,6 +636,7 @@ function handleFileImport(content, fileName) {
         state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
         state.rows = loaded.rows;
         state.auditLog = loaded.auditLog || [];
+        importedFileName = fileName;
         PSB.clearUndoRedo();
         recomputeAll();
         syncGlobalsToUI();
@@ -647,6 +660,7 @@ function handleFileImport(content, fileName) {
     PSB.resetIdCounter();
     state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
     state.auditLog = [];
+    importedFileName = fileName;
     PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'Imported ' + state.rows.length + ' rows from ' + fileName });
     recomputeAll();
     PSB.closeSidebar();
