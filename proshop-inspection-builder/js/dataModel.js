@@ -549,6 +549,9 @@ function getExportData(row, opNumber, globals) {
   if (computed.platingAnnotation) {
     exportNom = exportNom + ' ' + computed.platingAnnotation;
   }
+  if (computed.pinGage) {
+    exportNom = computed.pinGage;
+  }
   return {
     'Internal Part #': '',
     'Op #': opNumber,
