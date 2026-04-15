@@ -98,6 +98,8 @@ document.addEventListener('DOMContentLoaded', function() {
     PSB.initUI({
       onRowUserChange: handleRowUserChange,
       onFileImport: handleFileImport,
+      onAddRow: handleAddRow,
+      onDeleteRow: handleDeleteRow,
       getAppState: function() { return state; },
     });
     console.log('[PSB] UI initialized');
@@ -636,6 +638,34 @@ function handleRowUserChange(rowId, changes) {
     PSB.populateSidebar(rowId);
   }
 
+  markDirty();
+  scheduleAutoSave();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ADD / DELETE ROW HANDLERS
+// ═══════════════════════════════════════════════════════════
+function handleAddRow() {
+  var maxDimTag = 0;
+  for (var i = 0; i < state.rows.length; i++) {
+    var dt = parseInt(state.rows[i].raw.dimTag);
+    if (!isNaN(dt) && dt > maxDimTag) maxDimTag = dt;
+  }
+  var newRow = PSB.createRow({ dimTag: String(maxDimTag + 1) });
+  PSB.recompute(newRow, state.globals);
+  state.rows.push(newRow);
+  PSB.renderTable(state.rows);
+  markDirty();
+  scheduleAutoSave();
+}
+
+function handleDeleteRow(rowId) {
+  // Close sidebar if this row is selected
+  if (PSB.getSelectedRowId() === rowId) {
+    PSB.closeSidebar();
+  }
+  state.rows = state.rows.filter(function(r) { return r.id !== rowId; });
+  PSB.renderTable(state.rows);
   markDirty();
   scheduleAutoSave();
 }

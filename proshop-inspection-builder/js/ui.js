@@ -22,6 +22,8 @@ var sortDirection = 'asc'; // 'asc' or 'desc'
 // Callback references (set by app.js)
 var onRowUserChange = null;   // (rowId, userChanges) => void
 var onFileImport = null;      // (fileContent, fileName) => void
+var onAddRow = null;           // () => void
+var onDeleteRow = null;        // (rowId) => void
 var getAppState = null;       // () => { rows, globals }
 
 // Edit flash: tracks which cell should flash after re-render
@@ -68,6 +70,8 @@ function getOpColor(opNum) {
 function initUI(callbacks) {
   onRowUserChange = callbacks.onRowUserChange;
   onFileImport = callbacks.onFileImport;
+  onAddRow = callbacks.onAddRow;
+  onDeleteRow = callbacks.onDeleteRow;
   getAppState = callbacks.getAppState;
 
   setupDragDrop();
@@ -130,6 +134,23 @@ function renderTable(rows) {
     // OP bubble click → toggle on/off (same as sidebar)
     setupOpBubbleClicks(tr, row);
 
+    // Delete row button
+    (function(rowId) {
+      var delBtn = tr.querySelector('.delete-row-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          PSB.showConfirmModal({
+            title: 'Delete Row?',
+            message: 'Delete row <strong>' + esc(String(row.computed.dimTag || rowId)) + '</strong>? This cannot be undone.',
+            confirmLabel: 'Delete',
+            confirmClass: 'btn-danger',
+            onConfirm: function() { if (onDeleteRow) onDeleteRow(rowId); }
+          });
+        });
+      }
+    })(row.id);
+
     tbody.appendChild(tr);
 
     // Apply edit flash if this row/column was just edited
@@ -145,6 +166,16 @@ function renderTable(rows) {
       }
     }
   }
+
+  // Add row button at the bottom
+  var addTr = document.createElement('tr');
+  addTr.className = 'add-row-tr';
+  addTr.innerHTML = '<td colspan="12" class="add-row-cell"><button class="add-row-btn" title="Add empty row">+</button></td>';
+  addTr.querySelector('.add-row-btn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (onAddRow) onAddRow();
+  });
+  tbody.appendChild(addTr);
 
   // Resolve tab-navigation target after full table is built
   if (navigateTarget) {
@@ -177,7 +208,7 @@ function buildRowHTML(row) {
   var ov = row.user.overrides || {};
 
   return '' +
-    '<td class="col-status"><span class="status-dot ' + statusClass + '"></span></td>' +
+    '<td class="col-status"><span class="status-dot ' + statusClass + '"></span><button class="delete-row-btn" title="Delete row">&times;</button></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
     '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
     '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) + '</td>' +
