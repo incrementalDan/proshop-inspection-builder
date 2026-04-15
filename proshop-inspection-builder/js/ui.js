@@ -366,6 +366,9 @@ function populateSidebar(rowId) {
   } else {
     completeBtn.classList.remove('active');
   }
+
+  // Row history (bottom of sidebar)
+  populateSidebarHistory(rowId);
 }
 
 /**
@@ -1032,6 +1035,92 @@ function showConfirmModal(opts) {
   });
 }
 
+// ── Sidebar Row History ──────────────────────────────────
+
+function populateSidebarHistory(rowId) {
+  var listEl = document.getElementById('sidebar-history-list');
+  if (!listEl) return;
+  var state = getAppState();
+  var entries = PSB.getRowHistory(state.auditLog || [], rowId);
+
+  if (entries.length === 0) {
+    listEl.innerHTML = '<span class="text-muted">No changes yet</span>';
+  } else {
+    var html = '';
+    var max = Math.min(entries.length, 5); // Show last 5 in sidebar
+    for (var i = 0; i < max; i++) {
+      var e = entries[i];
+      html += '<div class="history-entry">' +
+        '<span class="history-time">' + PSB.formatHistoryTime(e.timestamp) + '</span>' +
+        '<span class="history-desc">' + esc(e.description) + '</span>' +
+        '</div>';
+    }
+    if (entries.length > 5) {
+      html += '<div class="history-entry text-muted">+ ' + (entries.length - 5) + ' more</div>';
+    }
+    listEl.innerHTML = html;
+  }
+
+  // Wire "View All" button
+  var viewAllBtn = document.getElementById('btn-full-history');
+  if (viewAllBtn) {
+    var clone = viewAllBtn.cloneNode(true);
+    viewAllBtn.parentNode.replaceChild(clone, viewAllBtn);
+    clone.addEventListener('click', function() { openHistoryModal(); });
+  }
+}
+
+// ── History Overlay Modal ────────────────────────────────
+
+function openHistoryModal() {
+  var state = getAppState();
+  var log = state.auditLog || [];
+  var listEl = document.getElementById('history-modal-list');
+
+  if (log.length === 0) {
+    listEl.innerHTML = '<p class="text-muted">No changes recorded yet.</p>';
+  } else {
+    var html = '';
+    // Show most recent first
+    for (var i = log.length - 1; i >= 0; i--) {
+      var e = log[i];
+      var typeClass = 'history-type-' + e.type;
+      var detailsHtml = '';
+      if (e.details && e.details.length > 0) {
+        detailsHtml = '<div class="history-details">';
+        for (var j = 0; j < e.details.length; j++) {
+          var d = e.details[j];
+          detailsHtml += '<div class="history-detail-row">' +
+            '<span class="history-field">' + esc(d.field) + '</span> ' +
+            (d.from ? '<span class="history-from">' + esc(d.from) + '</span> → ' : '') +
+            '<span class="history-to">' + esc(d.to) + '</span>' +
+            '</div>';
+        }
+        detailsHtml += '</div>';
+      }
+      html += '<div class="history-modal-entry ' + typeClass + '">' +
+        '<div class="history-modal-header">' +
+        '<span class="history-time">' + PSB.formatHistoryTime(e.timestamp) + '</span>' +
+        '<span class="history-type-badge">' + esc(e.type) + '</span>' +
+        '</div>' +
+        '<div class="history-desc">' + esc(e.description) + '</div>' +
+        detailsHtml +
+        '</div>';
+    }
+    listEl.innerHTML = html;
+  }
+
+  document.getElementById('history-modal').classList.remove('hidden');
+
+  // Wire close
+  var closeBtn = document.getElementById('history-close');
+  var closeClone = closeBtn.cloneNode(true);
+  closeBtn.parentNode.replaceChild(closeClone, closeBtn);
+  closeClone.addEventListener('click', function() {
+    document.getElementById('history-modal').classList.add('hidden');
+  });
+}
+
 // ── Export to namespace ───────────────────────────────────
 PSB.initUI = initUI;
 PSB.renderTable = renderTable;
@@ -1042,4 +1131,5 @@ PSB.getSelectedRowId = getSelectedRowId;
 PSB.getOpColor = getOpColor;
 PSB.showToast = showToast;
 PSB.showConfirmModal = showConfirmModal;
+PSB.openHistoryModal = openHistoryModal;
 PSB.esc = esc;

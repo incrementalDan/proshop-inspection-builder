@@ -257,6 +257,7 @@ function serializeState(state) {
         // computed is NOT saved — it's recalculated on load
       };
     }),
+    auditLog: state.auditLog || [],
   };
 }
 
@@ -268,6 +269,7 @@ function deserializeState(data) {
   var defaults = PSB.defaultUserState();
   return {
     globals: data.globals || {},
+    auditLog: data.auditLog || [],
     rows: data.rows.map(function(r) {
       // Ensure all user fields exist (handles saves from older versions)
       var user = Object.assign({}, defaults, r.user);

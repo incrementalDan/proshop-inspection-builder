@@ -265,6 +265,17 @@
         <div class="complete-section">
           <button id="sidebar-status-complete" class="btn btn-complete-main" data-status="complete">Complete ✓</button>
         </div>
+
+        <!-- Row History -->
+        <div class="sidebar-history">
+          <div class="sidebar-history-header">
+            <span class="sidebar-history-title">History</span>
+            <button id="btn-full-history" class="sidebar-history-expand" title="View full history">View All</button>
+          </div>
+          <div id="sidebar-history-list" class="sidebar-history-list">
+            <span class="text-muted">No changes yet</span>
+          </div>
+        </div>
       </div>
     </aside>
   </main>
@@ -332,18 +343,32 @@
     </div>
   </div>
 
+  <!-- History overlay modal -->
+  <div id="history-modal" class="modal hidden">
+    <div class="modal-content history-modal-content">
+      <div class="modal-header">
+        <h2>Change History</h2>
+        <button id="history-close" class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="history-modal-list" class="history-modal-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-container"></div>
 
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=16"></script>
-  <script src="js/parser.js?v=16"></script>
-  <script src="js/dataModel.js?v=16"></script>
-  <script src="js/exportEngine.js?v=16"></script>
-  <script src="js/storage.js?v=16"></script>
-  <script src="js/ui.js?v=16"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/mathEngine.js?v=17"></script>
+  <script src="js/parser.js?v=17"></script>
+  <script src="js/dataModel.js?v=17"></script>
+  <script src="js/exportEngine.js?v=17"></script>
+  <script src="js/storage.js?v=17"></script>
+  <script src="js/history.js?v=17"></script>
+  <script src="js/ui.js?v=17"></script>
+  <script src="js/app.js?v=17"></script>
 
 </body>
 </html>

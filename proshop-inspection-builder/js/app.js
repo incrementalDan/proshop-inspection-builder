@@ -36,6 +36,7 @@ var SAMPLE_CSV = [
 var state = {
   rows: [],
   globals: PSB.defaultGlobals(),
+  auditLog: [],
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -65,6 +66,26 @@ function markClean() {
   if (saveBtn) saveBtn.classList.remove('btn-dirty');
 }
 
+/**
+ * Restore app state from an undo/redo snapshot.
+ */
+function restoreSnapshot(snapshot) {
+  state.globals = snapshot.globals;
+  state.rows = snapshot.rows.map(function(r) {
+    return {
+      id: r.id,
+      raw: Object.freeze(Object.assign({}, r.raw)),
+      user: r.user,
+      computed: {},
+    };
+  });
+  recomputeAll();
+  syncGlobalsToUI();
+  PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+  markDirty();
+  scheduleAutoSave();
+}
+
 window.addEventListener('beforeunload', function(e) {
   if (isDirty && state.rows.length > 0) {
     e.preventDefault();
@@ -85,6 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (saved) {
         state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
         state.rows = saved.rows;
+        state.auditLog = saved.auditLog || [];
         // deserializeState already normalizes user/overrides fields
         recomputeAll();
         console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
@@ -125,10 +147,31 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         openExportModal();
       }
+      if (mod && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        var snap = PSB.undo(state);
+        if (snap) {
+          restoreSnapshot(snap);
+          PSB.showToast('Undo', 'info');
+        }
+      }
+      if (mod && (e.key === 'Z' || (e.key === 'z' && e.shiftKey) || e.key === 'y')) {
+        e.preventDefault();
+        var snapR = PSB.redo(state);
+        if (snapR) {
+          restoreSnapshot(snapR);
+          PSB.showToast('Redo', 'info');
+        }
+      }
       if (e.key === 'Escape') {
         var confirmModal = document.getElementById('confirm-modal');
         if (!confirmModal.classList.contains('hidden')) {
           confirmModal.classList.add('hidden');
+          return;
+        }
+        var historyModal = document.getElementById('history-modal');
+        if (!historyModal.classList.contains('hidden')) {
+          historyModal.classList.add('hidden');
           return;
         }
         var exportModal = document.getElementById('export-modal');
@@ -173,8 +216,10 @@ function bindNewButton() {
     var doNew = function() {
       PSB.clearAutoSave();
       PSB.clearProjectFileHandle();
+      PSB.clearUndoRedo();
       state.rows = [];
       state.globals = PSB.defaultGlobals();
+      state.auditLog = [];
       syncGlobalsToUI();
       PSB.renderOpBar(state.globals.ops, handleRemoveOp);
       PSB.renderTable(state.rows);
@@ -220,9 +265,12 @@ function bindGlobalControls() {
     unitToggle.addEventListener('click', function() {
       var isMm = unitToggle.getAttribute('aria-checked') === 'true';
       var newUnit = isMm ? 'inch' : 'mm';
+      var oldUnit = state.globals.importUnits;
+      PSB.pushUndo(state);
       unitToggle.setAttribute('aria-checked', newUnit === 'mm' ? 'true' : 'false');
       document.getElementById('import-units').value = newUnit;
       state.globals.importUnits = newUnit;
+      PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Units: ' + oldUnit + ' → ' + newUnit, details: [{ field: 'importUnits', from: oldUnit, to: newUnit }] });
       applyUnitColors(newUnit);
       recomputeAll();
       markDirty();
@@ -245,7 +293,11 @@ function bindGlobalControls() {
 
   // Plating thickness
   document.getElementById('plating-thickness').addEventListener('input', function(e) {
-    state.globals.platingThickness = parseFloat(e.target.value) || 0;
+    var oldVal = state.globals.platingThickness;
+    var newVal = parseFloat(e.target.value) || 0;
+    PSB.pushUndo(state);
+    state.globals.platingThickness = newVal;
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Plating thickness: ' + oldVal + ' → ' + newVal, details: [{ field: 'platingThickness', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
     markDirty();
     scheduleAutoSave();
@@ -253,7 +305,10 @@ function bindGlobalControls() {
 
   // Plating units
   document.getElementById('plating-units').addEventListener('change', function(e) {
+    var oldVal = state.globals.platingUnits;
+    PSB.pushUndo(state);
     state.globals.platingUnits = e.target.value;
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Plating units: ' + oldVal + ' → ' + e.target.value, details: [{ field: 'platingUnits', from: oldVal, to: e.target.value }] });
     recomputeAll();
     markDirty();
     scheduleAutoSave();
@@ -261,14 +316,22 @@ function bindGlobalControls() {
 
   // Precision
   document.getElementById('inch-precision').addEventListener('input', function(e) {
-    state.globals.inchPrecision = parseInt(e.target.value) || 4;
+    var oldVal = state.globals.inchPrecision;
+    var newVal = parseInt(e.target.value) || 4;
+    PSB.pushUndo(state);
+    state.globals.inchPrecision = newVal;
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Inch precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'inchPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
     markDirty();
     scheduleAutoSave();
   });
 
   document.getElementById('mm-precision').addEventListener('input', function(e) {
-    state.globals.mmPrecision = parseInt(e.target.value) || 3;
+    var oldVal = state.globals.mmPrecision;
+    var newVal = parseInt(e.target.value) || 3;
+    PSB.pushUndo(state);
+    state.globals.mmPrecision = newVal;
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'MM precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'mmPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
     markDirty();
     scheduleAutoSave();
@@ -319,6 +382,8 @@ function applyLoadedProject(jsonString, fileName) {
     var loaded = PSB.loadProject(jsonString);
     state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
     state.rows = loaded.rows;
+    state.auditLog = loaded.auditLog || [];
+    PSB.clearUndoRedo();
     recomputeAll();
     syncGlobalsToUI();
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
@@ -414,8 +479,10 @@ function bindOpBar() {
     if (val === 2000) { input.value = ''; PSB.showToast('OP2000 is included automatically in every export.', 'info'); return; }
     if (state.globals.ops.indexOf(val) !== -1) return;
 
+    PSB.pushUndo(state);
     state.globals.ops.push(val);
     state.globals.ops.sort(function(a, b) { return a - b; });
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Added OP ' + val });
 
     input.value = '';
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
@@ -431,7 +498,9 @@ function bindOpBar() {
 }
 
 function handleRemoveOp(opNum) {
+  PSB.pushUndo(state);
   state.globals.ops = state.globals.ops.filter(function(o) { return o !== opNum; });
+  PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Removed OP ' + opNum });
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
   recomputeAll();
   markDirty();
@@ -529,12 +598,14 @@ function bindSettingsModal() {
   });
 
   document.getElementById('settings-close').addEventListener('click', function() {
+    PSB.pushUndo(state);
     // Save equipment list
     var eqText = document.getElementById('settings-equipment-list').value;
     state.globals.equipmentList = eqText.split('\n')
       .map(function(s) { return s.trim(); })
       .filter(function(s) { return s !== ''; })
       .sort();
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Updated equipment list' });
 
     document.getElementById('settings-modal').classList.add('hidden');
     markDirty();
@@ -552,6 +623,8 @@ function handleFileImport(content, fileName) {
         var loaded = PSB.loadProject(content);
         state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
         state.rows = loaded.rows;
+        state.auditLog = loaded.auditLog || [];
+        PSB.clearUndoRedo();
         recomputeAll();
         syncGlobalsToUI();
         PSB.renderOpBar(state.globals.ops, handleRemoveOp);
@@ -570,8 +643,11 @@ function handleFileImport(content, fileName) {
       return;
     }
 
+    PSB.clearUndoRedo();
     PSB.resetIdCounter();
     state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
+    state.auditLog = [];
+    PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'Imported ' + state.rows.length + ' rows from ' + fileName });
     recomputeAll();
     PSB.closeSidebar();
     setFilename(fileName);
@@ -599,6 +675,29 @@ function handleFileImport(content, fileName) {
 function handleRowUserChange(rowId, changes) {
   var row = state.rows.find(function(r) { return r.id === rowId; });
   if (!row) return;
+
+  PSB.pushUndo(state);
+
+  // Build audit details from changes
+  var auditDetails = [];
+  var descParts = [];
+  if (changes.overrides) {
+    for (var key in changes.overrides) {
+      var oldVal = row.user.overrides[key];
+      var newVal = changes.overrides[key];
+      if (oldVal !== newVal) {
+        auditDetails.push({ field: key, from: oldVal === null ? '' : String(oldVal), to: newVal === null ? '' : String(newVal) });
+        descParts.push(key + ': ' + (newVal === null ? 'cleared' : newVal));
+      }
+    }
+  }
+  for (var ckey in changes) {
+    if (ckey === 'overrides') continue;
+    auditDetails.push({ field: ckey, from: String(row.user[ckey] || ''), to: String(changes[ckey]) });
+    descParts.push(ckey + ': ' + changes[ckey]);
+  }
+  var dimTag = row.computed.dimTag || row.raw.dimTag || rowId;
+  PSB.logChange(state.auditLog, { type: 'edit', rowId: rowId, description: 'Row ' + dimTag + ' — ' + descParts.join(', '), details: auditDetails });
 
   // Merge changes into user state
   Object.assign(row.user, changes);
@@ -646,25 +745,32 @@ function handleRowUserChange(rowId, changes) {
 // ADD / DELETE ROW HANDLERS
 // ═══════════════════════════════════════════════════════════
 function handleAddRow() {
+  PSB.pushUndo(state);
   var maxDimTag = 0;
   for (var i = 0; i < state.rows.length; i++) {
     var dt = parseInt(state.rows[i].raw.dimTag);
     if (!isNaN(dt) && dt > maxDimTag) maxDimTag = dt;
   }
-  var newRow = PSB.createRow({ dimTag: String(maxDimTag + 1) });
+  var newTag = maxDimTag + 1;
+  var newRow = PSB.createRow({ dimTag: String(newTag) });
   PSB.recompute(newRow, state.globals);
   state.rows.push(newRow);
+  PSB.logChange(state.auditLog, { type: 'add', rowId: newRow.id, description: 'Added row ' + newTag });
   PSB.renderTable(state.rows);
   markDirty();
   scheduleAutoSave();
 }
 
 function handleDeleteRow(rowId) {
+  var row = state.rows.find(function(r) { return r.id === rowId; });
+  var dimTag = row ? (row.computed.dimTag || row.raw.dimTag || rowId) : rowId;
+  PSB.pushUndo(state);
   // Close sidebar if this row is selected
   if (PSB.getSelectedRowId() === rowId) {
     PSB.closeSidebar();
   }
   state.rows = state.rows.filter(function(r) { return r.id !== rowId; });
+  PSB.logChange(state.auditLog, { type: 'delete', rowId: rowId, description: 'Deleted row ' + dimTag });
   PSB.renderTable(state.rows);
   markDirty();
   scheduleAutoSave();
