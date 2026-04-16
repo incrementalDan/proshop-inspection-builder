@@ -85,8 +85,16 @@ function restoreSnapshot(snapshot) {
   recomputeAll();
   syncGlobalsToUI();
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+  updateUndoRedoButtons();
   markDirty();
   scheduleAutoSave();
+}
+
+function updateUndoRedoButtons() {
+  var u = document.getElementById('btn-undo');
+  var r = document.getElementById('btn-redo');
+  if (u) u.disabled = !PSB.canUndo();
+  if (r) r.disabled = !PSB.canRedo();
 }
 
 window.addEventListener('beforeunload', function(e) {
@@ -137,6 +145,24 @@ document.addEventListener('DOMContentLoaded', function() {
     bindOpBar();
     bindExportModal();
     bindSettingsModal();
+
+    // Undo / Redo buttons
+    document.getElementById('btn-undo').addEventListener('click', function() {
+      var snap = PSB.undo(state);
+      if (snap) { restoreSnapshot(snap); PSB.showToast('Undo', 'info'); }
+      updateUndoRedoButtons();
+    });
+    document.getElementById('btn-redo').addEventListener('click', function() {
+      var snap = PSB.redo(state);
+      if (snap) { restoreSnapshot(snap); PSB.showToast('Redo', 'info'); }
+      updateUndoRedoButtons();
+    });
+
+    // Global History button
+    document.getElementById('btn-all-history').addEventListener('click', function() {
+      PSB.openHistoryModal();
+    });
+
     console.log('[PSB] All controls bound');
 
     // Keyboard shortcuts
@@ -153,18 +179,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         var snap = PSB.undo(state);
-        if (snap) {
-          restoreSnapshot(snap);
-          PSB.showToast('Undo', 'info');
-        }
+        if (snap) { restoreSnapshot(snap); PSB.showToast('Undo', 'info'); }
+        updateUndoRedoButtons();
       }
       if (mod && (e.key === 'Z' || (e.key === 'z' && e.shiftKey) || e.key === 'y')) {
         e.preventDefault();
         var snapR = PSB.redo(state);
-        if (snapR) {
-          restoreSnapshot(snapR);
-          PSB.showToast('Redo', 'info');
-        }
+        if (snapR) { restoreSnapshot(snapR); PSB.showToast('Redo', 'info'); }
+        updateUndoRedoButtons();
       }
       if (e.key === 'Escape') {
         var confirmModal = document.getElementById('confirm-modal');
@@ -768,6 +790,7 @@ function handleRowUserChange(rowId, changes) {
     PSB.populateSidebar(rowId);
   }
 
+  updateUndoRedoButtons();
   markDirty();
   scheduleAutoSave();
 }

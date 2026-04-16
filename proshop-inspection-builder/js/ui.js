@@ -1080,43 +1080,54 @@ function populateSidebarHistory(rowId) {
     listEl.innerHTML = '<span class="text-muted">No changes yet</span>';
   } else {
     var html = '';
-    var max = Math.min(entries.length, 5); // Show last 5 in sidebar
-    for (var i = 0; i < max; i++) {
+    for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
       html += '<div class="history-entry">' +
         '<span class="history-time">' + PSB.formatHistoryTime(e.timestamp) + '</span>' +
         '<span class="history-desc">' + esc(e.description) + '</span>' +
         '</div>';
     }
-    if (entries.length > 5) {
-      html += '<div class="history-entry text-muted">+ ' + (entries.length - 5) + ' more</div>';
-    }
     listEl.innerHTML = html;
   }
 
-  // Wire "View All" button
-  var viewAllBtn = document.getElementById('btn-full-history');
+  // Wire "View All" — shows only this row's history
+  var viewAllBtn = document.getElementById('btn-row-history');
   if (viewAllBtn) {
     var clone = viewAllBtn.cloneNode(true);
     viewAllBtn.parentNode.replaceChild(clone, viewAllBtn);
-    clone.addEventListener('click', function() { openHistoryModal(); });
+    clone.addEventListener('click', function() { openHistoryModal(rowId); });
   }
 }
 
 // ── History Overlay Modal ────────────────────────────────
 
-function openHistoryModal() {
+// rowId optional — if provided shows only that row's history
+function openHistoryModal(rowId) {
   var state = getAppState();
   var log = state.auditLog || [];
   var listEl = document.getElementById('history-modal-list');
+  var titleEl = document.querySelector('#history-modal .modal-header h2');
 
-  if (log.length === 0) {
+  var entries = rowId
+    ? log.filter(function(e) { return e.rowId === rowId; })
+    : log;
+
+  if (titleEl) {
+    if (rowId) {
+      var rowObj = state.rows.find(function(r) { return r.id === rowId; });
+      var tag = rowObj ? (rowObj.computed.dimTag || rowId) : rowId;
+      titleEl.textContent = 'Row ' + tag + ' — History';
+    } else {
+      titleEl.textContent = 'Change History — All Rows';
+    }
+  }
+
+  if (entries.length === 0) {
     listEl.innerHTML = '<p class="text-muted">No changes recorded yet.</p>';
   } else {
     var html = '';
-    // Show most recent first
-    for (var i = log.length - 1; i >= 0; i--) {
-      var e = log[i];
+    for (var i = entries.length - 1; i >= 0; i--) {
+      var e = entries[i];
       var typeClass = 'history-type-' + e.type;
       var detailsHtml = '';
       if (e.details && e.details.length > 0) {
@@ -1145,7 +1156,6 @@ function openHistoryModal() {
 
   document.getElementById('history-modal').classList.remove('hidden');
 
-  // Wire close
   var closeBtn = document.getElementById('history-close');
   var closeClone = closeBtn.cloneNode(true);
   closeBtn.parentNode.replaceChild(closeClone, closeBtn);
