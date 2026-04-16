@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=16">
+  <link rel="stylesheet" href="css/styles.css?v=18">
 </head>
 <body>
 
@@ -26,6 +26,7 @@
       <button id="btn-export" class="btn btn-accent">Export CSV</button>
       <button id="btn-save" class="btn btn-secondary">Save Project</button>
       <button id="btn-load" class="btn btn-secondary">Load Project</button>
+      <button id="btn-all-history" class="btn btn-secondary" title="View full change history">History</button>
       <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
       <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">◑</button>
     </div>
@@ -42,6 +43,10 @@
   <!-- OP BAR + Global Settings — inline row              -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div id="op-bar">
+    <div class="undo-redo-btns">
+      <button id="btn-undo" class="btn btn-icon" title="Undo (Ctrl+Z)" disabled>↩</button>
+      <button id="btn-redo" class="btn btn-icon" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
+    </div>
     <span class="op-bar-label">OPs:</span>
     <div id="op-tags"></div>
     <input type="text" id="op-add-input" placeholder="Add OP..." class="op-add-input">
@@ -265,16 +270,16 @@
         <div class="complete-section">
           <button id="sidebar-status-complete" class="btn btn-complete-main" data-status="complete">Complete ✓</button>
         </div>
+      </div>
 
-        <!-- Row History -->
-        <div class="sidebar-history">
-          <div class="sidebar-history-header">
-            <span class="sidebar-history-title">History</span>
-            <button id="btn-full-history" class="sidebar-history-expand" title="View full history">View All</button>
-          </div>
-          <div id="sidebar-history-list" class="sidebar-history-list">
-            <span class="text-muted">No changes yet</span>
-          </div>
+      <!-- Row History — pinned to sidebar bottom -->
+      <div class="sidebar-history">
+        <div class="sidebar-history-header">
+          <span class="sidebar-history-title">Row History</span>
+          <button id="btn-row-history" class="sidebar-history-expand" title="View this row's full history">View All</button>
+        </div>
+        <div id="sidebar-history-list" class="sidebar-history-list">
+          <span class="text-muted">No changes yet</span>
         </div>
       </div>
     </aside>
@@ -361,14 +366,14 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=17"></script>
-  <script src="js/parser.js?v=17"></script>
-  <script src="js/dataModel.js?v=17"></script>
-  <script src="js/exportEngine.js?v=17"></script>
-  <script src="js/storage.js?v=17"></script>
-  <script src="js/history.js?v=17"></script>
-  <script src="js/ui.js?v=17"></script>
-  <script src="js/app.js?v=17"></script>
+  <script src="js/mathEngine.js?v=18"></script>
+  <script src="js/parser.js?v=18"></script>
+  <script src="js/dataModel.js?v=18"></script>
+  <script src="js/exportEngine.js?v=18"></script>
+  <script src="js/storage.js?v=18"></script>
+  <script src="js/history.js?v=18"></script>
+  <script src="js/ui.js?v=18"></script>
+  <script src="js/app.js?v=18"></script>
 
 </body>
 </html>

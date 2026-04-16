@@ -383,6 +383,27 @@ input.no-spinners {
   gap: 8px;
 }
 
+.undo-redo-btns {
+  display: flex;
+  gap: 2px;
+  margin-right: 4px;
+}
+.undo-redo-btns .btn-icon {
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  opacity: 0.7;
+  transition: opacity var(--transition);
+}
+.undo-redo-btns .btn-icon:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.undo-redo-btns .btn-icon:not(:disabled):hover {
+  opacity: 1;
+}
+
 .op-bar-label {
   font-size: 11px;
   color: var(--text-muted);
@@ -721,22 +742,28 @@ input.no-spinners {
   border-color: var(--status-complete);
 }
 
-/* Delete row button — hidden until row hover */
+/* Delete row button — absolutely positioned over status cell, no layout shift */
+.col-status {
+  position: relative;
+}
 .delete-row-btn {
   display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
-  padding: 0 2px;
-  margin-left: 4px;
+  padding: 2px 4px;
   line-height: 1;
-  opacity: 0.5;
+  opacity: 0.55;
   transition: opacity var(--transition), color var(--transition);
 }
-#data-table tbody tr:hover .delete-row-btn {
-  display: inline-block;
+#data-table tbody tr.selected .delete-row-btn {
+  display: block;
 }
 .delete-row-btn:hover {
   color: var(--accent-red);
@@ -839,6 +866,12 @@ td.has-override {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+#sidebar > .sidebar-controls {
+  flex: 1 1 auto;
+  overflow-y: auto;
 }
 
 #sidebar-resizer {
@@ -1068,11 +1101,12 @@ td.has-override {
   outline: 1px dashed var(--border-light);
 }
 
-/* Sidebar row history */
+/* Sidebar row history — pinned to bottom of sidebar */
 .sidebar-history {
-  margin-top: 12px;
-  padding-top: 8px;
+  padding: 8px 12px 10px;
   border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 .sidebar-history-header {
   display: flex;
@@ -1097,7 +1131,7 @@ td.has-override {
 }
 .sidebar-history-expand:hover { opacity: 1; }
 .sidebar-history-list {
-  max-height: 100px;
+  max-height: 160px;
   overflow-y: auto;
   font-size: 11px;
 }
@@ -1244,11 +1278,11 @@ td.has-override {
   accent-color: var(--accent-blue);
 }
 
-/* iOS-style toggle switches */
+/* iOS-style toggle switches — 2 columns */
 .toggle-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
   padding: 4px 0;
 }
 
@@ -1262,6 +1296,7 @@ td.has-override {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  gap: 6px;
 }
 
 .toggle-input {
