@@ -690,6 +690,21 @@ function handleRowUserChange(rowId, changes) {
   var row = state.rows.find(function(r) { return r.id === rowId; });
   if (!row) return;
 
+  // Safety net: skip entirely if nothing actually changed
+  var hasRealChange = false;
+  if (changes.overrides) {
+    for (var chk in changes.overrides) {
+      if (row.user.overrides[chk] !== changes.overrides[chk]) { hasRealChange = true; break; }
+    }
+  }
+  if (!hasRealChange) {
+    for (var chk2 in changes) {
+      if (chk2 === 'overrides') continue;
+      if (row.user[chk2] !== changes[chk2]) { hasRealChange = true; break; }
+    }
+  }
+  if (!hasRealChange) return;
+
   PSB.pushUndo(state);
 
   // Build audit details from changes
@@ -707,8 +722,10 @@ function handleRowUserChange(rowId, changes) {
   }
   for (var ckey in changes) {
     if (ckey === 'overrides') continue;
-    auditDetails.push({ field: ckey, from: String(row.user[ckey] || ''), to: String(changes[ckey]) });
-    descParts.push(ckey + ': ' + changes[ckey]);
+    if (row.user[ckey] !== changes[ckey]) {
+      auditDetails.push({ field: ckey, from: String(row.user[ckey] || ''), to: String(changes[ckey]) });
+      descParts.push(ckey + ': ' + changes[ckey]);
+    }
   }
   var dimTag = row.computed.dimTag || row.raw.dimTag || rowId;
   PSB.logChange(state.auditLog, { type: 'edit', rowId: rowId, description: 'Row ' + dimTag + ' — ' + descParts.join(', '), details: auditDetails });
