@@ -444,13 +444,14 @@ function wireUpSidebarHandlers(rowId) {
       committed = true;
       var newValue = input.value.trim();
       // No-op if nothing actually changed
-      var state = getAppState();
-      var row = state.rows.find(function(r) { return r.id === rowId; });
-      if (!row || (newValue || null) === (row.user.overrides.outputTag || null)) {
+      if (newValue === originalValue.trim()) {
         otClone.textContent = originalValue;
         return;
       }
       otClone.textContent = newValue || originalValue;
+      var state = getAppState();
+      var row = state.rows.find(function(r) { return r.id === rowId; });
+      if (!row) { otClone.textContent = originalValue; return; }
       var ov = Object.assign({}, row.user.overrides);
       ov.outputTag = newValue || null;
       onRowUserChange(rowId, { overrides: ov });
@@ -671,6 +672,7 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
     e.stopPropagation();
     if (clone.querySelector('input')) return;
 
+    var originalHTML = clone.innerHTML;
     var originalValue = clone.textContent;
     var input = document.createElement('input');
     input.type = 'text';
@@ -695,18 +697,25 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
         newValue = newValue.substring(1);
       }
 
-      var state = getAppState();
-      var row = state.rows.find(function(r) { return r.id === rowId; });
-      if (!row) { clone.textContent = originalValue; return; }
+      // Strip the same notation from originalValue for comparison
+      var originalStripped = originalValue;
+      if (originalStripped && originalStripped.indexOf(' [') > 0) {
+        originalStripped = originalStripped.split(' [')[0].trim();
+      }
+      if (originalStripped && originalStripped.charAt(0) === '\u00b1') {
+        originalStripped = originalStripped.substring(1);
+      }
 
-      // No-op if nothing actually changed
-      var currentVal = row.user.overrides[overrideKey] || null;
-      if ((newValue || null) === currentVal) {
-        clone.textContent = originalValue;
+      // No-op if nothing actually changed — restore original HTML formatting
+      if (newValue === originalStripped) {
+        clone.innerHTML = originalHTML;
         return;
       }
 
       clone.textContent = newValue || originalValue;
+      var state = getAppState();
+      var row = state.rows.find(function(r) { return r.id === rowId; });
+      if (!row) { clone.innerHTML = originalHTML; return; }
       var ov = Object.assign({}, row.user.overrides);
       ov[overrideKey] = newValue || null;
       // When editing OP2000 base, clear independent OUT override + toast
@@ -722,7 +731,7 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
       if (ke.key === 'Enter') input.blur();
       if (ke.key === 'Escape') {
         committed = true;
-        clone.textContent = originalValue;
+        clone.innerHTML = originalHTML;
       }
     });
   });
@@ -738,6 +747,7 @@ function setupInlineEditing(tr, row) {
         e.stopPropagation();
         if (td.querySelector('input')) return; // Already editing
 
+        var originalHTML = td.innerHTML;
         var originalValue = td.textContent;
         var input = document.createElement('input');
         input.type = 'text';
@@ -764,9 +774,9 @@ function setupInlineEditing(tr, row) {
             originalStripped = originalStripped.split(' [')[0].trim();
           }
 
-          // No-op if nothing actually changed
+          // No-op if nothing actually changed — restore original HTML formatting
           if (newValue === originalStripped) {
-            td.textContent = originalValue;
+            td.innerHTML = originalHTML;
             return;
           }
 
@@ -821,7 +831,7 @@ function setupInlineEditing(tr, row) {
           if (ke.key === 'Enter') input.blur();
           if (ke.key === 'Escape') {
             committed = true; // Prevent commit on blur
-            td.textContent = originalValue;
+            td.innerHTML = originalHTML;
           }
           if (ke.key === 'Tab') {
             ke.preventDefault();
