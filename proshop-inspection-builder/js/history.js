@@ -79,7 +79,7 @@ function clearUndoRedo() {
 
 
 // ── Audit Log ────────────────────────────────────────────
-var COALESCE_MS = 3000; // Group changes within 3 seconds
+var COALESCE_MS = 750;
 
 /**
  * Log a change to the audit history.
