@@ -191,21 +191,21 @@ document.addEventListener('DOMContentLoaded', function() {
       if (e.key === 'Escape') {
         var confirmModal = document.getElementById('confirm-modal');
         if (!confirmModal.classList.contains('hidden')) {
-          confirmModal.classList.add('hidden');
+          PSB.closeModal('confirm-modal');
           return;
         }
         var historyModal = document.getElementById('history-modal');
         if (!historyModal.classList.contains('hidden')) {
-          historyModal.classList.add('hidden');
+          PSB.closeModal('history-modal');
           return;
         }
         var exportModal = document.getElementById('export-modal');
         var settingsModal = document.getElementById('settings-modal');
         if (!exportModal.classList.contains('hidden')) {
-          exportModal.classList.add('hidden');
+          PSB.closeModal('export-modal');
         } else if (!settingsModal.classList.contains('hidden')) {
           document.getElementById('settings-close').click();
-        } else if (!document.getElementById('sidebar').classList.contains('hidden')) {
+        } else if (!document.getElementById('sidebar').classList.contains('sidebar-closed')) {
           PSB.closeSidebar();
         }
       }
@@ -546,7 +546,7 @@ function handleRemoveOp(opNum) {
 // ═══════════════════════════════════════════════════════════
 function bindExportModal() {
   document.getElementById('export-close').addEventListener('click', function() {
-    document.getElementById('export-modal').classList.add('hidden');
+    PSB.closeModal('export-modal');
   });
 
   document.getElementById('btn-export-confirm').addEventListener('click', function() {
@@ -562,19 +562,20 @@ function bindExportModal() {
       return;
     }
 
-    state.globals.exportUnits = exportUnits;
-    // Recompute so exportNominal/exportTolerance use the selected export units
-    recomputeAll();
-    var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
-    PSB.downloadCSV(csv);
-    PSB.showToast('CSV exported.', 'success');
-    document.getElementById('export-modal').classList.add('hidden');
+    PSB.showLoading('Exporting...');
+    setTimeout(function() {
+      state.globals.exportUnits = exportUnits;
+      recomputeAll();
+      var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
+      PSB.downloadCSV(csv);
+      PSB.showToast('CSV exported.', 'success');
+      PSB.closeModal('export-modal');
+      PSB.hideLoading();
 
-    // Auto-save project alongside CSV export — only if already saved once.
-    // Never prompts. If no file handle, sessionStorage has the data.
-    if (PSB.hasFileHandle()) {
-      PSB.autoSaveToDisk(state).then(function(ok) { if (ok) markClean(); });
-    }
+      if (PSB.hasFileHandle()) {
+        PSB.autoSaveToDisk(state).then(function(ok) { if (ok) markClean(); });
+      }
+    }, 50);
   });
 }
 
@@ -616,7 +617,7 @@ function openExportModal() {
     container.appendChild(label);
   }
 
-  document.getElementById('export-modal').classList.remove('hidden');
+  PSB.openModal('export-modal');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -628,7 +629,7 @@ function bindSettingsModal() {
     document.getElementById('settings-equipment-list').value =
       state.globals.equipmentList.join('\n');
 
-    document.getElementById('settings-modal').classList.remove('hidden');
+    PSB.openModal('settings-modal');
   });
 
   document.getElementById('settings-close').addEventListener('click', function() {
@@ -641,7 +642,7 @@ function bindSettingsModal() {
       .sort();
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Updated equipment list' });
 
-    document.getElementById('settings-modal').classList.add('hidden');
+    PSB.closeModal('settings-modal');
     markDirty();
     scheduleAutoSave();
   });
@@ -652,44 +653,50 @@ function bindSettingsModal() {
 // ═══════════════════════════════════════════════════════════
 function handleFileImport(content, fileName) {
   var doImport = function() {
-    if (fileName.endsWith('.json')) {
-      try {
-        var loaded = PSB.loadProject(content);
-        state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-        state.rows = loaded.rows;
-        state.auditLog = loaded.auditLog || [];
-        importedFileName = fileName;
-        PSB.clearUndoRedo();
-        recomputeAll();
-        syncGlobalsToUI();
-        PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-        PSB.closeSidebar();
-        setFilename(fileName);
-        markClean();
-      } catch (err) {
-        PSB.showToast('Failed to load project: ' + err.message, 'error');
+    PSB.showLoading('Importing...');
+    setTimeout(function() {
+      if (fileName.endsWith('.json')) {
+        try {
+          var loaded = PSB.loadProject(content);
+          state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
+          state.rows = loaded.rows;
+          state.auditLog = loaded.auditLog || [];
+          importedFileName = fileName;
+          PSB.clearUndoRedo();
+          recomputeAll();
+          syncGlobalsToUI();
+          PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+          PSB.closeSidebar();
+          setFilename(fileName);
+          markClean();
+        } catch (err) {
+          PSB.showToast('Failed to load project: ' + err.message, 'error');
+        }
+        PSB.hideLoading();
+        return;
       }
-      return;
-    }
 
-    var rawRows = PSB.parseCSV(content);
-    if (rawRows.length === 0) {
-      PSB.showToast('No valid data found in CSV.', 'error');
-      return;
-    }
+      var rawRows = PSB.parseCSV(content);
+      if (rawRows.length === 0) {
+        PSB.showToast('No valid data found in CSV.', 'error');
+        PSB.hideLoading();
+        return;
+      }
 
-    PSB.clearUndoRedo();
-    PSB.resetIdCounter();
-    state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
-    state.auditLog = [];
-    importedFileName = fileName;
-    PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'Imported ' + state.rows.length + ' rows from ' + fileName });
-    recomputeAll();
-    PSB.closeSidebar();
-    setFilename(fileName);
-    markDirty();
-    console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
-    PSB.showToast('Imported ' + state.rows.length + ' rows from ' + fileName, 'success');
+      PSB.clearUndoRedo();
+      PSB.resetIdCounter();
+      state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
+      state.auditLog = [];
+      importedFileName = fileName;
+      PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'Imported ' + state.rows.length + ' rows from ' + fileName });
+      recomputeAll();
+      PSB.closeSidebar();
+      setFilename(fileName);
+      markDirty();
+      console.log('[PSB] Imported ' + state.rows.length + ' rows from ' + fileName);
+      PSB.showToast('Imported ' + state.rows.length + ' rows from ' + fileName, 'success');
+      PSB.hideLoading();
+    }, 50);
   };
 
   if (state.rows.length > 0) {

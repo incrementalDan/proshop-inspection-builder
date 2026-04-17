@@ -193,6 +193,13 @@ html, body {
   color: var(--text-primary);
   font-size: 12px;
   font-family: var(--font-mono);
+  transition: border-color var(--transition);
+}
+
+.control-group select:focus,
+.control-group input:focus {
+  border-color: var(--accent-blue);
+  outline: none;
 }
 
 .control-group input[type="number"] {
@@ -239,6 +246,15 @@ input.no-spinners {
   border-color: var(--border-light);
 }
 
+.btn:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
 .btn-primary {
   background: var(--accent-blue);
   color: white;
@@ -246,6 +262,11 @@ input.no-spinners {
 }
 
 .btn-primary:hover {
+  filter: brightness(1.15);
+}
+
+.btn-primary:active,
+.btn-accent:active {
   filter: brightness(1.15);
 }
 
@@ -403,6 +424,9 @@ input.no-spinners {
 .undo-redo-btns .btn-icon:not(:disabled):hover {
   opacity: 1;
 }
+.undo-redo-btns .btn-icon:not(:disabled):active {
+  transform: scale(0.9);
+}
 
 .op-bar-label {
   font-size: 11px;
@@ -487,6 +511,11 @@ input.no-spinners {
 
 .col-ops .op-bubble:hover {
   filter: brightness(1.2);
+  transform: scale(1.08);
+}
+
+.col-ops .op-bubble:active {
+  transform: scale(0.94);
 }
 
 .op-add-input {
@@ -583,6 +612,12 @@ input.no-spinners {
   border: 3px dashed var(--accent-blue);
   border-radius: var(--radius-lg);
   margin: 12px;
+  animation: drop-zone-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes drop-zone-pulse {
+  0%, 100% { background: rgba(74, 158, 255, 0.06); }
+  50% { background: rgba(74, 158, 255, 0.14); }
 }
 
 .drop-zone-content {
@@ -657,10 +692,12 @@ input.no-spinners {
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  transition: color 100ms ease, background 100ms ease;
 }
 
 #data-table th:hover {
   color: var(--accent-blue);
+  background: var(--bg-hover);
 }
 
 #data-table th.sorted-asc::after {
@@ -689,14 +726,18 @@ input.no-spinners {
   background: var(--row-odd);
 }
 
+#data-table tbody tr {
+  transition: background 100ms ease;
+  cursor: pointer;
+}
+
 #data-table tbody tr:hover {
   background: var(--bg-hover);
 }
 
 #data-table tbody tr.selected {
   background: var(--row-selected) !important;
-  outline: 1px solid var(--accent-blue);
-  outline-offset: -1px;
+  box-shadow: inset 3px 0 0 var(--accent-blue);
 }
 
 #data-table tbody tr.is-note {
@@ -806,23 +847,28 @@ input.no-spinners {
 td.editable {
   cursor: text;
   position: relative;
+  transition: background 100ms ease;
 }
 
 td.editable:hover {
-  outline: 1px solid var(--accent-blue);
-  outline-offset: -1px;
+  background: rgba(74, 158, 255, 0.06);
 }
 
 td.editable input {
   width: 100%;
   height: 100%;
-  padding: 0;
-  border: none;
-  background: transparent;
+  padding: 1px 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent-blue);
+  border-radius: 2px;
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 13px;
   outline: none;
+}
+
+td.editable input:focus {
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
 }
 
 /* Column widths */
@@ -841,8 +887,8 @@ td.editable input {
 
 /* Override highlight — faint indicator that value was manually changed */
 td.has-override {
-  background: rgba(255, 140, 66, 0.08);
-  border-left: 2px solid rgba(255, 140, 66, 0.35);
+  background: rgba(255, 140, 66, 0.10);
+  border-left: 2px solid rgba(255, 140, 66, 0.45);
 }
 
 /* ── Dual Unit Display ─────────────────────────────────── */
@@ -866,6 +912,12 @@ td.has-override {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: transform 200ms ease;
+}
+
+#sidebar.sidebar-closed {
+  transform: translateX(100%);
+  pointer-events: none;
 }
 
 #sidebar > .sidebar-controls {
@@ -886,8 +938,14 @@ td.has-override {
   width: 4px;
   cursor: col-resize;
   background: transparent;
-  transition: background var(--transition);
+  transition: background var(--transition), opacity 200ms ease, width 200ms ease;
   flex-shrink: 0;
+}
+
+#sidebar-resizer.sidebar-closed {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
 }
 
 #sidebar-resizer:hover,
@@ -1107,6 +1165,11 @@ td.has-override {
 
 .sidebar-editable:hover {
   outline: 1px dashed var(--border-light);
+}
+
+.sidebar-editable:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
 }
 
 /* Sidebar row history — pinned to bottom of sidebar */
@@ -1335,6 +1398,11 @@ td.has-override {
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
+.toggle-input:focus-visible + .toggle-track {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
 .toggle-input:checked + .toggle-track {
   background: var(--accent-blue);
 }
@@ -1378,6 +1446,11 @@ td.has-override {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  transition: background 150ms ease;
+}
+
+.modal.modal-open {
   background: rgba(0, 0, 0, 0.6);
 }
 
@@ -1391,6 +1464,14 @@ td.has-override {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  opacity: 0;
+  transform: scale(0.96) translateY(4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.modal.modal-open .modal-content {
+  opacity: 1;
+  transform: scale(1) translateY(0);
 }
 
 .modal-header {
@@ -1436,6 +1517,12 @@ td.has-override {
   font-size: 12px;
   padding: 8px;
   resize: vertical;
+  transition: border-color var(--transition);
+}
+
+.modal-body textarea:focus {
+  border-color: var(--accent-blue);
+  outline: none;
 }
 
 .modal-body .hint {
@@ -1470,6 +1557,7 @@ td.has-override {
 ::-webkit-scrollbar-thumb {
   background: var(--border-light);
   border-radius: 4px;
+  border: 2px solid var(--bg-primary);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -1482,6 +1570,39 @@ td.has-override {
   color: white;
 }
 
+/* ── Loading Spinner Overlay ──────────────────────────── */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+}
+
+.spinner-ring {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spinner-spin 0.8s linear infinite;
+}
+
+.spinner-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+@keyframes spinner-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Toast Notifications ──────────────────────────────── */
 #toast-container {
   position: fixed;
@@ -1490,6 +1611,10 @@ td.has-override {
   transform: translateX(-50%);
   z-index: 300;
   pointer-events: none;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  align-items: center;
 }
 
 .toast {

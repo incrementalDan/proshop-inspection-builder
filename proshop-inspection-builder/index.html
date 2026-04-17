@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=18">
+  <link rel="stylesheet" href="css/styles.css?v=19">
 </head>
 <body>
 
@@ -128,8 +128,8 @@
     </div>
 
     <!-- Sidebar (resizable) -->
-    <div id="sidebar-resizer" class="hidden"></div>
-    <aside id="sidebar" class="hidden">
+    <div id="sidebar-resizer" class="sidebar-closed"></div>
+    <aside id="sidebar" class="sidebar-closed">
       <div class="sidebar-header">
         <div>
           <h2 id="sidebar-dimtag" class="sidebar-dimtag">—</h2>
@@ -361,19 +361,24 @@
     </div>
   </div>
 
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="spinner-ring"></div>
+    <span class="spinner-text">Processing...</span>
+  </div>
+
   <div id="toast-container"></div>
 
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=18"></script>
-  <script src="js/parser.js?v=18"></script>
-  <script src="js/dataModel.js?v=18"></script>
-  <script src="js/exportEngine.js?v=18"></script>
-  <script src="js/storage.js?v=18"></script>
-  <script src="js/history.js?v=18"></script>
-  <script src="js/ui.js?v=18"></script>
-  <script src="js/app.js?v=18"></script>
+  <script src="js/mathEngine.js?v=19"></script>
+  <script src="js/parser.js?v=19"></script>
+  <script src="js/dataModel.js?v=19"></script>
+  <script src="js/exportEngine.js?v=19"></script>
+  <script src="js/storage.js?v=19"></script>
+  <script src="js/history.js?v=19"></script>
+  <script src="js/ui.js?v=19"></script>
+  <script src="js/app.js?v=19"></script>
 
 </body>
 </html>
