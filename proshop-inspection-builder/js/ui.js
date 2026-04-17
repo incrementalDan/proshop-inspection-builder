@@ -242,8 +242,8 @@ function selectRow(rowId) {
   // Show sidebar
   var sidebar = document.getElementById('sidebar');
   var resizer = document.getElementById('sidebar-resizer');
-  sidebar.classList.remove('hidden');
-  resizer.classList.remove('hidden');
+  sidebar.classList.remove('sidebar-closed');
+  resizer.classList.remove('sidebar-closed');
 
   // Populate sidebar
   populateSidebar(rowId);
@@ -496,8 +496,8 @@ function wireUpSidebarHandlers(rowId) {
  */
 function closeSidebar() {
   selectedRowId = null;
-  document.getElementById('sidebar').classList.add('hidden');
-  document.getElementById('sidebar-resizer').classList.add('hidden');
+  document.getElementById('sidebar').classList.add('sidebar-closed');
+  document.getElementById('sidebar-resizer').classList.add('sidebar-closed');
   var allRows = document.querySelectorAll('#table-body tr');
   for (var i = 0; i < allRows.length; i++) {
     allRows[i].classList.remove('selected');
@@ -983,8 +983,13 @@ function getSelectedRowId() {
 function showToast(message, type) {
   type = type || 'info';
   var container = document.getElementById('toast-container');
-  var existing = container.querySelector('.toast');
-  if (existing) container.removeChild(existing);
+
+  // Cap at 3 toasts — remove oldest if over limit
+  var toasts = container.querySelectorAll('.toast');
+  while (toasts.length >= 3) {
+    container.removeChild(toasts[0]);
+    toasts = container.querySelectorAll('.toast');
+  }
 
   var el = document.createElement('div');
   el.className = 'toast toast-' + type;
@@ -1057,13 +1062,13 @@ function showConfirmModal(opts) {
   var cancelClone = cancelBtn.cloneNode(true);
   cancelBtn.parentNode.replaceChild(cancelClone, cancelBtn);
 
-  modal.classList.remove('hidden');
+  openModal('confirm-modal');
 
   cancelClone.addEventListener('click', function() {
-    modal.classList.add('hidden');
+    closeModal('confirm-modal');
   });
   okClone.addEventListener('click', function() {
-    modal.classList.add('hidden');
+    closeModal('confirm-modal');
     if (opts.onConfirm) opts.onConfirm();
   });
 }
@@ -1154,14 +1159,55 @@ function openHistoryModal(rowId) {
     listEl.innerHTML = html;
   }
 
-  document.getElementById('history-modal').classList.remove('hidden');
+  openModal('history-modal');
 
   var closeBtn = document.getElementById('history-close');
   var closeClone = closeBtn.cloneNode(true);
   closeBtn.parentNode.replaceChild(closeClone, closeBtn);
   closeClone.addEventListener('click', function() {
-    document.getElementById('history-modal').classList.add('hidden');
+    closeModal('history-modal');
   });
+}
+
+// ── Loading Spinner ──────────────────────────────────────
+
+function showLoading(text) {
+  var overlay = document.getElementById('loading-overlay');
+  if (text) {
+    var span = overlay.querySelector('.spinner-text');
+    if (span) span.textContent = text;
+  }
+  overlay.classList.remove('hidden');
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+// ── Modal Open/Close Helpers (animated) ──────────────────
+
+function openModal(id) {
+  var modal = document.getElementById(id);
+  modal.classList.remove('hidden');
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      modal.classList.add('modal-open');
+    });
+  });
+}
+
+function closeModal(id) {
+  var modal = document.getElementById(id);
+  modal.classList.remove('modal-open');
+  var onEnd = function() {
+    modal.classList.add('hidden');
+    modal.removeEventListener('transitionend', onEnd);
+  };
+  modal.addEventListener('transitionend', onEnd);
+  // Fallback in case transitionend doesn't fire
+  setTimeout(function() {
+    modal.classList.add('hidden');
+  }, 200);
 }
 
 // ── Export to namespace ───────────────────────────────────
@@ -1175,4 +1221,8 @@ PSB.getOpColor = getOpColor;
 PSB.showToast = showToast;
 PSB.showConfirmModal = showConfirmModal;
 PSB.openHistoryModal = openHistoryModal;
+PSB.openModal = openModal;
+PSB.closeModal = closeModal;
+PSB.showLoading = showLoading;
+PSB.hideLoading = hideLoading;
 PSB.esc = esc;
