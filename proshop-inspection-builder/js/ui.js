@@ -216,8 +216,8 @@ function buildRowHTML(row) {
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
     '<td class="col-pingage editable">' + esc(addLeadingZero(c.pinGage)) + '</td>' +
-    '<td class="col-inputtol editable' + (ov.outTolerance !== null ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.op2000DualTol)) + '</td>' +
-    '<td class="col-outtol editable' + (ov.outputTolerance !== null ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.outTolerance)) + '</td>' +
+    '<td class="col-inputtol editable' + ((ov.outTolPlus !== null || ov.outTolMinus !== null) ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.op2000DualTol)) + '</td>' +
+    '<td class="col-outtol editable' + ((ov.outputTolPlus !== null || ov.outputTolMinus !== null) ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.outTolerance)) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
     '<td class="col-ops">' + opBubblesHTML + '</td>';
 }
@@ -294,7 +294,7 @@ function populateSidebar(rowId) {
     origSpec.textContent = '';
   }
 
-  if (u.overrides.outTolerance !== null) {
+  if (u.overrides.outTolPlus !== null || u.overrides.outTolMinus !== null) {
     oiTol.classList.remove('hidden');
     origTol.textContent = row.raw.tolerance || '';
   } else {
@@ -415,11 +415,11 @@ function wireUpSidebarHandlers(rowId) {
   // Editable sidebar preview values — double-click to edit
   // OP2000 values: set base overrides, clear independent OUT overrides + toast
   setupSidebarValueEdit('sidebar-op2000-spec', 'outDrawingSpec', rowId, 'outputSpec');
-  setupSidebarValueEdit('sidebar-op2000-tol', 'outTolerance', rowId, 'outputTolerance');
+  setupSidebarTolEdit('sidebar-op2000-tol', 'outTolPlus', 'outTolMinus', rowId, 'outputTolPlus', 'outputTolMinus');
   // OUT values: set independent overrides only, don't affect OP2000
   setupSidebarValueEdit('sidebar-out-spec', 'outputSpec', rowId);
   setupSidebarValueEdit('sidebar-out-nominal', 'outNominal', rowId);
-  setupSidebarValueEdit('sidebar-out-tol', 'outputTolerance', rowId);
+  setupSidebarTolEdit('sidebar-out-tol', 'outputTolPlus', 'outputTolMinus', rowId);
   setupSidebarValueEdit('sidebar-pingage-value', 'pinGageValue', rowId);
 
   // Output Tag — double-click to edit (Rule 6: overrideable)
@@ -737,120 +737,338 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
   });
 }
 
+// ── Sidebar Tolerance Editing (dual +/- inputs) ──────
+
+function setupSidebarTolEdit(elementId, plusKey, minusKey, rowId, clearPlusKey, clearMinusKey) {
+  var el = document.getElementById(elementId);
+  if (!el) return;
+  var clone = el.cloneNode(true);
+  el.parentNode.replaceChild(clone, el);
+  clone.classList.add('sidebar-editable');
+
+  clone.addEventListener('dblclick', function(e) {
+    e.stopPropagation();
+    if (clone.querySelector('input')) return;
+
+    var originalHTML = clone.innerHTML;
+    var state = getAppState();
+    var row = state.rows.find(function(r) { return r.id === rowId; });
+    if (!row) return;
+
+    var c = row.computed;
+    var globals = state.globals || {};
+    var importUnits = globals.importUnits || 'mm';
+    var prec = importUnits === 'inch' ? (globals.inchPrecision || 4) : (globals.mmPrecision || 3);
+
+    var isOp2k = plusKey === 'outTolPlus';
+    var plusVal = isOp2k ? c.op2kTolPlus : c.outTolPlus;
+    var minusVal = isOp2k ? c.op2kTolMinus : c.outTolMinus;
+    var plusStr = PSB.formatPrecision(plusVal, prec);
+    var minusStr = PSB.formatPrecision(minusVal, prec);
+
+    clone.innerHTML = '<div class="tol-edit-container">' +
+      '<div class="tol-input-wrap"><span class="tol-sign-label">+</span><input class="tol-input tol-plus" value="' + esc(plusStr) + '"></div>' +
+      '<div class="tol-input-wrap"><span class="tol-sign-label">−</span><input class="tol-input tol-minus" value="' + esc(minusStr) + '"></div>' +
+      '</div>';
+
+    var plusInput = clone.querySelector('.tol-plus');
+    var minusInput = clone.querySelector('.tol-minus');
+    plusInput.focus();
+    plusInput.select();
+
+    var committed = false;
+    var commit = function() {
+      if (committed) return;
+      committed = true;
+
+      var pv = plusInput.value.trim();
+      var mv = minusInput.value.trim();
+      if (pv.charAt(0) === '+') pv = pv.substring(1);
+      if (mv.charAt(0) === '-' || mv.charAt(0) === '−') mv = mv.substring(1);
+
+      var pNum = parseFloat(pv);
+      var mNum = parseFloat(mv);
+
+      if (isNaN(pNum) && isNaN(mNum)) {
+        clone.innerHTML = originalHTML;
+        return;
+      }
+      if (isNaN(pNum)) pNum = mNum;
+      if (isNaN(mNum)) mNum = pNum;
+
+      if (Math.abs(pNum - plusVal) < 1e-10 && Math.abs(mNum - minusVal) < 1e-10) {
+        clone.innerHTML = originalHTML;
+        return;
+      }
+
+      var freshState = getAppState();
+      var freshRow = freshState.rows.find(function(r) { return r.id === rowId; });
+      if (!freshRow) { clone.innerHTML = originalHTML; return; }
+      var ov = Object.assign({}, freshRow.user.overrides);
+      ov[plusKey] = String(pNum);
+      ov[minusKey] = String(mNum);
+
+      if (clearPlusKey && (ov[clearPlusKey] !== null || ov[clearMinusKey] !== null)) {
+        ov[clearPlusKey] = null;
+        ov[clearMinusKey] = null;
+        showToast('OP2000 Tol changed — OUT Tol override cleared', 'info');
+      }
+      onRowUserChange(rowId, { overrides: ov });
+    };
+
+    var blurTimeout;
+    var onBlur = function() {
+      blurTimeout = setTimeout(function() {
+        if (!clone.contains(document.activeElement) || !clone.querySelector('.tol-input')) {
+          commit();
+        }
+      }, 0);
+    };
+
+    plusInput.addEventListener('blur', onBlur);
+    minusInput.addEventListener('blur', onBlur);
+
+    plusInput.addEventListener('keydown', function(ke) {
+      if (ke.key === 'Enter') { ke.target.blur(); setTimeout(commit, 0); }
+      if (ke.key === 'Escape') { committed = true; clone.innerHTML = originalHTML; }
+      if (ke.key === 'Tab' && !ke.shiftKey) { ke.preventDefault(); minusInput.focus(); minusInput.select(); }
+    });
+    minusInput.addEventListener('keydown', function(ke) {
+      if (ke.key === 'Enter') { ke.target.blur(); setTimeout(commit, 0); }
+      if (ke.key === 'Escape') { committed = true; clone.innerHTML = originalHTML; }
+      if (ke.key === 'Tab' && ke.shiftKey) { ke.preventDefault(); plusInput.focus(); plusInput.select(); }
+      if (ke.key === 'Tab' && !ke.shiftKey) { ke.preventDefault(); commit(); }
+    });
+  });
+}
+
 // ── Inline Editing ────────────────────────────────────
 
 function setupInlineEditing(tr, row) {
   var editableCells = tr.querySelectorAll('td.editable');
   for (var i = 0; i < editableCells.length; i++) {
     (function(td) {
+      var isTolCell = td.classList.contains('col-inputtol') || td.classList.contains('col-outtol');
+
       td.addEventListener('dblclick', function(e) {
         e.stopPropagation();
-        if (td.querySelector('input')) return; // Already editing
+        if (td.querySelector('input')) return;
 
         var originalHTML = td.innerHTML;
-        var originalValue = td.textContent;
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.value = originalValue;
-        td.textContent = '';
-        td.appendChild(input);
-        input.focus();
-        input.select();
 
-        var committed = false;
-        var commit = function() {
-          if (committed) return;
-          committed = true;
-          var newValue = input.value.trim();
-          // Strip "[secondary]" bracket notation from dual-display columns
-          // so overrides store the raw value, not the UI-formatted string
-          if (newValue && newValue.indexOf(' [') > 0) {
-            newValue = newValue.split(' [')[0].trim();
-          }
-
-          // Strip the same notation from originalValue for comparison
-          var originalStripped = originalValue;
-          if (originalStripped && originalStripped.indexOf(' [') > 0) {
-            originalStripped = originalStripped.split(' [')[0].trim();
-          }
-
-          // No-op if nothing actually changed — restore original HTML formatting
-          if (newValue === originalStripped) {
-            td.innerHTML = originalHTML;
-            return;
-          }
-
-          td.textContent = newValue || originalValue;
-
-          // Set flash target for after re-render
-          var colClass = '';
-          var classes = td.className.split(' ');
-          for (var ci = 0; ci < classes.length; ci++) {
-            if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
-          }
-          if (colClass) flashCellKey = row.id + '|' + colClass;
-
-          // Determine which field was edited
-          // OP2000 columns → set base override + clear OUT independent override
-          // OUT columns → set independent OUT override only
-          var ov = Object.assign({}, row.user.overrides);
-          if (td.classList.contains('col-inputspec')) {
-            // OP2000 Spec — drives pipeline, clears independent OUT spec
-            if (ov.outputSpec !== null) {
-              ov.outputSpec = null;
-              showToast('OP2000 Spec changed — OUT Spec override cleared', 'info');
-            }
-            ov.outDrawingSpec = newValue || null;
-          } else if (td.classList.contains('col-drawspec')) {
-            // OUT Spec — independent override, does not affect OP2000
-            ov.outputSpec = newValue || null;
-          } else if (td.classList.contains('col-inputtol')) {
-            // OP2000 Tol — drives pipeline, clears independent OUT tol
-            if (ov.outputTolerance !== null) {
-              ov.outputTolerance = null;
-              showToast('OP2000 Tol changed — OUT Tol override cleared', 'info');
-            }
-            ov.outTolerance = newValue || null;
-          } else if (td.classList.contains('col-outtol')) {
-            // OUT Tol — independent override, does not affect OP2000
-            ov.outputTolerance = newValue || null;
-          } else if (td.classList.contains('col-pingage')) {
-            ov.pinGageValue = newValue || null;
-          } else if (td.classList.contains('col-su1')) {
-            ov.specUnit1 = newValue || null;
-          } else if (td.classList.contains('col-su2')) {
-            ov.specUnit2 = newValue || null;
-          } else if (td.classList.contains('col-su3')) {
-            ov.specUnit3 = newValue || null;
-          }
-          onRowUserChange(row.id, { overrides: ov });
-        };
-
-        input.addEventListener('blur', commit);
-        input.addEventListener('keydown', function(ke) {
-          if (ke.key === 'Enter') input.blur();
-          if (ke.key === 'Escape') {
-            committed = true; // Prevent commit on blur
-            td.innerHTML = originalHTML;
-          }
-          if (ke.key === 'Tab') {
-            ke.preventDefault();
-            var colClass = '';
-            var classes = td.className.split(' ');
-            for (var ci = 0; ci < classes.length; ci++) {
-              if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
-            }
-            navigateTarget = {
-              rowId: row.id,
-              colClass: colClass,
-              reverse: ke.shiftKey
-            };
-            input.blur();
-          }
-        });
+        if (isTolCell) {
+          setupDualTolEdit(td, row, originalHTML);
+        } else {
+          setupSingleEdit(td, row, originalHTML);
+        }
       });
     })(editableCells[i]);
   }
+}
+
+function setupDualTolEdit(td, row, originalHTML) {
+  var c = row.computed;
+  var isInput = td.classList.contains('col-inputtol');
+  var plusVal = isInput ? c.op2kTolPlus : c.outTolPlus;
+  var minusVal = isInput ? c.op2kTolMinus : c.outTolMinus;
+
+  var state = getAppState();
+  var globals = state ? state.globals : {};
+  var importUnits = globals.importUnits || 'mm';
+  var prec = importUnits === 'inch' ? (globals.inchPrecision || 4) : (globals.mmPrecision || 3);
+
+  var plusStr = PSB.formatPrecision(plusVal, prec);
+  var minusStr = PSB.formatPrecision(minusVal, prec);
+
+  td.innerHTML = '<div class="tol-edit-container">' +
+    '<div class="tol-input-wrap"><span class="tol-sign-label">+</span><input class="tol-input tol-plus" value="' + esc(plusStr) + '"></div>' +
+    '<div class="tol-input-wrap"><span class="tol-sign-label">−</span><input class="tol-input tol-minus" value="' + esc(minusStr) + '"></div>' +
+    '</div>';
+
+  var plusInput = td.querySelector('.tol-plus');
+  var minusInput = td.querySelector('.tol-minus');
+  plusInput.focus();
+  plusInput.select();
+
+  var committed = false;
+  var commit = function() {
+    if (committed) return;
+    committed = true;
+
+    var pv = plusInput.value.trim();
+    var mv = minusInput.value.trim();
+    if (pv.charAt(0) === '+') pv = pv.substring(1);
+    if (mv.charAt(0) === '-' || mv.charAt(0) === '−') mv = mv.substring(1);
+
+    var pNum = parseFloat(pv);
+    var mNum = parseFloat(mv);
+
+    if (isNaN(pNum) && isNaN(mNum)) {
+      td.innerHTML = originalHTML;
+      return;
+    }
+
+    if (isNaN(pNum)) pNum = mNum;
+    if (isNaN(mNum)) mNum = pNum;
+
+    var origPlus = td.classList.contains('col-inputtol') ? row.computed.op2kTolPlus : row.computed.outTolPlus;
+    var origMinus = td.classList.contains('col-inputtol') ? row.computed.op2kTolMinus : row.computed.outTolMinus;
+    if (Math.abs(pNum - origPlus) < 1e-10 && Math.abs(mNum - origMinus) < 1e-10) {
+      td.innerHTML = originalHTML;
+      return;
+    }
+
+    var colClass = '';
+    var classes = td.className.split(' ');
+    for (var ci = 0; ci < classes.length; ci++) {
+      if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
+    }
+    if (colClass) flashCellKey = row.id + '|' + colClass;
+
+    var ov = Object.assign({}, row.user.overrides);
+    if (td.classList.contains('col-inputtol')) {
+      if (ov.outputTolPlus !== null || ov.outputTolMinus !== null) {
+        ov.outputTolPlus = null;
+        ov.outputTolMinus = null;
+        showToast('OP2000 Tol changed — OUT Tol override cleared', 'info');
+      }
+      ov.outTolPlus = String(pNum);
+      ov.outTolMinus = String(mNum);
+    } else {
+      ov.outputTolPlus = String(pNum);
+      ov.outputTolMinus = String(mNum);
+    }
+    onRowUserChange(row.id, { overrides: ov });
+  };
+
+  var blurTimeout;
+  var onBlur = function() {
+    blurTimeout = setTimeout(function() {
+      if (!td.contains(document.activeElement) || !td.querySelector('.tol-input')) {
+        commit();
+      }
+    }, 0);
+  };
+
+  plusInput.addEventListener('blur', onBlur);
+  minusInput.addEventListener('blur', onBlur);
+
+  var handleKey = function(ke, isPlus) {
+    if (ke.key === 'Enter') {
+      ke.target.blur();
+      setTimeout(commit, 0);
+    }
+    if (ke.key === 'Escape') {
+      committed = true;
+      td.innerHTML = originalHTML;
+    }
+    if (ke.key === 'Tab') {
+      if (isPlus && !ke.shiftKey) {
+        ke.preventDefault();
+        minusInput.focus();
+        minusInput.select();
+      } else if (!isPlus && ke.shiftKey) {
+        ke.preventDefault();
+        plusInput.focus();
+        plusInput.select();
+      } else {
+        ke.preventDefault();
+        var colClass = '';
+        var classes = td.className.split(' ');
+        for (var ci = 0; ci < classes.length; ci++) {
+          if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
+        }
+        navigateTarget = { rowId: row.id, colClass: colClass, reverse: ke.shiftKey };
+        commit();
+      }
+    }
+  };
+
+  plusInput.addEventListener('keydown', function(ke) { handleKey(ke, true); });
+  minusInput.addEventListener('keydown', function(ke) { handleKey(ke, false); });
+}
+
+function setupSingleEdit(td, row, originalHTML) {
+  var originalValue = td.textContent;
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.value = originalValue;
+  td.textContent = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+
+  var committed = false;
+  var commit = function() {
+    if (committed) return;
+    committed = true;
+    var newValue = input.value.trim();
+    if (newValue && newValue.indexOf(' [') > 0) {
+      newValue = newValue.split(' [')[0].trim();
+    }
+
+    var originalStripped = originalValue;
+    if (originalStripped && originalStripped.indexOf(' [') > 0) {
+      originalStripped = originalStripped.split(' [')[0].trim();
+    }
+
+    if (newValue === originalStripped) {
+      td.innerHTML = originalHTML;
+      return;
+    }
+
+    td.textContent = newValue || originalValue;
+
+    var colClass = '';
+    var classes = td.className.split(' ');
+    for (var ci = 0; ci < classes.length; ci++) {
+      if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
+    }
+    if (colClass) flashCellKey = row.id + '|' + colClass;
+
+    var ov = Object.assign({}, row.user.overrides);
+    if (td.classList.contains('col-inputspec')) {
+      if (ov.outputSpec !== null) {
+        ov.outputSpec = null;
+        showToast('OP2000 Spec changed — OUT Spec override cleared', 'info');
+      }
+      ov.outDrawingSpec = newValue || null;
+    } else if (td.classList.contains('col-drawspec')) {
+      ov.outputSpec = newValue || null;
+    } else if (td.classList.contains('col-pingage')) {
+      ov.pinGageValue = newValue || null;
+    } else if (td.classList.contains('col-su1')) {
+      ov.specUnit1 = newValue || null;
+    } else if (td.classList.contains('col-su2')) {
+      ov.specUnit2 = newValue || null;
+    } else if (td.classList.contains('col-su3')) {
+      ov.specUnit3 = newValue || null;
+    }
+    onRowUserChange(row.id, { overrides: ov });
+  };
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', function(ke) {
+    if (ke.key === 'Enter') input.blur();
+    if (ke.key === 'Escape') {
+      committed = true;
+      td.innerHTML = originalHTML;
+    }
+    if (ke.key === 'Tab') {
+      ke.preventDefault();
+      var colClass = '';
+      var classes = td.className.split(' ');
+      for (var ci = 0; ci < classes.length; ci++) {
+        if (classes[ci].indexOf('col-') === 0) { colClass = classes[ci]; break; }
+      }
+      navigateTarget = {
+        rowId: row.id,
+        colClass: colClass,
+        reverse: ke.shiftKey
+      };
+      input.blur();
+    }
+  });
 }
 
 // ── OP Bubble Clicks (table) ──────────────────────────────
