@@ -246,7 +246,7 @@ function clearAutoSave() {
 
 function serializeState(state) {
   return {
-    version: 1,
+    version: 2,
     timestamp: new Date().toISOString(),
     globals: state.globals,
     rows: state.rows.map(function(row) {
@@ -275,6 +275,26 @@ function deserializeState(data) {
       var user = Object.assign({}, defaults, r.user);
       user.overrides = Object.assign({}, defaults.overrides, (r.user && r.user.overrides) || {});
       user.includeOps = Object.assign({}, (r.user && r.user.includeOps) || {});
+
+      // v1→v2 migration: convert single-string tolerance overrides to plus/minus
+      var ov = user.overrides;
+      if (ov.outTolerance !== null && ov.outTolPlus === null && ov.outTolMinus === null) {
+        var parsed = PSB.parseTolerance(ov.outTolerance);
+        if (parsed) {
+          ov.outTolPlus = String(parsed.tolPlus);
+          ov.outTolMinus = String(parsed.tolMinus);
+        }
+        ov.outTolerance = null;
+      }
+      if (ov.outputTolerance !== null && ov.outputTolPlus === null && ov.outputTolMinus === null) {
+        var parsedOut = PSB.parseTolerance(ov.outputTolerance);
+        if (parsedOut) {
+          ov.outputTolPlus = String(parsedOut.tolPlus);
+          ov.outputTolMinus = String(parsedOut.tolMinus);
+        }
+        ov.outputTolerance = null;
+      }
+
       return {
         id: r.id,
         raw: Object.freeze(Object.assign({}, r.raw)),

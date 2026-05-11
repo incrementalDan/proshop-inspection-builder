@@ -105,9 +105,11 @@ function defaultUserState() {
     status: 'none',          // 'none', 'edited', 'complete'
     overrides: {
       outDrawingSpec: null,  // OP2000 base spec override (drives OUT spec via pipeline)
-      outTolerance: null,    // OP2000 base tolerance override (drives OUT tol via pipeline)
+      outTolPlus: null,      // OP2000 base tol+ override (feeds pipeline)
+      outTolMinus: null,     // OP2000 base tol- override (feeds pipeline)
       outputSpec: null,      // Independent OUT spec override (cleared when OP2000 spec changes)
-      outputTolerance: null, // Independent OUT tol override (cleared when OP2000 tol changes)
+      outputTolPlus: null,   // Independent OUT tol+ override (bypasses pipeline)
+      outputTolMinus: null,  // Independent OUT tol- override (bypasses pipeline)
       pinGageValue: null,
       specUnit1: null,
       specUnit2: null,
@@ -115,6 +117,9 @@ function defaultUserState() {
       outNominal: null,
       inputTolerance: null,
       outputTag: null,       // null = auto-generate, string = manual override
+      // Deprecated (v1 compat — migrated on load, never written)
+      outTolerance: null,
+      outputTolerance: null,
     },
   };
 }
@@ -185,11 +190,11 @@ function recompute(row, globals) {
       // OP2000 fields (consistent shape with non-note rows — preserve raw values)
       op2000DrawingSpec: ov.outDrawingSpec !== null ? ov.outDrawingSpec : (raw.drawingSpec || ''),
       op2000Nominal: 0,
-      op2000Tolerance: ov.outTolerance !== null ? ov.outTolerance : (raw.tolerance || ''),
+      op2000Tolerance: raw.tolerance || '',
       op2000DualSpec: ov.outDrawingSpec !== null ? ov.outDrawingSpec : (raw.drawingSpec || ''),
-      op2000DualTol: ov.outTolerance !== null ? ov.outTolerance : (raw.tolerance || ''),
+      op2000DualTol: raw.tolerance || '',
       outNominal: ov.outNominal !== null ? ov.outNominal : (raw.nominal || ''),
-      outTolerance: ov.outTolerance !== null ? ov.outTolerance : (raw.tolerance || ''),
+      outTolerance: raw.tolerance || '',
       inputTolerance: ov.inputTolerance !== null ? ov.inputTolerance : (raw.tolerance || ''),
       pinGage: ov.pinGageValue !== null ? ov.pinGageValue : '',
       platingAnnotation: '',
@@ -199,6 +204,10 @@ function recompute(row, globals) {
       inspectionEquipment: user.inspectionEquipment,
       inspectionFrequency: user.inspectionFrequency,
       includeOps: Object.assign({}, user.includeOps),
+      op2kTolPlus: 0,
+      op2kTolMinus: 0,
+      outTolPlus: 0,
+      outTolMinus: 0,
       original: { nominal: 0, tolPlus: 0, tolMinus: 0 },
       output: { nominal: 0, tolPlus: 0, tolMinus: 0 },
     };
@@ -233,7 +242,26 @@ function recompute(row, globals) {
   var op2000SpecUnit2 = user.overrides.specUnit2 !== null ? user.overrides.specUnit2 : (raw.specUnit2 || specUnits.su2 || '');
   var op2000SpecUnit3 = user.overrides.specUnit3 !== null ? user.overrides.specUnit3 : (raw.specUnit3 || specUnits.su3 || '');
   var op2000DrawingSpec = user.overrides.outDrawingSpec !== null ? user.overrides.outDrawingSpec : (raw.drawingSpec || '');
-  var op2000Tolerance = user.overrides.outTolerance !== null ? user.overrides.outTolerance : (raw.tolerance || '');
+  // Build OP2000 tolerance display from plus/minus overrides or raw
+  var hasOp2kTolOverride = user.overrides.outTolPlus !== null || user.overrides.outTolMinus !== null;
+  var op2000Tolerance;
+  if (hasOp2kTolOverride) {
+    var ovPlus = parseFloat(user.overrides.outTolPlus);
+    var ovMinus = parseFloat(user.overrides.outTolMinus);
+    if (isNaN(ovPlus) && !isNaN(ovMinus)) ovPlus = ovMinus;
+    if (isNaN(ovMinus) && !isNaN(ovPlus)) ovMinus = ovPlus;
+    if (!isNaN(ovPlus) && !isNaN(ovMinus)) {
+      if (Math.abs(ovPlus - ovMinus) < 1e-10) {
+        op2000Tolerance = String(ovPlus);
+      } else {
+        op2000Tolerance = '+' + ovPlus + ' -' + ovMinus;
+      }
+    } else {
+      op2000Tolerance = raw.tolerance || '';
+    }
+  } else {
+    op2000Tolerance = raw.tolerance || '';
+  }
 
   // Feed OP2000 spec override into the numeric nominal so pipeline derives correctly
   if (user.overrides.outDrawingSpec !== null) {
@@ -243,12 +271,13 @@ function recompute(row, globals) {
   var op2000Nominal = nominal;
 
   // Feed OP2000 tolerance override into numeric pipeline
-  if (user.overrides.outTolerance !== null) {
-    var ovTolAsNum = parseFloat(user.overrides.outTolerance);
-    if (!isNaN(ovTolAsNum)) {
-      tolPlus = ovTolAsNum;
-      tolMinus = ovTolAsNum;
-    }
+  if (hasOp2kTolOverride) {
+    var ovTpNum = parseFloat(user.overrides.outTolPlus);
+    var ovTmNum = parseFloat(user.overrides.outTolMinus);
+    if (!isNaN(ovTpNum)) tolPlus = ovTpNum;
+    if (!isNaN(ovTmNum)) tolMinus = ovTmNum;
+    if (isNaN(ovTpNum) && !isNaN(ovTmNum)) tolPlus = ovTmNum;
+    if (isNaN(ovTmNum) && !isNaN(ovTpNum)) tolMinus = ovTpNum;
   }
   var op2000InputTolerance = user.overrides.inputTolerance !== null ? user.overrides.inputTolerance : (raw.tolerance || '');
 
@@ -314,7 +343,14 @@ function recompute(row, globals) {
   var secTolStr = PSB.formatPrecision(secondaryTolPlus, secondaryPrec);
 
   var dualNomStr = nominalStr + ' [' + secNomStr + ']';
-  var dualTolStr = tolStr + ' [' + secTolStr + ']';
+  var dualTolStr;
+  if (Math.abs(primaryTolPlus - primaryTolMinus) < 1e-10) {
+    dualTolStr = tolStr + ' [' + secTolStr + ']';
+  } else {
+    var tolMinusStr = PSB.formatPrecision(primaryTolMinus, primaryPrec);
+    var secTolMinusStr = PSB.formatPrecision(secondaryTolMinus, secondaryPrec);
+    dualTolStr = '+' + tolStr + ' -' + tolMinusStr + ' [+' + secTolStr + ' -' + secTolMinusStr + ']';
+  }
 
   // ── OP2000 dual-unit display strings (UI only — Type 1+2 formatted) ──
   // Detect original decimal precision from source strings (import or override).
@@ -334,30 +370,25 @@ function recompute(row, globals) {
   } else {
     op2000DualSpec = op2000DrawingSpec;
   }
-  // Preserve asymmetric tolerance notation (e.g., +0.001-0) — don't dual-format
-  var isAsymTol = /\+.*[-–]/.test(op2000Tolerance);
-  var op2kTolNum = parseFloat(op2000Tolerance);
-  if (!isAsymTol && !isNaN(op2kTolNum) && op2kTolNum !== 0) {
-    var op2kTolStr = PSB.formatPrecision(op2kTolNum, op2kTolPrec);
-    var op2kSecTol = PSB.convertUnits(op2kTolNum, importUnits, secondaryUnits);
-    var op2kSecTolStr = PSB.formatPrecision(op2kSecTol, secondaryPrec);
-    op2000DualTol = op2kTolStr + ' [' + op2kSecTolStr + ']';
+  // OP2000 dual-unit tolerance: handle symmetric vs asymmetric
+  if (hasOp2kTolOverride && Math.abs(originalTolPlus - originalTolMinus) >= 1e-10) {
+    var op2kTpStr = PSB.formatPrecision(originalTolPlus, op2kTolPrec);
+    var op2kTmStr = PSB.formatPrecision(originalTolMinus, op2kTolPrec);
+    var op2kSecTp = PSB.convertUnits(originalTolPlus, importUnits, secondaryUnits);
+    var op2kSecTm = PSB.convertUnits(originalTolMinus, importUnits, secondaryUnits);
+    var op2kSecTpStr = PSB.formatPrecision(op2kSecTp, secondaryPrec);
+    var op2kSecTmStr = PSB.formatPrecision(op2kSecTm, secondaryPrec);
+    op2000DualTol = '+' + op2kTpStr + ' -' + op2kTmStr + ' [+' + op2kSecTpStr + ' -' + op2kSecTmStr + ']';
   } else {
-    op2000DualTol = op2000Tolerance;
-  }
-
-  // ── Pin/Gage computation ─────────────────────────────────
-  // Uses primary (import) units — these are the units the user works in
-  var pinGageStr = '';
-  if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
-    pinGageStr = user.overrides.pinGageValue;
-  } else if (user.pinGageEnabled) {
-    if (user.inspectionEquipment === 'Gage Block') {
-      var gb = PSB.computeGageBlock(primaryNom, primaryTolPlus, primaryTolMinus, primaryPrec);
-      pinGageStr = gb.formatted;
+    var isAsymTol = /\+.*[-–]/.test(op2000Tolerance);
+    var op2kTolNum = parseFloat(op2000Tolerance);
+    if (!isAsymTol && !isNaN(op2kTolNum) && op2kTolNum !== 0) {
+      var op2kTolStr = PSB.formatPrecision(op2kTolNum, op2kTolPrec);
+      var op2kSecTol = PSB.convertUnits(op2kTolNum, importUnits, secondaryUnits);
+      var op2kSecTolStr = PSB.formatPrecision(op2kSecTol, secondaryPrec);
+      op2000DualTol = op2kTolStr + ' [' + op2kSecTolStr + ']';
     } else {
-      var pg = PSB.computePinGage(primaryNom, primaryTolPlus, primaryPrec);
-      pinGageStr = pg.formatted;
+      op2000DualTol = op2000Tolerance;
     }
   }
 
@@ -365,7 +396,6 @@ function recompute(row, globals) {
   // Priority: 1) Independent OUT override, 2) Derived from pipeline (OP2000 base + modifiers)
   var outDrawingSpec;
   if (user.overrides.outputSpec !== null) {
-    // Independent OUT spec override
     var ovsNum = parseFloat(user.overrides.outputSpec);
     if (!isNaN(ovsNum)) {
       outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [' +
@@ -374,24 +404,54 @@ function recompute(row, globals) {
       outDrawingSpec = user.overrides.outputSpec;
     }
   } else {
-    // Derived from pipeline: nominal (with centering + plating applied)
     outDrawingSpec = dualNomStr;
   }
 
+  // OUT tolerance: independent override or derived from pipeline
+  var hasOutTolOverride = user.overrides.outputTolPlus !== null || user.overrides.outputTolMinus !== null;
+  var finalTolPlus = primaryTolPlus;
+  var finalTolMinus = primaryTolMinus;
   var outTolerance;
-  if (user.overrides.outputTolerance !== null) {
-    // Independent OUT tolerance override
-    var ovtNum = parseFloat(user.overrides.outputTolerance);
-    var isAsymOvt = /\+.*[-–]/.test(user.overrides.outputTolerance);
-    if (!isAsymOvt && !isNaN(ovtNum) && ovtNum !== 0) {
-      outTolerance = PSB.formatPrecision(ovtNum, primaryPrec) + ' [' +
-        PSB.formatPrecision(PSB.convertUnits(ovtNum, importUnits, secondaryUnits), secondaryPrec) + ']';
+
+  if (hasOutTolOverride) {
+    var outOvPlus = parseFloat(user.overrides.outputTolPlus);
+    var outOvMinus = parseFloat(user.overrides.outputTolMinus);
+    if (isNaN(outOvPlus) && !isNaN(outOvMinus)) outOvPlus = outOvMinus;
+    if (isNaN(outOvMinus) && !isNaN(outOvPlus)) outOvMinus = outOvPlus;
+    if (!isNaN(outOvPlus) && !isNaN(outOvMinus)) {
+      finalTolPlus = outOvPlus;
+      finalTolMinus = outOvMinus;
+      if (Math.abs(outOvPlus - outOvMinus) < 1e-10) {
+        outTolerance = PSB.formatPrecision(outOvPlus, primaryPrec) + ' [' +
+          PSB.formatPrecision(PSB.convertUnits(outOvPlus, importUnits, secondaryUnits), secondaryPrec) + ']';
+      } else {
+        var ftp = PSB.formatPrecision(outOvPlus, primaryPrec);
+        var ftm = PSB.formatPrecision(outOvMinus, primaryPrec);
+        var sftp = PSB.formatPrecision(PSB.convertUnits(outOvPlus, importUnits, secondaryUnits), secondaryPrec);
+        var sftm = PSB.formatPrecision(PSB.convertUnits(outOvMinus, importUnits, secondaryUnits), secondaryPrec);
+        outTolerance = '+' + ftp + ' -' + ftm + ' [+' + sftp + ' -' + sftm + ']';
+      }
     } else {
-      outTolerance = user.overrides.outputTolerance;
+      outTolerance = dualTolStr;
     }
   } else {
-    // Derived from pipeline: tolerance (with centering applied)
     outTolerance = dualTolStr;
+  }
+
+  // ── Pin/Gage computation ─────────────────────────────────
+  // Uses final OUT tolerance values (which may be independently overridden)
+  var pinGageStr = '';
+  if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
+    pinGageStr = user.overrides.pinGageValue;
+  } else if (user.pinGageEnabled) {
+    var pgIsAsym = Math.abs(finalTolPlus - finalTolMinus) >= 1e-10;
+    if (user.inspectionEquipment === 'Gage Block' || pgIsAsym) {
+      var gb = PSB.computeGageBlock(primaryNom, finalTolPlus, finalTolMinus, primaryPrec);
+      pinGageStr = gb.formatted;
+    } else {
+      var pg = PSB.computePinGage(primaryNom, finalTolPlus, primaryPrec);
+      pinGageStr = pg.formatted;
+    }
   }
 
   var outNominal = dualNomStr;
@@ -442,6 +502,13 @@ function recompute(row, globals) {
     platingAnnotation: platingAnnotation,
     platingMode: user.platingMode,
 
+    // OP2000 numeric tol values (for edit UI population)
+    op2kTolPlus: originalTolPlus,
+    op2kTolMinus: originalTolMinus,
+    // Final OUT tolerance numeric values (pipeline or independent override)
+    outTolPlus: finalTolPlus,
+    outTolMinus: finalTolMinus,
+
     original: {
       nominal: originalNominal,
       tolPlus: originalTolPlus,
@@ -467,8 +534,12 @@ function recompute(row, globals) {
     exportTolerance: (function() {
       var eu = globals.exportUnits || 'inch';
       var ePrec = eu === 'inch' ? globals.inchPrecision : globals.mmPrecision;
-      var eTol = PSB.convertUnits(primaryTolPlus, importUnits, eu);
-      return PSB.formatPrecision(eTol, ePrec);
+      var eTolPlus = PSB.convertUnits(finalTolPlus, importUnits, eu);
+      var eTolMinus = PSB.convertUnits(finalTolMinus, importUnits, eu);
+      if (Math.abs(eTolPlus - eTolMinus) < 1e-10) {
+        return PSB.formatPrecision(eTolPlus, ePrec);
+      }
+      return '+' + PSB.formatPrecision(eTolPlus, ePrec) + ' -' + PSB.formatPrecision(eTolMinus, ePrec);
     })(),
 
     status: user.status,

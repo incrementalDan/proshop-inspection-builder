@@ -880,10 +880,47 @@ td.editable input:focus {
 .col-su2 { width: 60px; }
 .col-su3 { width: 40px; text-align: center; }
 .col-pingage { min-width: 90px; font-size: 11px; }
-.col-inputtol { width: 80px; color: var(--text-muted); }
-.col-outtol { width: 80px; }
+.col-inputtol { width: 120px; color: var(--text-muted); }
+.col-outtol { width: 120px; }
 .col-plating { width: 70px; }
 .col-ops { width: 80px; }
+
+/* ── Dual Tolerance Edit Inputs ───────────────────────── */
+.tol-edit-container {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  width: 100%;
+}
+.tol-input-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.tol-sign-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 2px;
+  flex-shrink: 0;
+  user-select: none;
+}
+.tol-input {
+  width: 100%;
+  min-width: 0;
+  padding: 1px 3px;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent-blue);
+  border-radius: 2px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+.tol-input:focus {
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
 
 /* Override highlight — faint indicator that value was manually changed */
 td.has-override {
