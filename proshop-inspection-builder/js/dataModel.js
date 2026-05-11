@@ -289,7 +289,7 @@ function recompute(row, globals) {
   // ══════════════════════════════════════════════════════════
   // Type 4 — Auto-Nominal Centering (derives from OP2000 base)
   // ══════════════════════════════════════════════════════════
-  if (user.autoNominal && !tolParsed.isSymmetric && (tolPlus !== tolMinus)) {
+  if (user.autoNominal && (tolPlus !== tolMinus)) {
     var centered = PSB.centerNominal(nominal, tolPlus, tolMinus);
     nominal = centered.nominal;
     tolPlus = centered.tolSymmetric;
@@ -441,17 +441,17 @@ function recompute(row, globals) {
   // ── Pin/Gage computation ─────────────────────────────────
   // Uses final OUT tolerance values (which may be independently overridden)
   var pinGageStr = '';
-  if (user.pinGageEnabled && user.overrides.pinGageValue !== null) {
-    pinGageStr = user.overrides.pinGageValue;
-  } else if (user.pinGageEnabled) {
+  var pinGageAutoStr = '';
+  if (user.pinGageEnabled) {
     var pgIsAsym = Math.abs(finalTolPlus - finalTolMinus) >= 1e-10;
     if (user.inspectionEquipment === 'Gage Block' || pgIsAsym) {
       var gb = PSB.computeGageBlock(primaryNom, finalTolPlus, finalTolMinus, primaryPrec);
-      pinGageStr = gb.formatted;
+      pinGageAutoStr = gb.formatted;
     } else {
       var pg = PSB.computePinGage(primaryNom, finalTolPlus, primaryPrec);
-      pinGageStr = pg.formatted;
+      pinGageAutoStr = pg.formatted;
     }
+    pinGageStr = user.overrides.pinGageValue !== null ? user.overrides.pinGageValue : pinGageAutoStr;
   }
 
   var outNominal = dualNomStr;
@@ -499,6 +499,7 @@ function recompute(row, globals) {
     outNominal: user.overrides.outNominal !== null ? user.overrides.outNominal : outNominal,
     outTolerance: outTolerance,
     pinGage: pinGageStr,
+    pinGageAuto: pinGageAutoStr,
     platingAnnotation: platingAnnotation,
     platingMode: user.platingMode,
 

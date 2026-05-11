@@ -36,38 +36,62 @@ function cloneStateForSnapshot(state) {
  * Call this BEFORE making any mutation.
  *
  * @param {Object} state — current { rows, globals }
+ * @param {string} [description] — human-readable description of the action about to happen
  */
-function pushUndo(state) {
-  undoStack.push(cloneStateForSnapshot(state));
+function pushUndo(state, description) {
+  var snap = cloneStateForSnapshot(state);
+  snap._desc = description || '';
+  undoStack.push(snap);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
-  // New action clears redo
   redoStack.length = 0;
 }
 
 /**
  * Undo: pop from undo stack, push current state to redo, return the snapshot to restore.
  * @param {Object} state — current state (to save for redo)
+ * @param {string} [desc] — description of the action being undone (for redo label)
  * @returns {Object|null} — snapshot to restore, or null if nothing to undo
  */
-function undo(state) {
+function undo(state, desc) {
   if (undoStack.length === 0) return null;
-  redoStack.push(cloneStateForSnapshot(state));
+  var snap = cloneStateForSnapshot(state);
+  snap._desc = desc || '';
+  redoStack.push(snap);
   return undoStack.pop();
 }
 
 /**
  * Redo: pop from redo stack, push current state to undo, return the snapshot to restore.
  * @param {Object} state — current state (to save for undo)
+ * @param {string} [desc] — description of the action being redone (for undo label)
  * @returns {Object|null} — snapshot to restore, or null if nothing to redo
  */
-function redo(state) {
+function redo(state, desc) {
   if (redoStack.length === 0) return null;
-  undoStack.push(cloneStateForSnapshot(state));
+  var snap = cloneStateForSnapshot(state);
+  snap._desc = desc || '';
+  undoStack.push(snap);
   return redoStack.pop();
 }
 
 function canUndo() { return undoStack.length > 0; }
 function canRedo() { return redoStack.length > 0; }
+
+function getUndoDescriptions() {
+  var result = [];
+  for (var i = undoStack.length - 1; i >= 0; i--) {
+    result.push(undoStack[i]._desc || 'Change');
+  }
+  return result;
+}
+
+function getRedoDescriptions() {
+  var result = [];
+  for (var i = redoStack.length - 1; i >= 0; i--) {
+    result.push(redoStack[i]._desc || 'Change');
+  }
+  return result;
+}
 
 /**
  * Clear undo/redo stacks (e.g. on New File or project load).
@@ -174,6 +198,8 @@ PSB.redo = redo;
 PSB.canUndo = canUndo;
 PSB.canRedo = canRedo;
 PSB.clearUndoRedo = clearUndoRedo;
+PSB.getUndoDescriptions = getUndoDescriptions;
+PSB.getRedoDescriptions = getRedoDescriptions;
 PSB.logChange = logChange;
 PSB.getRowHistory = getRowHistory;
 PSB.formatHistoryTime = formatHistoryTime;

@@ -95,6 +95,78 @@ function updateUndoRedoButtons() {
   var r = document.getElementById('btn-redo');
   if (u) u.disabled = !PSB.canUndo();
   if (r) r.disabled = !PSB.canRedo();
+  var ua = document.getElementById('btn-undo-arrow');
+  var ra = document.getElementById('btn-redo-arrow');
+  if (ua) ua.disabled = !PSB.canUndo();
+  if (ra) ra.disabled = !PSB.canRedo();
+}
+
+function setupUndoRedoDropdowns() {
+  var undoArrow = document.getElementById('btn-undo-arrow');
+  var redoArrow = document.getElementById('btn-redo-arrow');
+  var undoDropdown = document.getElementById('undo-dropdown');
+  var redoDropdown = document.getElementById('redo-dropdown');
+
+  function closeAll() {
+    undoDropdown.classList.add('hidden');
+    redoDropdown.classList.add('hidden');
+  }
+
+  undoArrow.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (undoArrow.disabled) return;
+    redoDropdown.classList.add('hidden');
+    var descs = PSB.getUndoDescriptions();
+    undoDropdown.innerHTML = '';
+    for (var i = 0; i < descs.length; i++) {
+      var item = document.createElement('div');
+      item.className = 'undo-redo-item';
+      item.textContent = descs[i];
+      item.dataset.index = i;
+      undoDropdown.appendChild(item);
+    }
+    undoDropdown.classList.toggle('hidden');
+  });
+
+  redoArrow.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (redoArrow.disabled) return;
+    undoDropdown.classList.add('hidden');
+    var descs = PSB.getRedoDescriptions();
+    redoDropdown.innerHTML = '';
+    for (var i = 0; i < descs.length; i++) {
+      var item = document.createElement('div');
+      item.className = 'undo-redo-item';
+      item.textContent = descs[i];
+      item.dataset.index = i;
+      redoDropdown.appendChild(item);
+    }
+    redoDropdown.classList.toggle('hidden');
+  });
+
+  undoDropdown.addEventListener('click', function(e) {
+    var item = e.target.closest('.undo-redo-item');
+    if (!item) return;
+    closeAll();
+    var descs = PSB.getUndoDescriptions();
+    var desc = descs.length > 0 ? descs[0] : '';
+    var snap = PSB.undo(state, desc);
+    if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
+    updateUndoRedoButtons();
+  });
+
+  redoDropdown.addEventListener('click', function(e) {
+    var item = e.target.closest('.undo-redo-item');
+    if (!item) return;
+    closeAll();
+    var descs = PSB.getRedoDescriptions();
+    var desc = descs.length > 0 ? descs[0] : '';
+    var snap = PSB.redo(state, desc);
+    if (snap) { restoreSnapshot(snap); PSB.showToast('Redo: ' + (snap._desc || 'Change'), 'info'); }
+    updateUndoRedoButtons();
+  });
+
+  document.addEventListener('click', function() { closeAll(); });
 }
 
 window.addEventListener('beforeunload', function(e) {
@@ -148,15 +220,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Undo / Redo buttons
     document.getElementById('btn-undo').addEventListener('click', function() {
-      var snap = PSB.undo(state);
-      if (snap) { restoreSnapshot(snap); PSB.showToast('Undo', 'info'); }
+      var descs = PSB.getUndoDescriptions();
+      var desc = descs.length > 0 ? descs[0] : '';
+      var snap = PSB.undo(state, desc);
+      if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
       updateUndoRedoButtons();
     });
     document.getElementById('btn-redo').addEventListener('click', function() {
-      var snap = PSB.redo(state);
-      if (snap) { restoreSnapshot(snap); PSB.showToast('Redo', 'info'); }
+      var descs = PSB.getRedoDescriptions();
+      var desc = descs.length > 0 ? descs[0] : '';
+      var snap = PSB.redo(state, desc);
+      if (snap) { restoreSnapshot(snap); PSB.showToast('Redo: ' + (snap._desc || 'Change'), 'info'); }
       updateUndoRedoButtons();
     });
+
+    // Undo/Redo dropdown arrows
+    setupUndoRedoDropdowns();
 
     // Global History button
     document.getElementById('btn-all-history').addEventListener('click', function() {
@@ -178,14 +257,18 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        var snap = PSB.undo(state);
-        if (snap) { restoreSnapshot(snap); PSB.showToast('Undo', 'info'); }
+        var uDescs = PSB.getUndoDescriptions();
+        var uDesc = uDescs.length > 0 ? uDescs[0] : '';
+        var snap = PSB.undo(state, uDesc);
+        if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
         updateUndoRedoButtons();
       }
       if (mod && (e.key === 'Z' || (e.key === 'z' && e.shiftKey) || e.key === 'y')) {
         e.preventDefault();
-        var snapR = PSB.redo(state);
-        if (snapR) { restoreSnapshot(snapR); PSB.showToast('Redo', 'info'); }
+        var rDescs = PSB.getRedoDescriptions();
+        var rDesc = rDescs.length > 0 ? rDescs[0] : '';
+        var snapR = PSB.redo(state, rDesc);
+        if (snapR) { restoreSnapshot(snapR); PSB.showToast('Redo: ' + (snapR._desc || 'Change'), 'info'); }
         updateUndoRedoButtons();
       }
       if (e.key === 'Escape') {
@@ -292,7 +375,7 @@ function bindGlobalControls() {
       var isMm = unitToggle.getAttribute('aria-checked') === 'true';
       var newUnit = isMm ? 'inch' : 'mm';
       var oldUnit = state.globals.importUnits;
-      PSB.pushUndo(state);
+      PSB.pushUndo(state, 'Units: ' + oldUnit + ' → ' + newUnit);
       unitToggle.setAttribute('aria-checked', newUnit === 'mm' ? 'true' : 'false');
       document.getElementById('import-units').value = newUnit;
       state.globals.importUnits = newUnit;
@@ -321,7 +404,7 @@ function bindGlobalControls() {
   document.getElementById('plating-thickness').addEventListener('input', function(e) {
     var oldVal = state.globals.platingThickness;
     var newVal = parseFloat(e.target.value) || 0;
-    PSB.pushUndo(state);
+    PSB.pushUndo(state, 'Plating thickness: ' + oldVal + ' → ' + newVal);
     state.globals.platingThickness = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Plating thickness: ' + oldVal + ' → ' + newVal, details: [{ field: 'platingThickness', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -332,7 +415,7 @@ function bindGlobalControls() {
   // Plating units
   document.getElementById('plating-units').addEventListener('change', function(e) {
     var oldVal = state.globals.platingUnits;
-    PSB.pushUndo(state);
+    PSB.pushUndo(state, 'Plating units: ' + oldVal + ' → ' + e.target.value);
     state.globals.platingUnits = e.target.value;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Plating units: ' + oldVal + ' → ' + e.target.value, details: [{ field: 'platingUnits', from: oldVal, to: e.target.value }] });
     recomputeAll();
@@ -344,7 +427,7 @@ function bindGlobalControls() {
   document.getElementById('inch-precision').addEventListener('input', function(e) {
     var oldVal = state.globals.inchPrecision;
     var newVal = parseInt(e.target.value) || 4;
-    PSB.pushUndo(state);
+    PSB.pushUndo(state, 'Inch precision: ' + oldVal + ' → ' + newVal);
     state.globals.inchPrecision = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Inch precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'inchPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -355,7 +438,7 @@ function bindGlobalControls() {
   document.getElementById('mm-precision').addEventListener('input', function(e) {
     var oldVal = state.globals.mmPrecision;
     var newVal = parseInt(e.target.value) || 3;
-    PSB.pushUndo(state);
+    PSB.pushUndo(state, 'MM precision: ' + oldVal + ' → ' + newVal);
     state.globals.mmPrecision = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'MM precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'mmPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -513,7 +596,7 @@ function bindOpBar() {
     if (val === 2000) { input.value = ''; PSB.showToast('OP2000 is included automatically in every export.', 'info'); return; }
     if (state.globals.ops.indexOf(val) !== -1) return;
 
-    PSB.pushUndo(state);
+    PSB.pushUndo(state, 'Add OP ' + val);
     state.globals.ops.push(val);
     state.globals.ops.sort(function(a, b) { return a - b; });
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Added OP ' + val });
@@ -532,7 +615,7 @@ function bindOpBar() {
 }
 
 function handleRemoveOp(opNum) {
-  PSB.pushUndo(state);
+  PSB.pushUndo(state, 'Remove OP ' + opNum);
   state.globals.ops = state.globals.ops.filter(function(o) { return o !== opNum; });
   PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Removed OP ' + opNum });
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
@@ -633,7 +716,7 @@ function bindSettingsModal() {
   });
 
   document.getElementById('settings-close').addEventListener('click', function() {
-    PSB.pushUndo(state);
+    PSB.pushUndo(state, 'Update settings');
     // Save equipment list
     var eqText = document.getElementById('settings-equipment-list').value;
     state.globals.equipmentList = eqText.split('\n')
@@ -734,9 +817,7 @@ function handleRowUserChange(rowId, changes) {
   }
   if (!hasRealChange) return;
 
-  PSB.pushUndo(state);
-
-  // Build audit details from changes
+  // Build audit details from changes (before pushUndo so we have the description)
   var auditDetails = [];
   var descParts = [];
   if (changes.overrides) {
@@ -757,7 +838,10 @@ function handleRowUserChange(rowId, changes) {
     }
   }
   var dimTag = row.computed.dimTag || row.raw.dimTag || rowId;
-  PSB.logChange(state.auditLog, { type: 'edit', rowId: rowId, description: 'Row ' + dimTag + ' — ' + descParts.join(', '), details: auditDetails });
+  var undoDesc = 'Row ' + dimTag + ' — ' + descParts.join(', ');
+
+  PSB.pushUndo(state, undoDesc);
+  PSB.logChange(state.auditLog, { type: 'edit', rowId: rowId, description: undoDesc, details: auditDetails });
 
   // Merge changes into user state
   Object.assign(row.user, changes);
@@ -774,6 +858,21 @@ function handleRowUserChange(rowId, changes) {
   // Auto-set equipment to GO / NO-GO when pin/gage is enabled with no equipment
   if (changes.pinGageEnabled && row.user.pinGageEnabled && !row.user.inspectionEquipment) {
     row.user.inspectionEquipment = 'GO / NO-GO';
+  }
+
+  // Auto-disable autoNominal when tolerance becomes asymmetric
+  if (row.user.autoNominal && changes.overrides) {
+    var ov = row.user.overrides;
+    var tolChanged = changes.overrides.outTolPlus !== undefined || changes.overrides.outTolMinus !== undefined;
+    if (tolChanged) {
+      var rawTol = PSB.parseTolerance(row.raw.toleranceText || row.raw.tolerance || '');
+      var tp = ov.outTolPlus !== null ? parseFloat(ov.outTolPlus) : rawTol.tolPlus;
+      var tm = ov.outTolMinus !== null ? parseFloat(ov.outTolMinus) : rawTol.tolMinus;
+      if (!isNaN(tp) && !isNaN(tm) && Math.abs(tp - tm) >= 1e-10) {
+        row.user.autoNominal = false;
+        PSB.showToast('Asymmetric tolerance — Auto Nominal disabled', 'info');
+      }
+    }
   }
 
   // Auto-set status to 'edited' if currently 'none'
@@ -806,7 +905,7 @@ function handleRowUserChange(rowId, changes) {
 // ADD / DELETE ROW HANDLERS
 // ═══════════════════════════════════════════════════════════
 function handleAddRow() {
-  PSB.pushUndo(state);
+  PSB.pushUndo(state, 'Add row');
   var maxDimTag = 0;
   for (var i = 0; i < state.rows.length; i++) {
     var dt = parseInt(state.rows[i].raw.dimTag);
@@ -825,7 +924,7 @@ function handleAddRow() {
 function handleDeleteRow(rowId) {
   var row = state.rows.find(function(r) { return r.id === rowId; });
   var dimTag = row ? (row.computed.dimTag || row.raw.dimTag || rowId) : rowId;
-  PSB.pushUndo(state);
+  PSB.pushUndo(state, 'Delete row ' + dimTag);
   // Close sidebar if this row is selected
   if (PSB.getSelectedRowId() === rowId) {
     PSB.closeSidebar();
