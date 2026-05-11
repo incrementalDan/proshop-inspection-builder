@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=20">
+  <link rel="stylesheet" href="css/styles.css?v=21">
 </head>
 <body>
 
@@ -44,8 +44,16 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <div id="op-bar">
     <div class="undo-redo-btns">
-      <button id="btn-undo" class="btn btn-icon" title="Undo (Ctrl+Z)" disabled>↩</button>
-      <button id="btn-redo" class="btn btn-icon" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
+      <div class="undo-redo-group">
+        <button id="btn-undo" class="btn btn-icon" title="Undo (Ctrl+Z)" disabled>↩</button>
+        <button id="btn-undo-arrow" class="btn btn-icon undo-redo-arrow" title="Undo history" disabled>▾</button>
+        <div id="undo-dropdown" class="undo-redo-dropdown hidden"></div>
+      </div>
+      <div class="undo-redo-group">
+        <button id="btn-redo" class="btn btn-icon" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
+        <button id="btn-redo-arrow" class="btn btn-icon undo-redo-arrow" title="Redo history" disabled>▾</button>
+        <div id="redo-dropdown" class="undo-redo-dropdown hidden"></div>
+      </div>
     </div>
     <span class="op-bar-label">OPs:</span>
     <div id="op-tags"></div>
@@ -189,7 +197,11 @@
       <!-- Pin/Gage display — fixed height, always present -->
       <div class="sidebar-pingage-area">
         <div class="preview-label">Pin/Gage</div>
-        <div id="sidebar-pingage-value" class="pingage-value">—</div>
+        <div class="preview-value-container">
+          <div id="sidebar-pingage-value" class="pingage-value">—</div>
+          <button id="oi-pingage" class="override-indicator hidden" title="Value overridden — click to see original">⤺</button>
+        </div>
+        <div class="original-value hidden" id="orig-pingage"></div>
       </div>
 
       <div class="sidebar-controls">
@@ -371,14 +383,14 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=20"></script>
-  <script src="js/parser.js?v=20"></script>
-  <script src="js/dataModel.js?v=20"></script>
-  <script src="js/exportEngine.js?v=20"></script>
-  <script src="js/storage.js?v=20"></script>
-  <script src="js/history.js?v=20"></script>
-  <script src="js/ui.js?v=20"></script>
-  <script src="js/app.js?v=20"></script>
+  <script src="js/mathEngine.js?v=21"></script>
+  <script src="js/parser.js?v=21"></script>
+  <script src="js/dataModel.js?v=21"></script>
+  <script src="js/exportEngine.js?v=21"></script>
+  <script src="js/storage.js?v=21"></script>
+  <script src="js/history.js?v=21"></script>
+  <script src="js/ui.js?v=21"></script>
+  <script src="js/app.js?v=21"></script>
 
 </body>
 </html>

@@ -215,7 +215,7 @@ function buildRowHTML(row) {
     '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.op2000DualSpec) + '</td>' +
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
-    '<td class="col-pingage editable">' + esc(addLeadingZero(c.pinGage)) + '</td>' +
+    '<td class="col-pingage editable' + (ov.pinGageValue !== null ? ' has-override' : '') + '">' + esc(addLeadingZero(c.pinGage)) + '</td>' +
     '<td class="col-inputtol editable' + ((ov.outTolPlus !== null || ov.outTolMinus !== null) ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.op2000DualTol)) + '</td>' +
     '<td class="col-outtol editable' + ((ov.outputTolPlus !== null || ov.outputTolMinus !== null) ? ' has-override' : '') + '">' + formatDualDisplay(tolDisplay(c.outTolerance)) + '</td>' +
     '<td class="col-plating">' + esc(c.platingMode !== 'none' ? c.platingMode : '') + '</td>' +
@@ -306,6 +306,19 @@ function populateSidebar(rowId) {
   // Wire override indicator click — toggle showing original value
   setupOverrideIndicator('oi-spec', 'orig-spec');
   setupOverrideIndicator('oi-tol', 'orig-tol');
+
+  // Pin/Gage override indicator
+  var oiPg = document.getElementById('oi-pingage');
+  var origPg = document.getElementById('orig-pingage');
+  if (u.overrides.pinGageValue !== null) {
+    oiPg.classList.remove('hidden');
+    origPg.textContent = c.pinGageAuto || '(auto-computed)';
+  } else {
+    oiPg.classList.add('hidden');
+    origPg.classList.add('hidden');
+    origPg.textContent = '';
+  }
+  setupOverrideIndicator('oi-pingage', 'orig-pingage');
 
   // Pin/Gage display (fixed area — always present, shows value only when enabled)
   var pgEl = document.getElementById('sidebar-pingage-value');
