@@ -454,6 +454,55 @@ function tryRestorePdf(expectedFileName) {
   });
 }
 
+// ── Prompt User to Locate PDF ────────────────────────────
+function promptForPdf(suggestedName) {
+  if (!window.showOpenFilePicker) return Promise.resolve(false);
+
+  return window.showOpenFilePicker({
+    types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }],
+    multiple: false,
+  }).then(function(handles) {
+    var handle = handles[0];
+    pdfFileHandle = handle;
+    savePdfHandleToIDB(handle);
+    return handle.getFile();
+  }).then(function(file) {
+    return new Promise(function(resolve) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        pdfArrayBuffer = e.target.result;
+        pdfFileName = file.name;
+        loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
+          if (PSB.setPdfFileName) PSB.setPdfFileName(pdfFileName);
+          elFilename.textContent = pdfFileName;
+          resolve(true);
+        }).catch(function() { resolve(false); });
+      };
+      reader.onerror = function() { resolve(false); };
+      reader.readAsArrayBuffer(file);
+    });
+  }).catch(function(err) {
+    if (err.name === 'AbortError') return false;
+    console.warn('[PSB-PDF] Locate PDF failed:', err);
+    return false;
+  });
+}
+
+/**
+ * Try IDB restore first; if that fails and promptIfMissing is true,
+ * open a file picker so the user can locate the PDF.
+ */
+function restoreOrPromptPdf(expectedFileName, promptIfMissing) {
+  return tryRestorePdf(expectedFileName).then(function(ok) {
+    if (ok) return true;
+    if (promptIfMissing) {
+      PSB.showToast('Please locate ' + expectedFileName, 'info');
+      return promptForPdf(expectedFileName);
+    }
+    return false;
+  });
+}
+
 // ── Public API ───────────────────────────────────────────
 function hasPdf() { return pdfDoc !== null; }
 function getPdfFileName() { return pdfFileName; }
@@ -463,5 +512,6 @@ PSB.initPdfViewer = initPdfViewer;
 PSB.loadPdfFromFile = loadPdfFromFile;
 PSB.closePdf = closePdf;
 PSB.tryRestorePdf = tryRestorePdf;
+PSB.restoreOrPromptPdf = restoreOrPromptPdf;
 PSB.hasPdf = hasPdf;
 PSB.getPdfFileName = getPdfFileName;
