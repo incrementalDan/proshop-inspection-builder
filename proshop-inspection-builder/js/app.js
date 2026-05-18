@@ -569,10 +569,6 @@ function bindFileButtons() {
           var fname = PSB.getProjectFileName();
           if (fname) setFilename(fname);
           PSB.showToast('Project saved.', 'success');
-          // Save PDF alongside project if one is loaded
-          if (PSB.hasPdf()) {
-            PSB.savePdfAlongsideProject(PSB.getProjectFileHandle());
-          }
         }
       });
     } else {
