@@ -527,9 +527,7 @@ function applyLoadedProject(jsonString, fileName) {
 
     // Restore PDF if project references one
     if (state.globals.pdfFileName) {
-      PSB.tryRestorePdf(state.globals.pdfFileName).then(function(ok) {
-        if (!ok) PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
-      });
+      PSB.restoreOrPromptPdf(state.globals.pdfFileName, true);
     } else {
       PSB.closePdf();
     }
@@ -778,6 +776,13 @@ function handleFileImport(content, fileName) {
           PSB.closeSidebar();
           setFilename(fileName);
           markClean();
+
+          // Restore PDF if project references one
+          if (state.globals.pdfFileName) {
+            PSB.restoreOrPromptPdf(state.globals.pdfFileName, true);
+          } else {
+            PSB.closePdf();
+          }
         } catch (err) {
           PSB.showToast('Failed to load project: ' + err.message, 'error');
         }
