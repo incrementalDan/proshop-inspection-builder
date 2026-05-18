@@ -104,16 +104,36 @@ function initPdfViewer() {
   btnZoomFit = document.getElementById('pdf-zoom-fit');
   btnClose = document.getElementById('pdf-close');
 
-  // Upload button
+  // Upload button — use File System Access API to get a persistent handle
   var btnUpload = document.getElementById('btn-upload-pdf');
   var fileInput = document.getElementById('file-import-pdf');
-  if (btnUpload && fileInput) {
-    btnUpload.addEventListener('click', function() { fileInput.click(); });
-    fileInput.addEventListener('change', function(e) {
-      var file = e.target.files[0];
-      if (file) loadPdfFromFile(file);
-      e.target.value = '';
+  if (btnUpload) {
+    btnUpload.addEventListener('click', function() {
+      if (window.showOpenFilePicker) {
+        window.showOpenFilePicker({
+          types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }],
+          multiple: false,
+        }).then(function(handles) {
+          var handle = handles[0];
+          pdfFileHandle = handle;
+          savePdfHandleToIDB(handle);
+          return handle.getFile();
+        }).then(function(file) {
+          loadPdfFromFile(file);
+        }).catch(function(err) {
+          if (err.name !== 'AbortError') console.warn('[PSB-PDF] Open failed:', err);
+        });
+      } else if (fileInput) {
+        fileInput.click();
+      }
     });
+    if (fileInput) {
+      fileInput.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (file) loadPdfFromFile(file);
+        e.target.value = '';
+      });
+    }
   }
 
   // Toolbar buttons
@@ -184,12 +204,6 @@ function loadPdfFromFile(file) {
     });
   };
   reader.readAsArrayBuffer(file);
-
-  // Store handle in IDB if File System Access API provides one
-  if (file.handle) {
-    pdfFileHandle = file.handle;
-    savePdfHandleToIDB(file.handle);
-  }
 }
 
 function waitForPdfjsLib() {
@@ -440,43 +454,6 @@ function tryRestorePdf(expectedFileName) {
   });
 }
 
-// ── Save PDF Alongside Project ───────────────────────────
-function savePdfAlongsideProject(projectHandle) {
-  if (!pdfArrayBuffer || !pdfFileName) return Promise.resolve(false);
-
-  // If we already have a PDF file handle, overwrite it
-  if (pdfFileHandle) {
-    return pdfFileHandle.createWritable().then(function(writable) {
-      return writable.write(new Blob([pdfArrayBuffer], { type: 'application/pdf' }))
-        .then(function() { return writable.close(); })
-        .then(function() { return true; });
-    }).catch(function(err) {
-      console.warn('[PSB-PDF] PDF save failed:', err);
-      return false;
-    });
-  }
-
-  // No handle yet — prompt user to save PDF
-  if (!window.showSaveFilePicker) return Promise.resolve(false);
-
-  return window.showSaveFilePicker({
-    suggestedName: pdfFileName,
-    types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }],
-  }).then(function(handle) {
-    pdfFileHandle = handle;
-    savePdfHandleToIDB(handle);
-    return handle.createWritable();
-  }).then(function(writable) {
-    return writable.write(new Blob([pdfArrayBuffer], { type: 'application/pdf' }))
-      .then(function() { return writable.close(); })
-      .then(function() { return true; });
-  }).catch(function(err) {
-    if (err.name === 'AbortError') return false;
-    console.warn('[PSB-PDF] PDF save failed:', err);
-    return false;
-  });
-}
-
 // ── Public API ───────────────────────────────────────────
 function hasPdf() { return pdfDoc !== null; }
 function getPdfFileName() { return pdfFileName; }
@@ -486,6 +463,5 @@ PSB.initPdfViewer = initPdfViewer;
 PSB.loadPdfFromFile = loadPdfFromFile;
 PSB.closePdf = closePdf;
 PSB.tryRestorePdf = tryRestorePdf;
-PSB.savePdfAlongsideProject = savePdfAlongsideProject;
 PSB.hasPdf = hasPdf;
 PSB.getPdfFileName = getPdfFileName;

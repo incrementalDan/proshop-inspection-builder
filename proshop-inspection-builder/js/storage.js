@@ -316,4 +316,3 @@ PSB.autoSaveToDisk = autoSaveToDisk;
 PSB.hasFileHandle = hasFileHandle;
 PSB.getProjectFileName = getProjectFileName;
 PSB.openProjectWithHandle = openProjectWithHandle;
-PSB.getProjectFileHandle = function() { return projectFileHandle; };
