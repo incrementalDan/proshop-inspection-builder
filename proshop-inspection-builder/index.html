@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=21">
+  <link rel="stylesheet" href="css/styles.css?v=22">
 </head>
 <body>
 
@@ -27,12 +27,14 @@
       <button id="btn-save" class="btn btn-secondary">Save Project</button>
       <button id="btn-load" class="btn btn-secondary">Load Project</button>
       <button id="btn-all-history" class="btn btn-secondary" title="View full change history">History</button>
+      <button id="btn-upload-pdf" class="btn btn-secondary" title="Upload PDF">📄 PDF</button>
       <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
       <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">◑</button>
     </div>
     <!-- Hidden inputs -->
     <input type="file" id="file-import-csv" accept=".csv" hidden>
     <input type="file" id="file-load-project" accept=".json" hidden>
+    <input type="file" id="file-import-pdf" accept=".pdf" hidden>
     <select id="import-units" hidden>
       <option value="mm">mm</option>
       <option value="inch">inch</option>
@@ -100,39 +102,61 @@
     <div id="drop-zone" class="drop-zone hidden">
       <div class="drop-zone-content">
         <span class="drop-icon">📄</span>
-        <span>Drop CSV or Project file here</span>
+        <span>Drop CSV, Project, or PDF file here</span>
       </div>
     </div>
 
-    <!-- Data Table -->
-    <div id="table-container">
-      <div id="empty-state" class="empty-state">
-        <div class="empty-icon">📋</div>
-        <h2>No Data Loaded</h2>
-        <p>Import a CSV from Ground Control or load a saved project to get started.</p>
-        <p class="hint">You can also drag & drop a file anywhere on this page.</p>
+    <div id="left-panel">
+      <!-- PDF Viewer (hidden when no PDF loaded) -->
+      <div id="pdf-viewer" class="hidden">
+        <div id="pdf-toolbar">
+          <button id="pdf-prev" class="btn btn-icon pdf-btn" title="Previous page">◀</button>
+          <span id="pdf-page-info" class="pdf-page-info">— / —</span>
+          <button id="pdf-next" class="btn btn-icon pdf-btn" title="Next page">▶</button>
+          <div class="pdf-toolbar-sep"></div>
+          <button id="pdf-zoom-out" class="btn btn-icon pdf-btn" title="Zoom out">−</button>
+          <button id="pdf-zoom-fit" class="btn btn-icon pdf-btn" title="Fit to page">⊡</button>
+          <button id="pdf-zoom-in" class="btn btn-icon pdf-btn" title="Zoom in">+</button>
+          <div class="pdf-toolbar-sep"></div>
+          <span id="pdf-filename" class="pdf-filename"></span>
+          <button id="pdf-close" class="btn btn-icon pdf-btn" title="Close PDF">✕</button>
+        </div>
+        <div id="pdf-canvas-wrap" tabindex="0">
+          <canvas id="pdf-canvas"></canvas>
+        </div>
       </div>
-      <table id="data-table" class="hidden">
-        <thead>
-          <tr>
-            <th data-col="status" class="col-status">Status</th>
-            <th data-col="dimTag" class="col-dimtag">Dim Tag</th>
-            <th data-col="specUnit1" class="col-su1">SU1</th>
-            <th data-col="outDrawingSpec" class="col-drawspec">OUT Drawing Spec</th>
-            <th data-col="op2000Spec" class="col-inputspec">OP2000 Spec</th>
-            <th data-col="specUnit2" class="col-su2">SU2</th>
-            <th data-col="specUnit3" class="col-su3">SU3</th>
-            <th data-col="pinGage" class="col-pingage">Pin/Gage</th>
-            <th data-col="op2000Tol" class="col-inputtol">OP2000 Tol</th>
-            <th data-col="outTolerance" class="col-outtol">OUT Tol</th>
-            <th data-col="plating" class="col-plating">Plating</th>
-            <th data-col="ops" class="col-ops">OPs</th>
-          </tr>
-        </thead>
-        <tbody id="table-body">
-          <!-- Rows rendered by ui.js -->
-        </tbody>
-      </table>
+      <div id="pdf-resizer" class="hidden"></div>
+
+      <!-- Data Table -->
+      <div id="table-container">
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon">📋</div>
+          <h2>No Data Loaded</h2>
+          <p>Import a CSV from Ground Control or load a saved project to get started.</p>
+          <p class="hint">You can also drag & drop a file anywhere on this page.</p>
+        </div>
+        <table id="data-table" class="hidden">
+          <thead>
+            <tr>
+              <th data-col="status" class="col-status">Status</th>
+              <th data-col="dimTag" class="col-dimtag">Dim Tag</th>
+              <th data-col="specUnit1" class="col-su1">SU1</th>
+              <th data-col="outDrawingSpec" class="col-drawspec">OUT Drawing Spec</th>
+              <th data-col="op2000Spec" class="col-inputspec">OP2000 Spec</th>
+              <th data-col="specUnit2" class="col-su2">SU2</th>
+              <th data-col="specUnit3" class="col-su3">SU3</th>
+              <th data-col="pinGage" class="col-pingage">Pin/Gage</th>
+              <th data-col="op2000Tol" class="col-inputtol">OP2000 Tol</th>
+              <th data-col="outTolerance" class="col-outtol">OUT Tol</th>
+              <th data-col="plating" class="col-plating">Plating</th>
+              <th data-col="ops" class="col-ops">OPs</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Rows rendered by ui.js -->
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Sidebar (resizable) -->
@@ -383,14 +407,23 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <script src="js/mathEngine.js?v=21"></script>
-  <script src="js/parser.js?v=21"></script>
-  <script src="js/dataModel.js?v=21"></script>
-  <script src="js/exportEngine.js?v=21"></script>
-  <script src="js/storage.js?v=21"></script>
-  <script src="js/history.js?v=21"></script>
-  <script src="js/ui.js?v=21"></script>
-  <script src="js/app.js?v=21"></script>
+  <!-- pdf.js — loaded as ESM, exposed globally for pdfViewer.js -->
+  <script type="module">
+    import * as pdfjsLib from './lib/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.mjs';
+    window.pdfjsLib = pdfjsLib;
+    window.dispatchEvent(new Event('pdfjsReady'));
+  </script>
+
+  <script src="js/mathEngine.js?v=22"></script>
+  <script src="js/parser.js?v=22"></script>
+  <script src="js/dataModel.js?v=22"></script>
+  <script src="js/exportEngine.js?v=22"></script>
+  <script src="js/storage.js?v=22"></script>
+  <script src="js/history.js?v=22"></script>
+  <script src="js/pdfViewer.js?v=22"></script>
+  <script src="js/ui.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
 
 </body>
 </html>

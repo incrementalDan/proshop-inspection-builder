@@ -242,6 +242,9 @@ document.addEventListener('DOMContentLoaded', function() {
       PSB.openHistoryModal();
     });
 
+    // PDF Viewer
+    PSB.initPdfViewer();
+
     console.log('[PSB] All controls bound');
 
     // Keyboard shortcuts
@@ -303,6 +306,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
 
+    // Try to restore PDF from IndexedDB handle
+    if (state.globals.pdfFileName) {
+      PSB.tryRestorePdf(state.globals.pdfFileName).then(function(ok) {
+        if (!ok) PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
+      });
+    }
+
     console.log('[PSB] Init complete');
 
   } catch (err) {
@@ -325,6 +335,7 @@ function bindNewButton() {
       PSB.clearAutoSave();
       PSB.clearProjectFileHandle();
       PSB.clearUndoRedo();
+      PSB.closePdf();
       state.rows = [];
       state.globals = PSB.defaultGlobals();
       state.auditLog = [];
@@ -474,6 +485,12 @@ function applyUnitColors(unit) {
   }
 }
 
+function setPdfFileName(name) {
+  state.globals.pdfFileName = name || null;
+  if (name) markDirty();
+}
+PSB.setPdfFileName = setPdfFileName;
+
 function getSuggestedSaveName() {
   if (!importedFileName) return 'ProShop_Project - InspecProject.json';
   // Strip extension, append " - InspecProject.json"
@@ -507,6 +524,16 @@ function applyLoadedProject(jsonString, fileName) {
     PSB.closeSidebar();
     setFilename(fileName);
     markClean();
+
+    // Restore PDF if project references one
+    if (state.globals.pdfFileName) {
+      PSB.tryRestorePdf(state.globals.pdfFileName).then(function(ok) {
+        if (!ok) PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
+      });
+    } else {
+      PSB.closePdf();
+    }
+
     console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
   } catch (err) {
     PSB.showToast('Failed to load project file: ' + err.message, 'error');
@@ -539,10 +566,13 @@ function bindFileButtons() {
       result.then(function(ok) {
         if (ok) {
           markClean();
-          // Update filename display to match saved file
           var fname = PSB.getProjectFileName();
           if (fname) setFilename(fname);
           PSB.showToast('Project saved.', 'success');
+          // Save PDF alongside project if one is loaded
+          if (PSB.hasPdf()) {
+            PSB.savePdfAlongsideProject(PSB.getProjectFileHandle());
+          }
         }
       });
     } else {
