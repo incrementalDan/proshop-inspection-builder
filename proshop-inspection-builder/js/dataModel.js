@@ -86,6 +86,7 @@ function defaultGlobals() {
       'Drop Indicator',
       'N/A',
     ],
+    pdfFileName: null,
   };
 }
 

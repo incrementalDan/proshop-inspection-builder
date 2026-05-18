@@ -591,6 +591,10 @@ function setupDragDrop() {
 }
 
 function readFile(file) {
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    if (PSB.loadPdfFromFile) PSB.loadPdfFromFile(file);
+    return;
+  }
   var reader = new FileReader();
   reader.onload = function(e) {
     if (onFileImport) {
