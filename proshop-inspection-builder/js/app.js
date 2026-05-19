@@ -510,7 +510,7 @@ function setFilename(name) {
   }
 }
 
-function applyLoadedProject(jsonString, fileName, dirHandle) {
+function applyLoadedProject(jsonString, fileName) {
   try {
     var loaded = PSB.loadProject(jsonString);
     state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
@@ -530,14 +530,9 @@ function applyLoadedProject(jsonString, fileName, dirHandle) {
       var pdfName = state.globals.pdfFileName;
       PSB.tryRestorePdf(pdfName).then(function(ok) {
         if (ok) return;
-        // IDB failed — try loading from the same directory
-        if (dirHandle) {
-          return PSB.loadPdfFromDirHandle(dirHandle, pdfName).then(function(ok2) {
-            if (!ok2) PSB.showToast('PDF "' + pdfName + '" not found in folder.', 'info');
-          });
-        }
-        // No directory handle (drag-drop / fallback) — prompt to locate
-        PSB.showToast('Please locate ' + pdfName, 'info');
+        // IDB handle missing or wrong file — prompt user to locate the PDF.
+        // startIn uses the project file handle so the picker opens in the same folder.
+        PSB.showToast('Select ' + pdfName + ' (one-time — remembered after this)', 'info');
         return PSB.promptForPdf(pdfName);
       });
     } else {
@@ -592,8 +587,8 @@ function bindFileButtons() {
   document.getElementById('btn-load').addEventListener('click', function() {
     PSB.openProjectWithHandle().then(function(result) {
       if (result) {
-        applyLoadedProject(result.jsonString, result.fileName, result.dirHandle);
-      } else if (!window.showOpenFilePicker && !window.showDirectoryPicker) {
+        applyLoadedProject(result.jsonString, result.fileName);
+      } else if (!window.showOpenFilePicker) {
         // Fallback for browsers without File System Access API
         document.getElementById('file-load-project').click();
       }
