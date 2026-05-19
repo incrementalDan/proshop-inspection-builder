@@ -17,6 +17,7 @@ var pdfFileName = null;
 var pdfArrayBuffer = null;
 var pdfFileHandle = null;
 var pdfRenderTask = null;
+var loadGeneration = 0;
 
 var PDF_MIN_ZOOM = 0.25;
 var PDF_MAX_ZOOM = 4.0;
@@ -191,16 +192,24 @@ function initPdfViewer() {
 // ── Load PDF from File ───────────────────────────────────
 function loadPdfFromFile(file) {
   if (!file || !file.name.toLowerCase().endsWith('.pdf')) return;
+  var thisGen = ++loadGeneration;
 
   var reader = new FileReader();
   reader.onload = function(e) {
+    if (thisGen !== loadGeneration) return;
     pdfArrayBuffer = e.target.result;
     pdfFileName = file.name;
 
     loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
+      if (thisGen !== loadGeneration) return;
       if (PSB.setPdfFileName) PSB.setPdfFileName(pdfFileName);
       elFilename.textContent = pdfFileName;
       PSB.showToast('PDF loaded: ' + pdfFileName, 'success');
+    }).catch(function() {
+      if (thisGen !== loadGeneration) return;
+      pdfArrayBuffer = null;
+      pdfFileName = null;
+      hidePdfViewer();
     });
   };
   reader.readAsArrayBuffer(file);
@@ -219,6 +228,8 @@ function loadPdfFromArrayBuffer(buffer) {
     var loadingTask = window.pdfjsLib.getDocument({ data: data });
     return loadingTask.promise;
   }).then(function(doc) {
+    if (pdfRenderTask) { pdfRenderTask.cancel(); pdfRenderTask = null; }
+    if (pdfDoc) pdfDoc.destroy();
     pdfDoc = doc;
     pdfTotalPages = doc.numPages;
     pdfCurrentPage = 1;
@@ -327,14 +338,15 @@ function hidePdfViewer() {
 
 // ── Close PDF ────────────────────────────────────────────
 function closePdf() {
-  pdfDoc = null;
+  if (pdfRenderTask) { pdfRenderTask.cancel(); pdfRenderTask = null; }
+  if (pdfDoc) { pdfDoc.destroy(); pdfDoc = null; }
+  loadGeneration++;
   pdfCurrentPage = 1;
   pdfTotalPages = 0;
   pdfZoom = 1.0;
   pdfFileName = null;
   pdfArrayBuffer = null;
   pdfFileHandle = null;
-  pdfRenderTask = null;
 
   hidePdfViewer();
   clearPdfHandleFromIDB();
@@ -342,7 +354,7 @@ function closePdf() {
   if (PSB.setPdfFileName) PSB.setPdfFileName(null);
 
   // Clear canvas
-  if (elCanvas) {
+  if (elCanvas && elCtx) {
     elCtx.clearRect(0, 0, elCanvas.width, elCanvas.height);
     elCanvas.width = 0;
     elCanvas.height = 0;
@@ -433,6 +445,10 @@ function tryRestorePdf(expectedFileName) {
       return handle.getFile();
     }).then(function(file) {
       if (!file) return false;
+      if (expectedFileName && file.name !== expectedFileName) {
+        clearPdfHandleFromIDB();
+        return false;
+      }
       pdfFileHandle = handle;
       return new Promise(function(resolve) {
         var reader = new FileReader();
