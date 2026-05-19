@@ -519,7 +519,7 @@ function restoreOrPromptPdf(expectedFileName, promptIfMissing) {
   return tryRestorePdf(expectedFileName).then(function(ok) {
     if (ok) return true;
     if (promptIfMissing) {
-      PSB.showToast('Please locate ' + expectedFileName, 'info');
+      PSB.showToast('Select ' + expectedFileName + ' (one-time — remembered after this)', 'info');
       return promptForPdf(expectedFileName);
     }
     return false;
