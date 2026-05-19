@@ -189,14 +189,74 @@ function clearProjectFileHandle() {
 }
 
 /**
- * Open a project file using the File System Access API.
- * Stores the file handle so subsequent saves overwrite the same file.
+ * Open a project by picking its folder.
+ * Uses showDirectoryPicker so we get access to both the .json and .pdf
+ * in one user action. Falls back to single-file picker if unsupported.
  *
- * Falls back to returning null if API not available (caller uses <input> fallback).
- *
- * @returns {Promise<{jsonString: string, fileName: string}|null>}
+ * @returns {Promise<{jsonString: string, fileName: string, dirHandle: FileSystemDirectoryHandle|null}|null>}
  */
 function openProjectWithHandle() {
+  if (window.showDirectoryPicker) {
+    return openProjectFromDirectory().catch(function(err) {
+      if (err.name === 'AbortError') return null;
+      console.warn('[PSB] Directory open failed, falling back to file picker:', err);
+      return openProjectFromFile();
+    });
+  }
+  return openProjectFromFile();
+}
+
+function openProjectFromDirectory() {
+  return window.showDirectoryPicker({ mode: 'read' }).then(function(dirHandle) {
+    var entries = [];
+    var iter = dirHandle.values();
+
+    function collect() {
+      return iter.next().then(function(r) {
+        if (r.done) return entries;
+        if (r.value.kind === 'file') entries.push(r.value);
+        return collect();
+      });
+    }
+
+    return collect().then(function(files) {
+      var jsonHandles = files.filter(function(h) {
+        return h.name.toLowerCase().endsWith('.json');
+      });
+
+      if (jsonHandles.length === 0) {
+        PSB.showToast('No project file (.json) found in this folder.', 'error');
+        return null;
+      }
+
+      function tryHandle(index) {
+        if (index >= jsonHandles.length) return Promise.resolve(null);
+        var h = jsonHandles[index];
+        return h.getFile().then(function(file) {
+          return file.text().then(function(text) {
+            try {
+              var parsed = JSON.parse(text);
+              if (parsed.version || parsed.rows) {
+                projectFileHandle = h;
+                return { jsonString: text, fileName: file.name, dirHandle: dirHandle };
+              }
+            } catch (e) { /* not valid JSON or not a project */ }
+            return tryHandle(index + 1);
+          });
+        });
+      }
+
+      return tryHandle(0).then(function(result) {
+        if (!result) {
+          PSB.showToast('No valid ProShop project found in this folder.', 'error');
+        }
+        return result;
+      });
+    });
+  });
+}
+
+function openProjectFromFile() {
   if (!window.showOpenFilePicker) return Promise.resolve(null);
 
   return window.showOpenFilePicker({
@@ -211,7 +271,7 @@ function openProjectWithHandle() {
     return handle.getFile();
   }).then(function(file) {
     return file.text().then(function(text) {
-      return { jsonString: text, fileName: file.name };
+      return { jsonString: text, fileName: file.name, dirHandle: null };
     });
   }).catch(function(err) {
     if (err.name === 'AbortError') {
@@ -315,4 +375,5 @@ PSB.clearProjectFileHandle = clearProjectFileHandle;
 PSB.autoSaveToDisk = autoSaveToDisk;
 PSB.hasFileHandle = hasFileHandle;
 PSB.getProjectFileName = getProjectFileName;
+PSB.getProjectFileHandle = function() { return projectFileHandle; };
 PSB.openProjectWithHandle = openProjectWithHandle;

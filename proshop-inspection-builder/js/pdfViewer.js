@@ -458,10 +458,17 @@ function tryRestorePdf(expectedFileName) {
 function promptForPdf(suggestedName) {
   if (!window.showOpenFilePicker) return Promise.resolve(false);
 
-  return window.showOpenFilePicker({
+  var opts = {
     types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }],
     multiple: false,
-  }).then(function(handles) {
+  };
+  // Start in the project file's directory if available
+  if (PSB.hasFileHandle && PSB.hasFileHandle()) {
+    var projHandle = PSB.getProjectFileHandle && PSB.getProjectFileHandle();
+    if (projHandle) opts.startIn = projHandle;
+  }
+
+  return window.showOpenFilePicker(opts).then(function(handles) {
     var handle = handles[0];
     pdfFileHandle = handle;
     savePdfHandleToIDB(handle);
@@ -503,6 +510,35 @@ function restoreOrPromptPdf(expectedFileName, promptIfMissing) {
   });
 }
 
+// ── Load PDF from Directory Handle ───────────────────────
+function loadPdfFromDirHandle(dirHandle, targetName) {
+  if (!dirHandle || !targetName) return Promise.resolve(false);
+
+  return dirHandle.getFileHandle(targetName).then(function(handle) {
+    pdfFileHandle = handle;
+    savePdfHandleToIDB(handle);
+    return handle.getFile();
+  }).then(function(file) {
+    return new Promise(function(resolve) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        pdfArrayBuffer = e.target.result;
+        pdfFileName = file.name;
+        loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
+          if (PSB.setPdfFileName) PSB.setPdfFileName(pdfFileName);
+          elFilename.textContent = pdfFileName;
+          resolve(true);
+        }).catch(function() { resolve(false); });
+      };
+      reader.onerror = function() { resolve(false); };
+      reader.readAsArrayBuffer(file);
+    });
+  }).catch(function(err) {
+    console.warn('[PSB-PDF] PDF not found in directory:', err);
+    return false;
+  });
+}
+
 // ── Public API ───────────────────────────────────────────
 function hasPdf() { return pdfDoc !== null; }
 function getPdfFileName() { return pdfFileName; }
@@ -513,5 +549,7 @@ PSB.loadPdfFromFile = loadPdfFromFile;
 PSB.closePdf = closePdf;
 PSB.tryRestorePdf = tryRestorePdf;
 PSB.restoreOrPromptPdf = restoreOrPromptPdf;
+PSB.promptForPdf = promptForPdf;
+PSB.loadPdfFromDirHandle = loadPdfFromDirHandle;
 PSB.hasPdf = hasPdf;
 PSB.getPdfFileName = getPdfFileName;
