@@ -7,10 +7,11 @@ A browser-based, local-first engineering tool that:
 3. Applies deterministic math (nominal centering, plating, unit conversion)
 4. Allows controlled user overrides via sidebar
 5. Exports ProShop-compatible CSV for direct import into ProShop ERP
+6. Displays engineering drawing PDFs alongside inspection data (Phase 1 — view only)
 
 ## Architecture Rules (DO NOT VIOLATE)
 - **Local-first**: NO backend, NO external API calls. Runs entirely from `index.html` in a browser.
-- **No build step**: No bundlers, no npm, no frameworks. Vanilla JS with ES6 modules.
+- **No build step**: No bundlers, no npm, no frameworks. Vanilla JS, ES5-style (`var`, function declarations), `PSB` namespace on `window`. Exception: pdf.js is loaded as an ES module (`lib/pdf.min.mjs`) via a `<script type="module">` tag, then exposed as `window.pdfjsLib`.
 - **Single source of truth**: Every row follows `{ raw, user, computed }` pattern.
   - `raw` = immutable parsed import data
   - `user` = user overrides and settings for this row
@@ -29,6 +30,10 @@ js/mathEngine.js        — Nominal centering, plating, unit conversion, precisi
 js/ui.js                — Table rendering, sidebar, inline editing, theme toggle
 js/exportEngine.js      — ProShop CSV export generation
 js/storage.js           — Save/load full project state as JSON
+js/history.js           — Undo/redo snapshot stack, audit log with coalescing
+js/pdfViewer.js         — PDF viewer module (canvas-based via pdf.js, Phase 1 view-only)
+lib/pdf.min.mjs         — pdf.js library (Mozilla, local copy, ~800KB)
+lib/pdf.worker.min.mjs  — pdf.js web worker (local copy, ~800KB)
 test/index.html         — Test runner page
 test/testData.js        — Sample CSV data as JS constants for testing
 test/parser.test.js     — Parser unit tests
@@ -70,6 +75,25 @@ docs/proshop-field-mapping.png — ProShop UI field reference screenshot
 - `saveProject(state)` → saves to localStorage + triggers JSON download
 - `loadProject(jsonString)` → returns full app state
 - `autoSave(state)` → saves to localStorage only
+- `openProjectWithHandle()` → File System Access API picker, stores handle for silent re-saves
+- `autoSaveToDisk(state)` → silently writes to stored file handle (no prompt)
+
+### history.js
+- `pushUndo(state, description)` → snapshot current state before mutation
+- `undo(state, desc)` / `redo(state, desc)` → pop/push between stacks, return snapshot
+- `canUndo()` / `canRedo()` → boolean checks
+- `getUndoDescriptions()` / `getRedoDescriptions()` → arrays for dropdown menus
+- `logChange(auditLog, entry)` → append to audit log with 750ms coalescing
+- `getRowHistory(auditLog, rowId)` → entries for a specific row
+
+### pdfViewer.js
+- `initPdfViewer()` → bind toolbar, resizer, upload button, keyboard/mouse handlers
+- `loadPdfFromFile(file)` → read File as ArrayBuffer, render via pdf.js
+- `closePdf()` → clear all state, hide viewer, remove IDB handle
+- `tryRestorePdf(expectedFileName)` → restore from IndexedDB handle (validates filename match)
+- `restoreOrPromptPdf(fileName, promptIfMissing)` → try IDB, then file picker fallback
+- `promptForPdf(suggestedName)` → open file picker (uses startIn for same-folder hint)
+- `hasPdf()` / `getPdfFileName()` → state queries
 
 ## CSV Column Mapping (ProShop Import Format)
 Both input and output use these exact headers:
@@ -114,8 +138,9 @@ Cleans up messy Ground Control import data by placing values in the correct ProS
 User corrections for data that was originally incorrect or misread by Ground Control. Stored in `row.user.overrides`.
 
 Override architecture for Spec/Tol:
-- `outDrawingSpec` / `outTolerance` — OP2000 base overrides. These feed into the NUMERIC pipeline (update nominal/tolerance values), so all downstream calculations (centering, plating, OUT values) derive from the corrected base. Editing OP2000 Spec/Tol in the table or sidebar sets these keys.
-- `outputSpec` / `outputTolerance` — Independent OUT overrides. These bypass the pipeline entirely and set OUT display values directly. When an OP2000 base override is edited, any existing independent OUT override is cleared (with a toast notification).
+- `outDrawingSpec` / `outTolPlus` / `outTolMinus` — OP2000 base overrides. These feed into the NUMERIC pipeline (update nominal/tolerance values), so all downstream calculations (centering, plating, OUT values) derive from the corrected base. Editing OP2000 Spec/Tol in the table or sidebar sets these keys.
+- `outputSpec` / `outputTolPlus` / `outputTolMinus` — Independent OUT overrides. These bypass the pipeline entirely and set OUT display values directly. When an OP2000 base override is edited, any existing independent OUT override is cleared (with a toast notification).
+- Tolerances are stored as separate plus/minus values (not single strings). Double-clicking a tolerance cell shows dual +/- inputs. Asymmetric tolerances auto-switch Pin/Gage to Gage Block mode.
 - Other editable fields: SU1, SU2, SU3, Output Nominal, Input Tolerance, Pin Gage.
 
 **Type 3 — Modifiers**
@@ -196,10 +221,14 @@ The Pin/Gage column format depends on the selected Inspection Equipment:
 - Inch Precision: number of decimal places (default 4)
 - MM Precision: number of decimal places (default 3)
 - Equipment List: `["Calipers","Micrometer","Optical C.","CMM","Height Gage","Gage Block","GO / NO-GO","PASS/FAIL","Drop Indicator","N/A"]`
+- PDF Filename: stored as `pdfFileName` in globals (just the name, e.g. `"drawing.pdf"`, not a path)
 
 ## UI Layout
-- **Header bar**: Global settings (always visible)
-- **Main area**: Data table (left/center) + Sidebar (right, resizable)
+- **Header bar**: Global settings (always visible), includes PDF upload button
+- **Main area**: `#left-panel` (vertical flex) + `#sidebar-resizer` + `#sidebar`
+  - **Without PDF**: `#left-panel` contains only `#table-container` (full height)
+  - **With PDF loaded**: `#left-panel` splits vertically — `#pdf-viewer` (flex:2, ~2/3) + `#pdf-resizer` (draggable) + `#table-container` (flex:1, ~1/3)
+- **PDF viewer**: Canvas-based rendering, toolbar with page nav / zoom / fit / close. Pan via click-drag, Ctrl+wheel zoom, arrow keys for pages.
 - **Table**: Sortable/filterable columns, alternating row colors, click to select
 - **Sidebar**: Opens on row click. Dim Tag big at top. Output drawing spec + tolerance prominent. All controls below.
 - **Row status**: none (untouched) → yellow (edited) → green (user marked complete)
@@ -210,6 +239,40 @@ The Pin/Gage column format depends on the selected Inspection Equipment:
 - Math tests: known input/output pairs for centering, plating, unit conversion
 - Integration test: import sample-input.csv → configure → export → compare against sample-output.csv
 - Run tests by opening `test/index.html` in browser
+
+## PDF Viewer (Phase 1 — View Only)
+
+### Architecture
+- **Completely independent** of CSV/table/export logic. If no PDF is loaded, the app is identical to before.
+- Rendered via **pdf.js** (Mozilla's PDF engine, loaded locally from `lib/`). Canvas-based rendering — chosen for Phase 2 ballooning compatibility (annotations will overlay the canvas).
+- All PDF data stays in the browser. No uploads, no cloud, no network calls. pdf.js runs entirely client-side.
+
+### PDF File Persistence
+The PDF file itself is **never re-saved or copied**. It stays on disk where the user put it. The project JSON stores only the filename string.
+
+Persistence across sessions uses the **File System Access API** (Chromium):
+- When the user opens a PDF via the upload button, `showOpenFilePicker` returns a `FileSystemFileHandle`
+- That handle is stored in **IndexedDB** (`psb_pdf_store` database, `handles` store, key `currentPdfHandle`)
+- On next app load or project load, `tryRestorePdf()` retrieves the handle from IDB, checks permission, reads the file, and renders — no user interaction needed
+- If the IDB handle is missing or stale (wrong filename), `promptForPdf()` opens a file picker with `startIn` set to the project file's location so the PDF is right there
+- First time per project = user picks the PDF once. Every subsequent load = auto-restores from IDB.
+
+### Security Rules (DO NOT VIOLATE)
+- **PDF data NEVER leaves the browser**. No network requests, no cloud uploads, no external services.
+- PDF is rendered to `<canvas>` (rasterized pixels). No PDF content is ever inserted as HTML/DOM.
+- IndexedDB is origin-scoped. File handles are structured-cloned (not JSON-serializable, can't be exfiltrated).
+- No `postMessage`, `BroadcastChannel`, `SharedWorker`, or `ServiceWorker` — each tab is isolated.
+- `pdfArrayBuffer` (raw bytes, 1-20MB) lives only in JS heap. Released on close/new load.
+
+### Phase 2+ (Future)
+- Phase 2: Manual ballooning annotations (canvas overlay)
+- Phase 3: Auto-detection of dimension callouts
+- Current implementation is designed to support these — canvas rendering, not `<iframe>`.
+
+### Robustness Patterns
+- **Generation counter** (`loadGeneration`): prevents stale FileReader callbacks from clobbering state when user rapidly loads multiple PDFs
+- **Render task cancellation**: `closePdf()` and `loadPdfFromArrayBuffer()` cancel in-flight render tasks and call `pdfDoc.destroy()` to release pdf.js worker resources
+- **Filename validation**: `tryRestorePdf(expectedFileName)` checks that the IDB handle points to the correct file — prevents wrong PDF from loading after project switch
 
 ## Git Workflow
 - Commit after each working feature
@@ -326,6 +389,13 @@ This is an ordering / readability tool, not a math function.
 - Do NOT lose the original raw data when user edits — raw is immutable
 - Do NOT use frameworks or build tools — this must open from index.html directly
 - Do NOT put plating adjustment on tolerance — only on nominal
-- OP2000 overrides (`outDrawingSpec`/`outTolerance`) MUST feed into the numeric pipeline — they update the nominal/tolerance values used for centering, plating, and OUT derivation
-- OUT overrides (`outputSpec`/`outputTolerance`) are INDEPENDENT — they bypass the pipeline. Editing OP2000 clears them.
+- OP2000 overrides (`outDrawingSpec`/`outTolPlus`/`outTolMinus`) MUST feed into the numeric pipeline — they update the nominal/tolerance values used for centering, plating, and OUT derivation
+- OUT overrides (`outputSpec`/`outputTolPlus`/`outputTolMinus`) are INDEPENDENT — they bypass the pipeline. Editing OP2000 clears them.
 - Data flow is ONE-WAY: OP2000 → OUT. Editing OUT spec/tol NEVER changes OP2000 values.
+- Tolerances are split plus/minus — never store as a single string. The deprecated `outTolerance`/`outputTolerance` keys exist only for v1→v2 migration in `storage.js`.
+- The PDF viewer is **completely independent** of CSV/table logic. Do not couple them. If no PDF is loaded, no PDF code runs.
+- NEVER re-save or copy the PDF file. It lives on disk; we just hold a read handle.
+- NEVER send PDF data over the network or to any external service.
+- `.hidden { display: none !important }` blocks CSS transitions — sidebar uses `sidebar-closed` class instead. PDF viewer uses `.hidden` class since it doesn't need transitions.
+- `showDirectoryPicker` is confusing UX (files appear grayed out) — use `showOpenFilePicker` for file selection.
+- All modules export to `window.PSB` namespace. ES5-style code (var, function declarations, no import/export, no build step).
