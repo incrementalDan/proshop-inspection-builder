@@ -234,6 +234,12 @@ function recompute(row, globals) {
     }
   }
 
+  // ── Unit and precision settings (needed by Type 2 and all downstream) ──
+  var importUnits = globals.importUnits || 'mm';
+  var secondaryUnits = importUnits === 'mm' ? 'inch' : 'mm';
+  var primaryPrec = importUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+  var secondaryPrec = secondaryUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+
   // ══════════════════════════════════════════════════════════
   // Type 2 — Manual Overrides: apply user corrections
   // OP2000 overrides feed into the numeric pipeline so OUT
@@ -253,9 +259,9 @@ function recompute(row, globals) {
     if (isNaN(ovMinus) && !isNaN(ovPlus)) ovMinus = ovPlus;
     if (!isNaN(ovPlus) && !isNaN(ovMinus)) {
       if (Math.abs(ovPlus - ovMinus) < 1e-10) {
-        op2000Tolerance = String(ovPlus);
+        op2000Tolerance = PSB.formatPrecision(ovPlus, primaryPrec);
       } else {
-        op2000Tolerance = '+' + ovPlus + ' -' + ovMinus;
+        op2000Tolerance = '+' + PSB.formatPrecision(ovPlus, primaryPrec) + ' -' + PSB.formatPrecision(ovMinus, primaryPrec);
       }
     } else {
       op2000Tolerance = raw.tolerance || '';
@@ -324,11 +330,6 @@ function recompute(row, globals) {
   }
 
   // ── Dual-unit formatting ─────────────────────────────────
-  var importUnits = globals.importUnits || 'mm';
-  var secondaryUnits = importUnits === 'mm' ? 'inch' : 'mm';
-  var primaryPrec = importUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
-  var secondaryPrec = secondaryUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
-
   var primaryNom = nominal;
   var primaryTolPlus = tolPlus;
   var primaryTolMinus = tolMinus;

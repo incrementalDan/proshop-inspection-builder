@@ -421,6 +421,16 @@ function bindGlobalControls() {
     recomputeAll();
     markDirty();
     scheduleAutoSave();
+    // Toast fires after user stops typing (debounced)
+    if (platingToastTimer) clearTimeout(platingToastTimer);
+    platingToastTimer = setTimeout(function() {
+      var units = state.globals.platingUnits || 'inch';
+      if (newVal > 0) {
+        PSB.showToast('Plating: ' + newVal + ' ' + units, 'info');
+      } else {
+        PSB.showToast('Plating thickness cleared', 'info');
+      }
+    }, 700);
   });
 
   // Plating units
@@ -681,14 +691,20 @@ function bindExportModal() {
       state.globals.exportUnits = exportUnits;
       recomputeAll();
       var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
-      PSB.downloadCSV(csv);
-      PSB.showToast('CSV exported.', 'success');
-      PSB.closeModal('export-modal');
-      PSB.hideLoading();
-
-      if (PSB.hasFileHandle()) {
-        PSB.autoSaveToDisk(state).then(function(ok) { if (ok) markClean(); });
-      }
+      PSB.downloadCSV(csv, null, PSB.getProjectFileHandle()).then(function(saved) {
+        PSB.hideLoading();
+        if (saved) {
+          PSB.showToast('CSV exported.', 'success');
+          PSB.closeModal('export-modal');
+          if (PSB.hasFileHandle()) {
+            PSB.autoSaveToDisk(state).then(function(ok) { if (ok) markClean(); });
+          }
+        }
+        // If !saved (user cancelled picker), keep modal open
+      }).catch(function() {
+        PSB.hideLoading();
+        PSB.showToast('Export failed.', 'error');
+      });
     }, 50);
   });
 }
@@ -999,6 +1015,7 @@ function recomputeAll() {
 // ═══════════════════════════════════════════════════════════
 var autoSaveTimer = null;
 var diskSaveTimer = null;
+var platingToastTimer = null;
 
 function scheduleAutoSave() {
   // Quick save to sessionStorage (1s debounce)
