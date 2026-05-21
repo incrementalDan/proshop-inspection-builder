@@ -1871,3 +1871,49 @@ td.edit-flash {
 .fai-editable:hover {
   background: var(--bg-row-hover, rgba(255,255,255,0.05));
 }
+
+/* FAI tolerance cross-check highlighting */
+.fai-tol-tighter {
+  background-color: rgba(217, 119, 6, 0.18) !important; /* yellow — CMM tighter than plan */
+}
+.fai-tol-wider {
+  background-color: rgba(220, 38, 38, 0.18) !important; /* red — CMM wider/looser than plan */
+}
+
+/* FAI nominal mismatch highlighting */
+.fai-nominal-mismatch {
+  background-color: rgba(220, 38, 38, 0.18) !important;
+  cursor: help;
+}
+.fai-mismatch-icon {
+  color: #dc2626;
+  font-size: 11px;
+  margin-left: 2px;
+}
+
+/* FAI compare mode toggle button group */
+.btn-group {
+  display: inline-flex;
+}
+.btn-group .btn-toggle {
+  padding: 4px 10px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text-primary, #e0e0e0);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.btn-group .btn-toggle:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.btn-group .btn-toggle:last-child {
+  border-radius: 0 4px 4px 0;
+  border-left: none;
+}
+.btn-group .btn-toggle.active {
+  background: var(--accent-blue, #4a9eff);
+  color: #fff;
+  border-color: var(--accent-blue, #4a9eff);
+}

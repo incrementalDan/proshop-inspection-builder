@@ -48,10 +48,20 @@ var VIEW_CONFIGS = {
     sidebarEnabled: false,
     faiControlsVisible: true,
     setupControlsVisible: false,
+    compareMode: 'op2000',   // 'op2000' | 'compensated' — which plan values to compare CMM against
   },
 };
 
 var currentView = 'setup';
+
+function setFaiCompareMode(mode) {
+  VIEW_CONFIGS.fai.compareMode = mode;
+  var op2kBtn = document.getElementById('btn-fai-compare-op2000');
+  var compBtn = document.getElementById('btn-fai-compare-comp');
+  if (op2kBtn) op2kBtn.classList.toggle('active', mode === 'op2000');
+  if (compBtn) compBtn.classList.toggle('active', mode === 'compensated');
+  if (currentView === 'fai') PSB.renderTable(state, VIEW_CONFIGS.fai);
+}
 
 function switchView(viewId) {
   currentView = viewId;
@@ -1231,6 +1241,12 @@ function bindFaiControls() {
       switchView(currentView === 'setup' ? 'fai' : 'setup');
     });
   }
+
+  // FAI compare mode toggle
+  var cmpOp2kBtn = document.getElementById('btn-fai-compare-op2000');
+  var cmpCompBtn = document.getElementById('btn-fai-compare-comp');
+  if (cmpOp2kBtn) cmpOp2kBtn.addEventListener('click', function() { setFaiCompareMode('op2000'); });
+  if (cmpCompBtn) cmpCompBtn.addEventListener('click', function() { setFaiCompareMode('compensated'); });
 
   // FAI Export button
   var exportFaiBtn = document.getElementById('btn-export-fai');
