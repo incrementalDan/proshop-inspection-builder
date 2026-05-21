@@ -68,6 +68,7 @@ function defaultGlobals() {
   return {
     projectId: null,          // UUID assigned on first save — stable key for PDF IDB cache
     faiWarnThreshold: 0.80,   // FAI warn threshold (fraction of tolerance band)
+    cmmImportUnits: 'mm',     // units CMM report values are expressed in (mm | inch)
     importUnits: 'mm',        // 'mm' or 'inch'
     displayUnits: 'inch',     // 'mm', 'inch', or 'both'
     exportUnits: 'inch',

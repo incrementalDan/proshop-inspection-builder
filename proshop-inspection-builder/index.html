@@ -415,17 +415,49 @@
   <!-- CMM IMPORT MODAL                                   -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div id="modal-cmm-import" class="modal hidden">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:560px;">
       <div class="modal-header">
         <h2>Import CMM Data</h2>
       </div>
       <div class="modal-body">
-        <p>Paste Zeiss CALYPSO report text, or select a .txt file.</p>
-        <textarea id="cmm-paste-area" rows="12" style="width:100%;font-family:monospace;font-size:12px;box-sizing:border-box;" placeholder="Paste CMM report text here..."></textarea>
-        <div style="margin-top:8px;">
-          <label>Or load from file: <input type="file" id="cmm-file-input" accept=".txt,.pdf"></label>
+
+        <!-- Existing runs section — hidden when no runs exist -->
+        <div id="cmm-runs-section" class="cmm-section hidden">
+          <div class="cmm-section-header">
+            <strong>Existing CMM Runs</strong>
+            <label class="cmm-select-all-label">
+              <input type="checkbox" id="cmm-select-all"> Select all
+            </label>
+          </div>
+          <div id="cmm-runs-list" class="cmm-runs-list"></div>
+          <button id="btn-cmm-delete-selected" class="btn btn-danger btn-small" style="margin-top:6px;" disabled>Delete Selected</button>
         </div>
-        <div class="confirm-modal-actions" style="margin-top:12px;">
+
+        <!-- New import section -->
+        <div class="cmm-section" style="margin-top:12px;">
+          <strong>New Import</strong>
+          <div class="cmm-import-options">
+            <div class="cmm-option-row">
+              <label class="cmm-option-label">CMM Units:</label>
+              <div class="btn-group" id="cmm-units-toggle">
+                <button id="btn-cmm-units-mm"   class="btn btn-toggle active">mm</button>
+                <button id="btn-cmm-units-inch" class="btn btn-toggle">inch</button>
+              </div>
+            </div>
+            <div class="cmm-option-row" id="cmm-mode-row">
+              <label class="cmm-option-label">Mode:</label>
+              <label class="cmm-radio-label"><input type="radio" name="cmm-import-mode" value="add"   checked> Add to existing</label>
+              <label class="cmm-radio-label"><input type="radio" name="cmm-import-mode" value="clear">Clear all runs, then import</label>
+            </div>
+          </div>
+          <textarea id="cmm-paste-area" rows="10" style="width:100%;font-family:monospace;font-size:12px;box-sizing:border-box;margin-top:10px;" placeholder="Paste Zeiss CALYPSO report text here…"></textarea>
+          <div style="margin-top:6px;">
+            <label style="font-size:13px;">Or load from file: <input type="file" id="cmm-file-input" accept=".txt,.pdf"></label>
+            <span id="cmm-loaded-filename" style="margin-left:8px;font-size:12px;opacity:0.6;"></span>
+          </div>
+        </div>
+
+        <div class="confirm-modal-actions" style="margin-top:14px;">
           <button id="btn-cmm-import-cancel" class="btn btn-secondary">Cancel</button>
           <button id="btn-cmm-import-confirm" class="btn btn-primary">Import</button>
         </div>

@@ -1119,14 +1119,57 @@ function recomputeAll() {
 // FAI IMPORT FLOW
 // ═══════════════════════════════════════════════════════════
 
-function handleCmmImport(rawText, fileName) {
+/**
+ * Delete one or more CMM runs by ID. Removes all matching measurements from
+ * every row, recalculates aggregateStatus, and removes the run from faiRuns.
+ *
+ * @param {string[]} runIds — array of run IDs to remove
+ */
+function deleteFaiRuns(runIds) {
+  if (!runIds || runIds.length === 0) return;
+  var idSet = {};
+  for (var i = 0; i < runIds.length; i++) idSet[runIds[i]] = true;
+
+  for (var ri = 0; ri < state.rows.length; ri++) {
+    var row = state.rows[ri];
+    if (!row.fai || !row.fai.measurements) continue;
+    row.fai.measurements = row.fai.measurements.filter(function(m) {
+      return !idSet[m.runId];
+    });
+    if (row.fai.measurements.length === 0) {
+      row.fai = null;
+    } else {
+      row.fai.aggregateStatus = PSB.computeAggregateStatus(row.fai.measurements);
+    }
+  }
+
+  state.faiRuns = (state.faiRuns || []).filter(function(r) { return !idSet[r.id]; });
+  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+  markDirty();
+}
+
+function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   var parsed = PSB.parseCmmText(rawText);
   if (!parsed || parsed.length === 0) {
     PSB.showToast('No CMM data found in input', 'warn');
     return;
   }
 
+  // Save chosen units to globals for next time
+  cmmUnits = cmmUnits || state.globals.cmmImportUnits || 'mm';
+  state.globals.cmmImportUnits = cmmUnits;
+
+  // Clear existing runs if requested
+  if (clearFirst && state.faiRuns && state.faiRuns.length > 0) {
+    var allIds = state.faiRuns.map(function(r) { return r.id; });
+    deleteFaiRuns(allIds);
+  }
+
   PSB.pushUndo(state, 'Import CMM run: ' + fileName);
+
+  var planUnits = state.globals.importUnits || 'mm';
+  var needConvert = cmmUnits !== planUnits;
 
   var runId = 'run_' + Date.now();
   var matchedCount = 0;
@@ -1166,17 +1209,23 @@ function handleCmmImport(rawText, fileName) {
     var now = new Date().toISOString();
     for (var gi = 0; gi < group.length; gi++) {
       var cmmRow = group[gi];
-      var status = PSB.computeFaiStatus(
-        cmmRow.measured, cmmRow.nominal, cmmRow.plusTol, cmmRow.minusTol, warnThreshold
-      );
+
+      // Convert CMM values to plan units if needed (full precision, no trimming)
+      var measured  = needConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
+      var nominal   = needConvert ? PSB.convertUnits(cmmRow.nominal,   cmmUnits, planUnits) : cmmRow.nominal;
+      var deviation = needConvert ? PSB.convertUnits(cmmRow.deviation, cmmUnits, planUnits) : cmmRow.deviation;
+      var plusTol   = needConvert ? PSB.convertUnits(cmmRow.plusTol,   cmmUnits, planUnits) : cmmRow.plusTol;
+      var minusTol  = needConvert ? PSB.convertUnits(cmmRow.minusTol,  cmmUnits, planUnits) : cmmRow.minusTol;
+
+      var status = PSB.computeFaiStatus(measured, nominal, plusTol, minusTol, warnThreshold);
       planRow.fai.measurements.push({
         runId: runId,
         cmmName: cmmRow.cmmName,
-        measured: cmmRow.measured,
-        nominal: cmmRow.nominal,
-        deviation: cmmRow.deviation,
-        plusTol: cmmRow.plusTol,
-        minusTol: cmmRow.minusTol,
+        measured: measured,
+        nominal: nominal,
+        deviation: deviation,
+        plusTol: plusTol,
+        minusTol: minusTol,
         status: status,
         isChild: gi > 0,
         childIndex: gi > 0 ? gi : null,
@@ -1196,6 +1245,7 @@ function handleCmmImport(rawText, fileName) {
     label: fileName.replace(/\.[^.]+$/, ''),
     fileName: fileName,
     importedAt: new Date().toISOString(),
+    units: cmmUnits,
     rowCount: parsed.length,
     matchedCount: matchedCount,
     unmatchedRows: unmatchedRows,
@@ -1264,14 +1314,42 @@ function bindFaiControls() {
     });
   }
 
-  // CMM Import button
+  // CMM Import button — populate existing runs list when modal opens
   var importCmmBtn = document.getElementById('btn-import-cmm');
   if (importCmmBtn) {
     importCmmBtn.addEventListener('click', function() {
-      // Clear previous paste area
       var pasteArea = document.getElementById('cmm-paste-area');
       if (pasteArea) pasteArea.value = '';
+      var filenameSpan = document.getElementById('cmm-loaded-filename');
+      if (filenameSpan) filenameSpan.textContent = '';
+      cmmLastLoadedFileName = 'CMM_Import.txt';
+
+      // Sync units toggle to current global
+      var curUnits = state.globals.cmmImportUnits || 'mm';
+      var mmBtn   = document.getElementById('btn-cmm-units-mm');
+      var inchBtn = document.getElementById('btn-cmm-units-inch');
+      if (mmBtn)   mmBtn.classList.toggle('active',  curUnits === 'mm');
+      if (inchBtn) inchBtn.classList.toggle('active', curUnits === 'inch');
+
+      // Populate existing runs list
+      refreshCmmRunsList();
       PSB.openModal('modal-cmm-import');
+    });
+  }
+
+  // CMM units toggle
+  var cmmUnitsMm   = document.getElementById('btn-cmm-units-mm');
+  var cmmUnitsInch = document.getElementById('btn-cmm-units-inch');
+  if (cmmUnitsMm) {
+    cmmUnitsMm.addEventListener('click', function() {
+      cmmUnitsMm.classList.add('active');
+      if (cmmUnitsInch) cmmUnitsInch.classList.remove('active');
+    });
+  }
+  if (cmmUnitsInch) {
+    cmmUnitsInch.addEventListener('click', function() {
+      cmmUnitsInch.classList.add('active');
+      if (cmmUnitsMm) cmmUnitsMm.classList.remove('active');
     });
   }
 
@@ -1283,12 +1361,15 @@ function bindFaiControls() {
     });
   }
 
-  // CMM file input — read as text
+  // CMM file input — read as text, track filename
   var cmmFileInput = document.getElementById('cmm-file-input');
   if (cmmFileInput) {
     cmmFileInput.addEventListener('change', function(e) {
       var file = e.target.files[0];
       if (!file) return;
+      cmmLastLoadedFileName = file.name;
+      var filenameSpan = document.getElementById('cmm-loaded-filename');
+      if (filenameSpan) filenameSpan.textContent = file.name;
       var reader = new FileReader();
       reader.onload = function(ev) {
         var pasteArea = document.getElementById('cmm-paste-area');
@@ -1296,6 +1377,35 @@ function bindFaiControls() {
       };
       reader.readAsText(file);
       e.target.value = '';
+    });
+  }
+
+  // Delete selected runs
+  var deleteSelectedBtn = document.getElementById('btn-cmm-delete-selected');
+  if (deleteSelectedBtn) {
+    deleteSelectedBtn.addEventListener('click', function() {
+      var checkboxes = document.querySelectorAll('#cmm-runs-list input[type=checkbox]:checked');
+      var ids = [];
+      for (var i = 0; i < checkboxes.length; i++) {
+        ids.push(checkboxes[i].value);
+      }
+      if (ids.length === 0) return;
+      PSB.pushUndo(state, 'Delete CMM run' + (ids.length > 1 ? 's' : ''));
+      deleteFaiRuns(ids);
+      PSB.showToast('Deleted ' + ids.length + ' run' + (ids.length > 1 ? 's' : ''), 'success');
+      refreshCmmRunsList();
+    });
+  }
+
+  // Select-all checkbox
+  var selectAllChk = document.getElementById('cmm-select-all');
+  if (selectAllChk) {
+    selectAllChk.addEventListener('change', function() {
+      var checkboxes = document.querySelectorAll('#cmm-runs-list input[type=checkbox]');
+      for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = selectAllChk.checked;
+      }
+      updateDeleteSelectedBtn();
     });
   }
 
@@ -1309,11 +1419,12 @@ function bindFaiControls() {
         PSB.showToast('Please paste CMM data or load a file', 'warn');
         return;
       }
-      var cmmFileInp = document.getElementById('cmm-file-input');
-      var fileName = 'CMM_Import.txt';
-      // Use the textarea content as-is; filename comes from any loaded file or default
+      var mmBtn = document.getElementById('btn-cmm-units-mm');
+      var chosenUnits = (mmBtn && mmBtn.classList.contains('active')) ? 'mm' : 'inch';
+      var modeRadio = document.querySelector('input[name="cmm-import-mode"]:checked');
+      var clearFirst = modeRadio && modeRadio.value === 'clear';
       PSB.closeModal('modal-cmm-import');
-      handleCmmImport(rawText, fileName);
+      handleCmmImport(rawText, cmmLastLoadedFileName, chosenUnits, clearFirst);
     });
   }
 
@@ -1324,6 +1435,45 @@ function bindFaiControls() {
       PSB.closeModal('modal-cmm-summary');
     });
   }
+}
+
+var cmmLastLoadedFileName = 'CMM_Import.txt';
+
+function refreshCmmRunsList() {
+  var runs = state.faiRuns || [];
+  var section = document.getElementById('cmm-runs-section');
+  var list = document.getElementById('cmm-runs-list');
+  var selectAllChk = document.getElementById('cmm-select-all');
+  if (!section || !list) return;
+
+  if (runs.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  if (selectAllChk) selectAllChk.checked = false;
+
+  var html = '';
+  for (var i = 0; i < runs.length; i++) {
+    var run = runs[i];
+    var date = run.importedAt ? run.importedAt.slice(0, 10) : '';
+    var unitsLabel = run.units ? ' · ' + run.units : '';
+    html += '<label class="cmm-run-row">' +
+      '<input type="checkbox" value="' + PSB.esc(run.id) + '" onchange="updateDeleteSelectedBtn()"> ' +
+      '<span class="cmm-run-label">' + PSB.esc(run.label || run.fileName) + '</span>' +
+      '<span class="cmm-run-meta">' + PSB.esc(run.matchedCount + ' dims' + unitsLabel + (date ? ' · ' + date : '')) + '</span>' +
+      '</label>';
+  }
+  list.innerHTML = html;
+  updateDeleteSelectedBtn();
+}
+
+function updateDeleteSelectedBtn() {
+  var btn = document.getElementById('btn-cmm-delete-selected');
+  if (!btn) return;
+  var checked = document.querySelectorAll('#cmm-runs-list input[type=checkbox]:checked').length;
+  btn.disabled = checked === 0;
+  btn.textContent = checked > 0 ? 'Delete Selected (' + checked + ')' : 'Delete Selected';
 }
 
 // ═══════════════════════════════════════════════════════════
