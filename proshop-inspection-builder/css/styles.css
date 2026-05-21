@@ -1844,3 +1844,30 @@ td.has-override {
 td.edit-flash {
   animation: cell-flash 600ms ease-out;
 }
+
+/* ── FAI Status Colors ──────────────────────────────────── */
+.fai-pass { color: #16a34a; font-weight: 600; }
+.fai-warn { color: #d97706; font-weight: 600; }
+.fai-fail { color: #dc2626; font-weight: 600; }
+.fai-none { color: #9ca3af; }
+
+.fai-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.fai-badge.fai-pass { background: #dcfce7; color: #16a34a; }
+.fai-badge.fai-warn { background: #fef3c7; color: #d97706; }
+.fai-badge.fai-fail { background: #fee2e2; color: #dc2626; }
+.fai-badge.fai-none { background: #f3f4f6; color: #9ca3af; }
+
+/* FAI editable notes cell */
+.fai-editable {
+  cursor: text;
+}
+.fai-editable:hover {
+  background: var(--bg-row-hover, rgba(255,255,255,0.05));
+}

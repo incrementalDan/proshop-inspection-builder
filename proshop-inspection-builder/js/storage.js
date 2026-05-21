@@ -252,10 +252,12 @@ function serializeState(state) {
         id: row.id,
         raw: row.raw,
         user: row.user,
+        fai: row.fai || null,
         // computed is NOT saved — it's recalculated on load
       };
     }),
     auditLog: state.auditLog || [],
+    faiRuns: state.faiRuns || [],
   };
 }
 
@@ -297,9 +299,11 @@ function deserializeState(data) {
         id: r.id,
         raw: Object.freeze(Object.assign({}, r.raw)),
         user: user,
+        fai: r.fai || null,
         computed: {}, // Will be recalculated by app.js on load
       };
     }),
+    faiRuns: data.faiRuns || [],
   };
 }
 

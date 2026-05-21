@@ -204,6 +204,56 @@ function detectPrecision(str) {
   return trimmed.length - dotIndex - 1;
 }
 
+/**
+ * Compute FAI pass/warn/fail status for a single measurement.
+ *
+ * @param {number} measured
+ * @param {number} nominal
+ * @param {number} plusTol   — positive number, upper limit
+ * @param {number} minusTol  — positive number, lower limit magnitude
+ * @param {number} warnThreshold — fraction of tolerance band used before warn (default 0.8)
+ * @returns {'pass'|'warn'|'fail'}
+ */
+function computeFaiStatus(measured, nominal, plusTol, minusTol, warnThreshold) {
+  warnThreshold = warnThreshold || 0.8;
+  var upperLimit = nominal + plusTol;
+  var lowerLimit = nominal - minusTol;
+  if (measured > upperLimit || measured < lowerLimit) return 'fail';
+
+  // Avoid division by zero — zero tolerance means exact match only
+  if (plusTol === 0 && minusTol === 0) {
+    return measured === nominal ? 'pass' : 'fail';
+  }
+
+  var deviation = measured - nominal;
+  var bandUsed;
+  if (deviation >= 0) {
+    bandUsed = plusTol > 0 ? deviation / plusTol : 1;
+  } else {
+    bandUsed = minusTol > 0 ? Math.abs(deviation) / minusTol : 1;
+  }
+  if (bandUsed >= warnThreshold) return 'warn';
+  return 'pass';
+}
+
+/**
+ * Compute aggregate FAI status across multiple measurements.
+ * Priority: fail > warn > pass > null (no measurements).
+ *
+ * @param {Array} measurements — array of measurement objects with .status
+ * @returns {'pass'|'warn'|'fail'|null}
+ */
+function computeAggregateStatus(measurements) {
+  if (!measurements || measurements.length === 0) return null;
+  var worst = 'pass';
+  for (var i = 0; i < measurements.length; i++) {
+    var s = measurements[i].status;
+    if (s === 'fail') return 'fail';
+    if (s === 'warn') worst = 'warn';
+  }
+  return worst;
+}
+
 // ── Export to namespace ───────────────────────────────────
 PSB.centerNominal = centerNominal;
 PSB.applyPlating = applyPlating;
@@ -212,3 +262,5 @@ PSB.formatPrecision = formatPrecision;
 PSB.computePinGage = computePinGage;
 PSB.computeGageBlock = computeGageBlock;
 PSB.detectPrecision = detectPrecision;
+PSB.computeFaiStatus = computeFaiStatus;
+PSB.computeAggregateStatus = computeAggregateStatus;

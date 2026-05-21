@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=22">
+  <link rel="stylesheet" href="css/styles.css?v=23">
 </head>
 <body>
 
@@ -20,16 +20,19 @@
       <span id="filename-text" class="filename-text">No file loaded</span>
     </div>
     <div class="header-actions">
-      <button id="btn-new" class="btn btn-secondary" title="Clear all data and start fresh">New</button>
-      <button id="btn-sample" class="btn btn-secondary" title="Load sample data for testing">Sample</button>
-      <button id="btn-import" class="btn btn-primary">Import CSV</button>
-      <button id="btn-export" class="btn btn-accent">Export CSV</button>
+      <button id="btn-new" class="btn btn-secondary setup-only" title="Clear all data and start fresh">New</button>
+      <button id="btn-sample" class="btn btn-secondary setup-only" title="Load sample data for testing">Sample</button>
+      <button id="btn-import" class="btn btn-primary setup-only">Import CSV</button>
+      <button id="btn-export" class="btn btn-accent setup-only">Export CSV</button>
       <button id="btn-save" class="btn btn-secondary">Save Project</button>
       <button id="btn-load" class="btn btn-secondary">Load Project</button>
-      <button id="btn-all-history" class="btn btn-secondary" title="View full change history">History</button>
-      <button id="btn-upload-pdf" class="btn btn-secondary" title="Upload PDF">📄 PDF</button>
-      <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
-      <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">◑</button>
+      <button id="btn-all-history" class="btn btn-secondary setup-only" title="View full change history">History</button>
+      <button id="btn-upload-pdf" class="btn btn-secondary setup-only" title="Upload PDF">PDF</button>
+      <button id="btn-view-toggle" class="btn btn-secondary">FAI View</button>
+      <button id="btn-import-cmm" class="btn btn-primary fai-only hidden">Import CMM Data</button>
+      <button id="btn-export-fai" class="btn btn-secondary fai-only hidden">Export FAI</button>
+      <button id="btn-settings" class="btn btn-icon setup-only" title="Settings">&#9881;</button>
+      <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">&#9681;</button>
     </div>
     <!-- Hidden inputs -->
     <input type="file" id="file-import-csv" accept=".csv" hidden>
@@ -405,6 +408,64 @@
   <div id="toast-container"></div>
 
   <!-- ═══════════════════════════════════════════════════ -->
+  <!-- CMM IMPORT MODAL                                   -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="modal-cmm-import" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Import CMM Data</h2>
+      </div>
+      <div class="modal-body">
+        <p>Paste Zeiss CALYPSO report text, or select a .txt file.</p>
+        <textarea id="cmm-paste-area" rows="12" style="width:100%;font-family:monospace;font-size:12px;box-sizing:border-box;" placeholder="Paste CMM report text here..."></textarea>
+        <div style="margin-top:8px;">
+          <label>Or load from file: <input type="file" id="cmm-file-input" accept=".txt,.pdf"></label>
+        </div>
+        <div class="confirm-modal-actions" style="margin-top:12px;">
+          <button id="btn-cmm-import-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="btn-cmm-import-confirm" class="btn btn-primary">Import</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- CMM IMPORT SUMMARY MODAL                          -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="modal-cmm-summary" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>CMM Import Summary</h2>
+      </div>
+      <div class="modal-body">
+        <p>Rows parsed: <strong id="cmm-summary-total">0</strong></p>
+        <p>Matched: <strong id="cmm-summary-matched">0</strong> &nbsp;|&nbsp; Unmatched: <strong id="cmm-summary-unmatched">0</strong></p>
+        <div id="cmm-summary-unmatched-list"></div>
+        <div class="confirm-modal-actions" style="margin-top:12px;">
+          <button id="btn-cmm-summary-done" class="btn btn-primary">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- FAI EXPORT MODAL (placeholder)                    -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="modal-fai-export" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Export FAI</h2>
+      </div>
+      <div class="modal-body">
+        <p>FAI export format not yet defined &mdash; coming soon.</p>
+        <div class="confirm-modal-actions" style="margin-top:12px;">
+          <button id="btn-fai-export-close" class="btn btn-primary">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- pdf.js — loaded as ESM, exposed globally for pdfViewer.js -->
@@ -415,15 +476,16 @@
     window.dispatchEvent(new Event('pdfjsReady'));
   </script>
 
-  <script src="js/mathEngine.js?v=22"></script>
-  <script src="js/parser.js?v=22"></script>
-  <script src="js/dataModel.js?v=22"></script>
-  <script src="js/exportEngine.js?v=22"></script>
-  <script src="js/storage.js?v=22"></script>
-  <script src="js/history.js?v=22"></script>
-  <script src="js/pdfViewer.js?v=22"></script>
-  <script src="js/ui.js?v=22"></script>
-  <script src="js/app.js?v=22"></script>
+  <script src="js/mathEngine.js?v=23"></script>
+  <script src="js/parser.js?v=23"></script>
+  <script src="js/dataModel.js?v=23"></script>
+  <script src="js/exportEngine.js?v=23"></script>
+  <script src="js/storage.js?v=23"></script>
+  <script src="js/history.js?v=23"></script>
+  <script src="js/pdfViewer.js?v=23"></script>
+  <script src="js/cmmParser.js?v=23"></script>
+  <script src="js/ui.js?v=23"></script>
+  <script src="js/app.js?v=23"></script>
 
 </body>
 </html>
