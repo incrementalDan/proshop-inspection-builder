@@ -263,46 +263,92 @@ function updateTableHeaders(isFaiView) {
 function buildFaiRowHTML(row) {
   var c = row.computed;
   var fai = row.fai;
+  var appState = getAppState();
+  var compareMode = (currentViewConfig && currentViewConfig.compareMode) || 'op2000';
+  var warnThreshold = (appState && appState.globals && appState.globals.faiWarnThreshold) || 0.80;
 
-  // FAI status badge
-  var aggStatus = fai ? fai.aggregateStatus : null;
+  // Plan values based on compare mode
+  var planNominal, planTolPlus, planTolMinus;
+  if (compareMode === 'compensated') {
+    planNominal  = (c.output && c.output.nominal  != null) ? c.output.nominal  : c.op2000Nominal;
+    planTolPlus  = (c.output && c.output.tolPlus  != null) ? c.output.tolPlus  : c.op2kTolPlus;
+    planTolMinus = (c.output && c.output.tolMinus != null) ? c.output.tolMinus : c.op2kTolMinus;
+  } else {
+    planNominal  = c.op2000Nominal;
+    planTolPlus  = c.op2kTolPlus;
+    planTolMinus = c.op2kTolMinus;
+  }
+
+  // Last measurement
+  var lastMeasurement = null;
+  if (fai && fai.measurements && fai.measurements.length > 0) {
+    lastMeasurement = fai.measurements[fai.measurements.length - 1];
+  }
+
+  // FAI status — recomputed using PLAN nominal + tolerance, not CMM's
+  var aggStatus = null;
+  if (lastMeasurement && planNominal != null && planTolPlus != null && planTolMinus != null &&
+      planTolPlus > 0 && planTolMinus > 0) {
+    aggStatus = PSB.computeFaiStatus(lastMeasurement.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
+  } else if (fai) {
+    aggStatus = fai.aggregateStatus;
+  }
   var statusLabel = aggStatus ? aggStatus.toUpperCase() : '—';
   var statusClass = aggStatus ? 'fai-badge fai-' + aggStatus : 'fai-badge fai-none';
   var statusHtml = '<span class="' + statusClass + '">' + esc(statusLabel) + '</span>';
 
-  // Last measurement data
-  var lastMeasurement = null;
-  if (fai && fai.measurements && fai.measurements.length > 0) {
-    lastMeasurement = fai.measurements[fai.measurements.length - 1];
+  // Plan tolerance display
+  var pTolPlus = planTolPlus || 0;
+  var pTolMinus = planTolMinus || 0;
+  var tolDisplay = '';
+  if (pTolPlus || pTolMinus) {
+    if (Math.abs(pTolPlus - pTolMinus) < 1e-10) {
+      tolDisplay = '±' + String(pTolPlus);
+    } else {
+      tolDisplay = '+' + String(pTolPlus) + ' / -' + String(pTolMinus);
+    }
+  }
+
+  // Tolerance cross-check: compare CMM tol band vs plan tol band
+  var tolCellClass = 'col-tolerance';
+  var tolCellTitle = '';
+  if (lastMeasurement && pTolPlus && pTolMinus) {
+    var planBand = pTolPlus + pTolMinus;
+    var cmmBand = (lastMeasurement.plusTol || 0) + (lastMeasurement.minusTol || 0);
+    if (cmmBand > 0 && planBand > 0) {
+      var ratio = cmmBand / planBand;
+      if (ratio < 0.999) {
+        tolCellClass += ' fai-tol-tighter';  // CMM tighter than plan → yellow
+        tolCellTitle = 'CMM tol tighter than plan (' + cmmBand.toPrecision(4) + ' vs ' + planBand.toPrecision(4) + ')';
+      } else if (ratio > 1.001) {
+        tolCellClass += ' fai-tol-wider';    // CMM wider than plan → red
+        tolCellTitle = 'CMM tol wider than plan (' + cmmBand.toPrecision(4) + ' vs ' + planBand.toPrecision(4) + ')';
+      }
+    }
+  }
+
+  // Plan nominal display + nominal cross-check
+  var planNominalDisplay = planNominal != null ? String(planNominal) : '—';
+  var nomCellClass = 'col-nominal';
+  var nomCellTitle = '';
+  if (lastMeasurement && planNominal != null) {
+    var nomDiff = Math.abs((lastMeasurement.nominal || 0) - planNominal);
+    if (nomDiff > 1e-6) {
+      nomCellClass += ' fai-nominal-mismatch';
+      nomCellTitle = 'CMM nominal ' + lastMeasurement.nominal + ' ≠ plan ' + planNominal;
+    }
   }
 
   var measuredVal = lastMeasurement ? String(lastMeasurement.measured) : '—';
   var deviationVal = lastMeasurement ? String(lastMeasurement.deviation) : '—';
   var notesVal = lastMeasurement ? (lastMeasurement.notes || '') : '';
   var runLabel = '—';
-
-  if (lastMeasurement) {
-    // Find run label from app state
-    var appState = getAppState();
-    if (appState && appState.faiRuns) {
-      for (var ri = 0; ri < appState.faiRuns.length; ri++) {
-        if (appState.faiRuns[ri].id === lastMeasurement.runId) {
-          runLabel = appState.faiRuns[ri].label || appState.faiRuns[ri].fileName || lastMeasurement.runId;
-          break;
-        }
+  if (lastMeasurement && appState && appState.faiRuns) {
+    for (var ri = 0; ri < appState.faiRuns.length; ri++) {
+      if (appState.faiRuns[ri].id === lastMeasurement.runId) {
+        runLabel = appState.faiRuns[ri].label || appState.faiRuns[ri].fileName || lastMeasurement.runId;
+        break;
       }
-    }
-  }
-
-  // Tolerance display
-  var tolPlus = c.outTolPlus || 0;
-  var tolMinus = c.outTolMinus || 0;
-  var tolDisplay = '';
-  if (tolPlus || tolMinus) {
-    if (Math.abs(tolPlus - tolMinus) < 1e-10) {
-      tolDisplay = '±' + String(tolPlus);
-    } else {
-      tolDisplay = '+' + String(tolPlus) + ' / -' + String(tolMinus);
     }
   }
 
@@ -312,8 +358,8 @@ function buildFaiRowHTML(row) {
     '<td class="col-drawing-spec">' + formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '') + '</td>' +
     '<td class="col-su1">' + esc(c.specUnit1 || '') + '</td>' +
     '<td class="col-su2">' + esc(c.specUnit2 || '') + '</td>' +
-    '<td class="col-nominal">' + esc(c.op2000DrawingSpec || '') + '</td>' +
-    '<td class="col-tolerance">' + esc(tolDisplay) + '</td>' +
+    '<td class="' + nomCellClass + '"' + (nomCellTitle ? ' title="' + esc(nomCellTitle) + '"' : '') + '>' + esc(planNominalDisplay) + (nomCellTitle ? ' <span class="fai-mismatch-icon">⚠</span>' : '') + '</td>' +
+    '<td class="' + tolCellClass + '"' + (tolCellTitle ? ' title="' + esc(tolCellTitle) + '"' : '') + '>' + esc(tolDisplay) + '</td>' +
     '<td class="col-measured">' + esc(measuredVal) + '</td>' +
     '<td class="col-deviation">' + esc(deviationVal) + '</td>' +
     '<td class="col-fai-notes fai-editable">' + esc(notesVal) + '</td>' +
