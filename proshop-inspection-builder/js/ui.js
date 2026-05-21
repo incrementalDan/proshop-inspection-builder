@@ -18,6 +18,7 @@ window.PSB = window.PSB || {};
 var selectedRowId = null;
 var sortColumn = null;
 var sortDirection = 'asc'; // 'asc' or 'desc'
+var currentViewConfig = { id: 'setup' }; // tracks active view for header sort re-renders
 
 // Callback references (set by app.js)
 var onRowUserChange = null;   // (rowId, userChanges) => void
@@ -84,9 +85,28 @@ function initUI(callbacks) {
  * Render the full table from rows.
  * Call this after any data change.
  *
- * @param {Object[]} rows — array of row objects with computed values
+ * @param {Object} stateOrRows — full state object { rows, globals, ... } OR array of rows (legacy)
+ * @param {Object} [viewConfig] — view config object from VIEW_CONFIGS; defaults to setup view
  */
-function renderTable(rows) {
+function renderTable(stateOrRows, viewConfig) {
+  // Accept either a full state object or a rows array (backward compatibility)
+  var rows;
+  if (Array.isArray(stateOrRows)) {
+    rows = stateOrRows;
+  } else if (stateOrRows && stateOrRows.rows) {
+    rows = stateOrRows.rows;
+  } else {
+    rows = [];
+  }
+
+  // Default to setup view if no config provided
+  if (!viewConfig) {
+    viewConfig = { id: 'setup' };
+  }
+  currentViewConfig = viewConfig;
+
+  var isFaiView = viewConfig.id === 'fai';
+
   var tbody = document.getElementById('table-body');
   var table = document.getElementById('data-table');
   var emptyState = document.getElementById('empty-state');
@@ -99,6 +119,9 @@ function renderTable(rows) {
 
   table.classList.remove('hidden');
   emptyState.classList.add('hidden');
+
+  // Update table headers based on view
+  updateTableHeaders(isFaiView);
 
   // Sort rows if sort is active
   var displayRows = rows.slice();
@@ -121,35 +144,44 @@ function renderTable(rows) {
     if (row.computed.isNote) tr.classList.add('is-note');
     if (row.id === selectedRowId) tr.classList.add('selected');
 
-    tr.innerHTML = buildRowHTML(row);
+    if (isFaiView) {
+      tr.innerHTML = buildFaiRowHTML(row);
+    } else {
+      tr.innerHTML = buildRowHTML(row);
+    }
 
-    // Row click → select + open sidebar (use IIFE for closure)
-    (function(rowId) {
-      tr.addEventListener('click', function() { selectRow(rowId); });
-    })(row.id);
+    // Row click → select + open sidebar (only in setup view)
+    if (!isFaiView) {
+      (function(rowId) {
+        tr.addEventListener('click', function() { selectRow(rowId); });
+      })(row.id);
 
-    // Inline editing for editable cells
-    setupInlineEditing(tr, row);
+      // Inline editing for editable cells
+      setupInlineEditing(tr, row);
 
-    // OP bubble click → toggle on/off (same as sidebar)
-    setupOpBubbleClicks(tr, row);
+      // OP bubble click → toggle on/off (same as sidebar)
+      setupOpBubbleClicks(tr, row);
 
-    // Delete row button
-    (function(rowId) {
-      var delBtn = tr.querySelector('.delete-row-btn');
-      if (delBtn) {
-        delBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          PSB.showConfirmModal({
-            title: 'Delete Row?',
-            message: 'Delete row <strong>' + esc(String(row.computed.dimTag || rowId)) + '</strong>? This cannot be undone.',
-            confirmLabel: 'Delete',
-            confirmClass: 'btn-danger',
-            onConfirm: function() { if (onDeleteRow) onDeleteRow(rowId); }
+      // Delete row button
+      (function(rowId) {
+        var delBtn = tr.querySelector('.delete-row-btn');
+        if (delBtn) {
+          delBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            PSB.showConfirmModal({
+              title: 'Delete Row?',
+              message: 'Delete row <strong>' + esc(String(row.computed.dimTag || rowId)) + '</strong>? This cannot be undone.',
+              confirmLabel: 'Delete',
+              confirmClass: 'btn-danger',
+              onConfirm: function() { if (onDeleteRow) onDeleteRow(rowId); }
+            });
           });
-        });
-      }
-    })(row.id);
+        }
+      })(row.id);
+    } else {
+      // FAI view: setup notes editing for notes field
+      setupFaiNotesEditing(tr, row);
+    }
 
     tbody.appendChild(tr);
 
@@ -167,21 +199,174 @@ function renderTable(rows) {
     }
   }
 
-  // Add row button at the bottom
-  var addTr = document.createElement('tr');
-  addTr.className = 'add-row-tr';
-  addTr.innerHTML = '<td colspan="12" class="add-row-cell"><button class="add-row-btn" title="Add empty row">+</button></td>';
-  addTr.querySelector('.add-row-btn').addEventListener('click', function(e) {
-    e.stopPropagation();
-    if (onAddRow) onAddRow();
-  });
-  tbody.appendChild(addTr);
+  // Add row button at the bottom (setup view only)
+  if (!isFaiView) {
+    var addTr = document.createElement('tr');
+    addTr.className = 'add-row-tr';
+    addTr.innerHTML = '<td colspan="12" class="add-row-cell"><button class="add-row-btn" title="Add empty row">+</button></td>';
+    addTr.querySelector('.add-row-btn').addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (onAddRow) onAddRow();
+    });
+    tbody.appendChild(addTr);
+  }
 
   // Resolve tab-navigation target after full table is built
   if (navigateTarget) {
     resolveNavigateTarget(tbody, displayRows);
     navigateTarget = null;
   }
+}
+
+/**
+ * Update table header cells based on the active view.
+ */
+function updateTableHeaders(isFaiView) {
+  var thead = document.querySelector('#data-table thead tr');
+  if (!thead) return;
+
+  if (isFaiView) {
+    thead.innerHTML =
+      '<th class="col-fai-status">Status</th>' +
+      '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
+      '<th class="col-drawing-spec">Drawing Spec</th>' +
+      '<th class="col-su1">SU1</th>' +
+      '<th class="col-su2">SU2</th>' +
+      '<th class="col-nominal">Nominal</th>' +
+      '<th class="col-tolerance">Tolerance</th>' +
+      '<th class="col-measured">Measured</th>' +
+      '<th class="col-deviation">Deviation</th>' +
+      '<th class="col-fai-notes">Notes</th>' +
+      '<th class="col-run">Run</th>';
+  } else {
+    thead.innerHTML =
+      '<th data-col="status" class="col-status">Status</th>' +
+      '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
+      '<th data-col="specUnit1" class="col-su1">SU1</th>' +
+      '<th data-col="outDrawingSpec" class="col-drawspec">OUT Drawing Spec</th>' +
+      '<th data-col="op2000Spec" class="col-inputspec">OP2000 Spec</th>' +
+      '<th data-col="specUnit2" class="col-su2">SU2</th>' +
+      '<th data-col="specUnit3" class="col-su3">SU3</th>' +
+      '<th data-col="pinGage" class="col-pingage">Pin/Gage</th>' +
+      '<th data-col="op2000Tol" class="col-inputtol">OP2000 Tol</th>' +
+      '<th data-col="outTolerance" class="col-outtol">OUT Tol</th>' +
+      '<th data-col="plating" class="col-plating">Plating</th>' +
+      '<th data-col="ops" class="col-ops">OPs</th>';
+    // Re-bind header sorting after DOM change
+    setupTableHeaderClicks();
+  }
+}
+
+/**
+ * Build HTML for a single FAI view table row.
+ */
+function buildFaiRowHTML(row) {
+  var c = row.computed;
+  var fai = row.fai;
+
+  // FAI status badge
+  var aggStatus = fai ? fai.aggregateStatus : null;
+  var statusLabel = aggStatus ? aggStatus.toUpperCase() : '—';
+  var statusClass = aggStatus ? 'fai-badge fai-' + aggStatus : 'fai-badge fai-none';
+  var statusHtml = '<span class="' + statusClass + '">' + esc(statusLabel) + '</span>';
+
+  // Last measurement data
+  var lastMeasurement = null;
+  if (fai && fai.measurements && fai.measurements.length > 0) {
+    lastMeasurement = fai.measurements[fai.measurements.length - 1];
+  }
+
+  var measuredVal = lastMeasurement ? String(lastMeasurement.measured) : '—';
+  var deviationVal = lastMeasurement ? String(lastMeasurement.deviation) : '—';
+  var notesVal = lastMeasurement ? (lastMeasurement.notes || '') : '';
+  var runLabel = '—';
+
+  if (lastMeasurement) {
+    // Find run label from app state
+    var appState = getAppState();
+    if (appState && appState.faiRuns) {
+      for (var ri = 0; ri < appState.faiRuns.length; ri++) {
+        if (appState.faiRuns[ri].id === lastMeasurement.runId) {
+          runLabel = appState.faiRuns[ri].label || appState.faiRuns[ri].fileName || lastMeasurement.runId;
+          break;
+        }
+      }
+    }
+  }
+
+  // Tolerance display
+  var tolPlus = c.outTolPlus || 0;
+  var tolMinus = c.outTolMinus || 0;
+  var tolDisplay = '';
+  if (tolPlus || tolMinus) {
+    if (Math.abs(tolPlus - tolMinus) < 1e-10) {
+      tolDisplay = '±' + String(tolPlus);
+    } else {
+      tolDisplay = '+' + String(tolPlus) + ' / -' + String(tolMinus);
+    }
+  }
+
+  return '' +
+    '<td class="col-fai-status">' + statusHtml + '</td>' +
+    '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
+    '<td class="col-drawing-spec">' + formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '') + '</td>' +
+    '<td class="col-su1">' + esc(c.specUnit1 || '') + '</td>' +
+    '<td class="col-su2">' + esc(c.specUnit2 || '') + '</td>' +
+    '<td class="col-nominal">' + esc(c.op2000DrawingSpec || '') + '</td>' +
+    '<td class="col-tolerance">' + esc(tolDisplay) + '</td>' +
+    '<td class="col-measured">' + esc(measuredVal) + '</td>' +
+    '<td class="col-deviation">' + esc(deviationVal) + '</td>' +
+    '<td class="col-fai-notes fai-editable">' + esc(notesVal) + '</td>' +
+    '<td class="col-run">' + esc(runLabel) + '</td>';
+}
+
+/**
+ * Set up inline notes editing for FAI view rows.
+ */
+function setupFaiNotesEditing(tr, row) {
+  var notesTd = tr.querySelector('.col-fai-notes');
+  if (!notesTd) return;
+
+  notesTd.addEventListener('dblclick', function(e) {
+    e.stopPropagation();
+    if (notesTd.querySelector('input')) return;
+
+    var originalValue = notesTd.textContent;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = originalValue;
+    input.className = 'inline-edit-input';
+    notesTd.textContent = '';
+    notesTd.appendChild(input);
+    input.focus();
+    input.select();
+
+    var committed = false;
+    var commit = function() {
+      if (committed) return;
+      committed = true;
+      var newValue = input.value;
+      notesTd.textContent = newValue;
+
+      // Update the last measurement's notes
+      if (row.fai && row.fai.measurements && row.fai.measurements.length > 0) {
+        row.fai.measurements[row.fai.measurements.length - 1].notes = newValue;
+        var appState = getAppState();
+        if (appState) {
+          PSB.autoSave({ rows: appState.rows, globals: appState.globals, auditLog: appState.auditLog, faiRuns: appState.faiRuns });
+        }
+      }
+    };
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', function(ke) {
+      if (ke.key === 'Enter') input.blur();
+      if (ke.key === 'Escape') {
+        committed = true;
+        notesTd.textContent = originalValue;
+      }
+    });
+  });
 }
 
 /**
@@ -670,7 +855,7 @@ function setupTableHeaderClicks() {
 
         // Re-render with current data
         var state = getAppState();
-        if (state) renderTable(state.rows);
+        if (state) renderTable(state, currentViewConfig);
       });
     })(headers[i]);
   }

@@ -31,6 +31,72 @@ function ensureProjectId() {
   }
 }
 
+// ── View Configuration ────────────────────────────────────
+var VIEW_CONFIGS = {
+  setup: {
+    id: 'setup',
+    label: 'Setup View',
+    columns: ['status','dimTag','outDrawingSpec','op2000Spec','su2','su3','pinGage','op2000Tol','outTol','plating','ops'],
+    sidebarEnabled: true,
+    faiControlsVisible: false,
+    setupControlsVisible: true,
+  },
+  fai: {
+    id: 'fai',
+    label: 'FAI View',
+    columns: ['faiStatus','dimTag','drawingSpec','su1','su2','nominal','tolerance','measured','deviation','notes','run'],
+    sidebarEnabled: false,
+    faiControlsVisible: true,
+    setupControlsVisible: false,
+  },
+};
+
+var currentView = 'setup';
+
+function switchView(viewId) {
+  currentView = viewId;
+  var config = VIEW_CONFIGS[viewId];
+
+  // Toggle sidebar visibility
+  var sidebar = document.getElementById('sidebar');
+  var sidebarResizer = document.getElementById('sidebar-resizer');
+  if (sidebar) {
+    if (config.sidebarEnabled) {
+      // Only re-open sidebar if a row is selected
+      // (leave it closed if no row is selected)
+    } else {
+      sidebar.classList.add('sidebar-closed');
+      if (sidebarResizer) sidebarResizer.classList.add('sidebar-closed');
+    }
+  }
+
+  // Toggle control visibility
+  var setupControls = document.querySelectorAll('.setup-only');
+  var faiControls = document.querySelectorAll('.fai-only');
+  for (var i = 0; i < setupControls.length; i++) {
+    if (config.setupControlsVisible) {
+      setupControls[i].classList.remove('hidden');
+    } else {
+      setupControls[i].classList.add('hidden');
+    }
+  }
+  for (var j = 0; j < faiControls.length; j++) {
+    if (config.faiControlsVisible) {
+      faiControls[j].classList.remove('hidden');
+    } else {
+      faiControls[j].classList.add('hidden');
+    }
+  }
+
+  // Update toggle button label
+  var toggleBtn = document.getElementById('btn-view-toggle');
+  if (toggleBtn) {
+    toggleBtn.textContent = viewId === 'setup' ? 'FAI View' : 'Setup View';
+  }
+
+  PSB.renderTable(state, config);
+}
+
 // ═══════════════════════════════════════════════════════════
 // SAMPLE DATA (for quick testing)
 // ═══════════════════════════════════════════════════════════
@@ -53,6 +119,7 @@ var state = {
   rows: [],
   globals: PSB.defaultGlobals(),
   auditLog: [],
+  faiRuns: [],
 };
 
 // Track imported filename for save suggestion
@@ -206,6 +273,7 @@ document.addEventListener('DOMContentLoaded', function() {
         state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
         state.rows = saved.rows;
         state.auditLog = saved.auditLog || [];
+        state.faiRuns = saved.faiRuns || [];
         // deserializeState already normalizes user/overrides fields
         recomputeAll();
         console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
@@ -233,6 +301,7 @@ document.addEventListener('DOMContentLoaded', function() {
     bindOpBar();
     bindExportModal();
     bindSettingsModal();
+    bindFaiControls();
 
     // Undo / Redo buttons
     document.getElementById('btn-undo').addEventListener('click', function() {
@@ -317,7 +386,7 @@ document.addEventListener('DOMContentLoaded', function() {
     syncGlobalsToUI();
     applyUnitColors(state.globals.importUnits);
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-    PSB.renderTable(state.rows);
+    PSB.renderTable(state, VIEW_CONFIGS[currentView]);
     // Set version from single source
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
@@ -358,11 +427,12 @@ function bindNewButton() {
       state.rows = [];
       state.globals = PSB.defaultGlobals();
       state.auditLog = [];
+      state.faiRuns = [];
       importedFileName = null;
       PSB.setPdfProjectId(null);
       syncGlobalsToUI();
       PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-      PSB.renderTable(state.rows);
+      PSB.renderTable(state, VIEW_CONFIGS[currentView]);
       PSB.closeSidebar();
       setFilename(null);
       markClean();
@@ -546,6 +616,7 @@ function applyLoadedProject(jsonString, fileName) {
     state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
     state.rows = loaded.rows;
     state.auditLog = loaded.auditLog || [];
+    state.faiRuns = loaded.faiRuns || [];
     importedFileName = fileName;
     PSB.clearUndoRedo();
     recomputeAll();
@@ -813,6 +884,7 @@ function handleFileImport(content, fileName) {
           state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
           state.rows = loaded.rows;
           state.auditLog = loaded.auditLog || [];
+          state.faiRuns = loaded.faiRuns || [];
           importedFileName = fileName;
           PSB.clearUndoRedo();
           recomputeAll();
@@ -961,7 +1033,7 @@ function handleRowUserChange(rowId, changes) {
   PSB.recompute(row, state.globals);
 
   // Re-render table and sidebar
-  PSB.renderTable(state.rows);
+  PSB.renderTable(state, VIEW_CONFIGS[currentView]);
 
   // Update sidebar if this row is selected
   if (PSB.getSelectedRowId() === rowId) {
@@ -993,7 +1065,7 @@ function handleAddRow() {
   PSB.recompute(newRow, state.globals);
   state.rows.push(newRow);
   PSB.logChange(state.auditLog, { type: 'add', rowId: newRow.id, description: 'Added row ' + newTag });
-  PSB.renderTable(state.rows);
+  PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   markDirty();
   scheduleAutoSave();
 }
@@ -1008,7 +1080,7 @@ function handleDeleteRow(rowId) {
   }
   state.rows = state.rows.filter(function(r) { return r.id !== rowId; });
   PSB.logChange(state.auditLog, { type: 'delete', rowId: rowId, description: 'Deleted row ' + dimTag });
-  PSB.renderTable(state.rows);
+  PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   markDirty();
   scheduleAutoSave();
 }
@@ -1020,7 +1092,7 @@ function recomputeAll() {
   for (var i = 0; i < state.rows.length; i++) {
     PSB.recompute(state.rows[i], state.globals);
   }
-  PSB.renderTable(state.rows);
+  PSB.renderTable(state, VIEW_CONFIGS[currentView]);
 
   // Refresh sidebar if a row is selected so values stay in sync
   var selId = PSB.getSelectedRowId();
@@ -1031,6 +1103,211 @@ function recomputeAll() {
   }
 
   scheduleAutoSave();
+}
+
+// ═══════════════════════════════════════════════════════════
+// FAI IMPORT FLOW
+// ═══════════════════════════════════════════════════════════
+
+function handleCmmImport(rawText, fileName) {
+  var parsed = PSB.parseCmmText(rawText);
+  if (!parsed || parsed.length === 0) {
+    PSB.showToast('No CMM data found in input', 'warn');
+    return;
+  }
+
+  PSB.pushUndo(state, 'Import CMM run: ' + fileName);
+
+  var runId = 'run_' + Date.now();
+  var matchedCount = 0;
+  var unmatchedRows = [];
+  var warnThreshold = state.globals.faiWarnThreshold || 0.80;
+
+  // Group parsed rows by dimTag
+  var byDimTag = {};
+  for (var i = 0; i < parsed.length; i++) {
+    var p = parsed[i];
+    if (p.dimTag !== null) {
+      if (!byDimTag[p.dimTag]) byDimTag[p.dimTag] = [];
+      byDimTag[p.dimTag].push(p);
+    } else {
+      unmatchedRows.push(p);
+    }
+  }
+
+  // Match to plan rows and attach measurements
+  for (var dimTag in byDimTag) {
+    var group = byDimTag[dimTag];
+    var planRow = null;
+    for (var ri = 0; ri < state.rows.length; ri++) {
+      var r = state.rows[ri];
+      var tag = r.computed.dimTag || r.raw['Dim Tag #'];
+      if (String(tag) === String(dimTag)) { planRow = r; break; }
+    }
+
+    if (!planRow) {
+      for (var gi = 0; gi < group.length; gi++) unmatchedRows.push(group[gi]);
+      continue;
+    }
+
+    matchedCount += group.length;
+    if (!planRow.fai) planRow.fai = { measurements: [], aggregateStatus: null, isExpanded: false };
+
+    var now = new Date().toISOString();
+    for (var gi = 0; gi < group.length; gi++) {
+      var cmmRow = group[gi];
+      var status = PSB.computeFaiStatus(
+        cmmRow.measured, cmmRow.nominal, cmmRow.plusTol, cmmRow.minusTol, warnThreshold
+      );
+      planRow.fai.measurements.push({
+        runId: runId,
+        cmmName: cmmRow.cmmName,
+        measured: cmmRow.measured,
+        nominal: cmmRow.nominal,
+        deviation: cmmRow.deviation,
+        plusTol: cmmRow.plusTol,
+        minusTol: cmmRow.minusTol,
+        status: status,
+        isChild: gi > 0,
+        childIndex: gi > 0 ? gi : null,
+        equipment: '',
+        notes: '',
+        attachments: [],
+        timestamp: now,
+      });
+    }
+    planRow.fai.aggregateStatus = PSB.computeAggregateStatus(planRow.fai.measurements);
+  }
+
+  // Append run metadata
+  if (!state.faiRuns) state.faiRuns = [];
+  state.faiRuns.push({
+    id: runId,
+    label: fileName.replace(/\.[^.]+$/, ''),
+    fileName: fileName,
+    importedAt: new Date().toISOString(),
+    rowCount: parsed.length,
+    matchedCount: matchedCount,
+    unmatchedRows: unmatchedRows,
+  });
+
+  PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'CMM import: ' + fileName });
+  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+
+  // Show import summary
+  showCmmImportSummary(parsed.length, matchedCount, unmatchedRows);
+  markDirty();
+}
+
+function showCmmImportSummary(totalParsed, matchedCount, unmatchedRows) {
+  var unmatchedHtml = '';
+  if (unmatchedRows.length > 0) {
+    var items = '';
+    var limit = unmatchedRows.length < 20 ? unmatchedRows.length : 20;
+    for (var i = 0; i < limit; i++) {
+      var row = unmatchedRows[i];
+      items += '<li>' + PSB.esc(row.cmmName || '(no name)') + ' — ' + (row.measured != null ? row.measured : '?') + '</li>';
+    }
+    if (unmatchedRows.length > 20) items += '<li>…and ' + (unmatchedRows.length - 20) + ' more</li>';
+    unmatchedHtml = '<p><strong>Unmatched rows:</strong></p><ul>' + items + '</ul>';
+  }
+
+  var modal = document.getElementById('modal-cmm-summary');
+  if (modal) {
+    document.getElementById('cmm-summary-total').textContent = totalParsed;
+    document.getElementById('cmm-summary-matched').textContent = matchedCount;
+    document.getElementById('cmm-summary-unmatched').textContent = unmatchedRows.length;
+    document.getElementById('cmm-summary-unmatched-list').innerHTML = unmatchedHtml;
+    PSB.openModal('modal-cmm-summary');
+  }
+}
+
+function bindFaiControls() {
+  // View toggle button
+  var toggleBtn = document.getElementById('btn-view-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function() {
+      switchView(currentView === 'setup' ? 'fai' : 'setup');
+    });
+  }
+
+  // FAI Export button
+  var exportFaiBtn = document.getElementById('btn-export-fai');
+  if (exportFaiBtn) {
+    exportFaiBtn.addEventListener('click', function() {
+      PSB.openModal('modal-fai-export');
+    });
+  }
+
+  // FAI Export modal close
+  var faiExportClose = document.getElementById('btn-fai-export-close');
+  if (faiExportClose) {
+    faiExportClose.addEventListener('click', function() {
+      PSB.closeModal('modal-fai-export');
+    });
+  }
+
+  // CMM Import button
+  var importCmmBtn = document.getElementById('btn-import-cmm');
+  if (importCmmBtn) {
+    importCmmBtn.addEventListener('click', function() {
+      // Clear previous paste area
+      var pasteArea = document.getElementById('cmm-paste-area');
+      if (pasteArea) pasteArea.value = '';
+      PSB.openModal('modal-cmm-import');
+    });
+  }
+
+  // CMM Import cancel
+  var cmmCancelBtn = document.getElementById('btn-cmm-import-cancel');
+  if (cmmCancelBtn) {
+    cmmCancelBtn.addEventListener('click', function() {
+      PSB.closeModal('modal-cmm-import');
+    });
+  }
+
+  // CMM file input — read as text
+  var cmmFileInput = document.getElementById('cmm-file-input');
+  if (cmmFileInput) {
+    cmmFileInput.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var pasteArea = document.getElementById('cmm-paste-area');
+        if (pasteArea) pasteArea.value = ev.target.result;
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+  }
+
+  // CMM Import confirm
+  var cmmConfirmBtn = document.getElementById('btn-cmm-import-confirm');
+  if (cmmConfirmBtn) {
+    cmmConfirmBtn.addEventListener('click', function() {
+      var pasteArea = document.getElementById('cmm-paste-area');
+      var rawText = pasteArea ? pasteArea.value : '';
+      if (!rawText.trim()) {
+        PSB.showToast('Please paste CMM data or load a file', 'warn');
+        return;
+      }
+      var cmmFileInp = document.getElementById('cmm-file-input');
+      var fileName = 'CMM_Import.txt';
+      // Use the textarea content as-is; filename comes from any loaded file or default
+      PSB.closeModal('modal-cmm-import');
+      handleCmmImport(rawText, fileName);
+    });
+  }
+
+  // CMM Summary done
+  var cmmSummaryDone = document.getElementById('btn-cmm-summary-done');
+  if (cmmSummaryDone) {
+    cmmSummaryDone.addEventListener('click', function() {
+      PSB.closeModal('modal-cmm-summary');
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
