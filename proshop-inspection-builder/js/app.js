@@ -1210,12 +1210,19 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
     for (var gi = 0; gi < group.length; gi++) {
       var cmmRow = group[gi];
 
+      // Angles are never converted between units — degrees are degrees regardless of unit system.
+      // An angle CMM row is one where the CMM name contains "angle" or "°",
+      // or the matched plan row is flagged as an angle dimension.
+      var ANGLE_RE_CMM = /angle|°/i;
+      var isCmmAngle = ANGLE_RE_CMM.test(cmmRow.cmmName) || (planRow.computed && planRow.computed.isAngle);
+      var doConvert = needConvert && !isCmmAngle;
+
       // Convert CMM values to plan units if needed (full precision, no trimming)
-      var measured  = needConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
-      var nominal   = needConvert ? PSB.convertUnits(cmmRow.nominal,   cmmUnits, planUnits) : cmmRow.nominal;
-      var deviation = needConvert ? PSB.convertUnits(cmmRow.deviation, cmmUnits, planUnits) : cmmRow.deviation;
-      var plusTol   = needConvert ? PSB.convertUnits(cmmRow.plusTol,   cmmUnits, planUnits) : cmmRow.plusTol;
-      var minusTol  = needConvert ? PSB.convertUnits(cmmRow.minusTol,  cmmUnits, planUnits) : cmmRow.minusTol;
+      var measured  = doConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
+      var nominal   = doConvert ? PSB.convertUnits(cmmRow.nominal,   cmmUnits, planUnits) : cmmRow.nominal;
+      var deviation = doConvert ? PSB.convertUnits(cmmRow.deviation, cmmUnits, planUnits) : cmmRow.deviation;
+      var plusTol   = doConvert ? PSB.convertUnits(cmmRow.plusTol,   cmmUnits, planUnits) : cmmRow.plusTol;
+      var minusTol  = doConvert ? PSB.convertUnits(cmmRow.minusTol,  cmmUnits, planUnits) : cmmRow.minusTol;
 
       var status = PSB.computeFaiStatus(measured, nominal, plusTol, minusTol, warnThreshold);
       planRow.fai.measurements.push({
