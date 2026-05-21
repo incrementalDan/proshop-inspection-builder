@@ -1,9 +1,16 @@
 /**
- * pdfViewer.js — PDF Viewer Module (Phase 1: View Only)
+ * pdfViewer.js — PDF Viewer Module
  *
  * Renders engineering drawings using pdf.js (canvas-based).
  * Completely independent of CSV/table logic.
  * If no PDF is loaded, the app behaves identically to before.
+ *
+ * PDF persistence strategy (3 layers, tried in order):
+ *   1. Per-project PDF byte cache in IDB  — no permissions, instant, survives restarts
+ *   2. Per-project FSA file handle in IDB — permission re-grant on new session
+ *   3. Legacy single-slot handle           — backward-compat with v1 projects
+ *
+ * The active project ID is injected by app.js via PSB.setPdfProjectId().
  */
 
 window.PSB = window.PSB || {};
@@ -18,6 +25,7 @@ var pdfArrayBuffer = null;
 var pdfFileHandle = null;
 var pdfRenderTask = null;
 var loadGeneration = 0;
+var currentProjectId = null;   // set by setPdfProjectId() from app.js
 
 var PDF_MIN_ZOOM = 0.25;
 var PDF_MAX_ZOOM = 4.0;
@@ -28,18 +36,23 @@ var elViewer, elToolbar, elCanvasWrap, elCanvas, elCtx;
 var elPageInfo, elFilename, elResizer, elLeftPanel;
 var btnPrev, btnNext, btnZoomIn, btnZoomOut, btnZoomFit, btnClose;
 
-// ── IndexedDB (File Handle Persistence) ──────────────────
+// ── IndexedDB (File Handle + Bytes Persistence) ──────────
 var IDB_NAME = 'psb_pdf_store';
-var IDB_STORE = 'handles';
-var IDB_KEY = 'currentPdfHandle';
+var IDB_VERSION = 2;              // bumped for pdf_bytes store
+var IDB_STORE = 'handles';        // FSA file handles, keyed by 'handle:{projectId}' or legacy key
+var IDB_STORE_BYTES = 'pdf_bytes';// raw ArrayBuffers, keyed by projectId
+var IDB_LEGACY_KEY = 'currentPdfHandle'; // v1 compat
 
 function openIDB() {
   return new Promise(function(resolve, reject) {
-    var req = indexedDB.open(IDB_NAME, 1);
+    var req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = function(e) {
       var db = e.target.result;
       if (!db.objectStoreNames.contains(IDB_STORE)) {
         db.createObjectStore(IDB_STORE);
+      }
+      if (!db.objectStoreNames.contains(IDB_STORE_BYTES)) {
+        db.createObjectStore(IDB_STORE_BYTES);
       }
     };
     req.onsuccess = function(e) { resolve(e.target.result); };
@@ -47,11 +60,18 @@ function openIDB() {
   });
 }
 
+// ── Per-project IDB key helpers ──────────────────────────
+
+function pdfHandleKey() {
+  return currentProjectId ? ('handle:' + currentProjectId) : IDB_LEGACY_KEY;
+}
+
 function savePdfHandleToIDB(handle) {
+  var key = pdfHandleKey();
   return openIDB().then(function(db) {
     return new Promise(function(resolve, reject) {
       var tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(handle, IDB_KEY);
+      tx.objectStore(IDB_STORE).put(handle, key);
       tx.oncomplete = function() { resolve(); };
       tx.onerror = function() { reject(tx.error); };
     });
@@ -61,29 +81,82 @@ function savePdfHandleToIDB(handle) {
 }
 
 function getPdfHandleFromIDB() {
+  var key = pdfHandleKey();
   return openIDB().then(function(db) {
     return new Promise(function(resolve, reject) {
       var tx = db.transaction(IDB_STORE, 'readonly');
-      var req = tx.objectStore(IDB_STORE).get(IDB_KEY);
-      req.onsuccess = function() { resolve(req.result || null); };
-      req.onerror = function() { reject(req.error); };
+      var store = tx.objectStore(IDB_STORE);
+      var req = store.get(key);
+      req.onsuccess = function() {
+        if (req.result) { resolve(req.result); return; }
+        // Fall back to legacy key for old projects without a projectId
+        if (key !== IDB_LEGACY_KEY) {
+          var req2 = store.get(IDB_LEGACY_KEY);
+          req2.onsuccess = function() { resolve(req2.result || null); };
+          req2.onerror = function() { resolve(null); };
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = function() { resolve(null); };
     });
-  }).catch(function(err) {
-    console.warn('[PSB-PDF] IDB get handle failed:', err);
-    return null;
-  });
+  }).catch(function() { return null; });
 }
 
 function clearPdfHandleFromIDB() {
+  // Only clears THIS project's entry; never touches other projects or legacy key
+  var key = pdfHandleKey();
   return openIDB().then(function(db) {
     return new Promise(function(resolve, reject) {
       var tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).delete(IDB_KEY);
+      tx.objectStore(IDB_STORE).delete(key);
       tx.oncomplete = function() { resolve(); };
       tx.onerror = function() { reject(tx.error); };
     });
   }).catch(function(err) {
     console.warn('[PSB-PDF] IDB clear handle failed:', err);
+  });
+}
+
+// ── PDF bytes cache (primary persistence layer) ──────────
+
+function savePdfBytesToIDB(arrayBuffer, fileName) {
+  if (!currentProjectId) return Promise.resolve(); // no project ID yet, skip
+  return openIDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(IDB_STORE_BYTES, 'readwrite');
+      tx.objectStore(IDB_STORE_BYTES).put({ arrayBuffer: arrayBuffer, fileName: fileName }, currentProjectId);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  }).catch(function(err) {
+    console.warn('[PSB-PDF] IDB save bytes failed:', err);
+  });
+}
+
+function getPdfBytesFromIDB() {
+  if (!currentProjectId) return Promise.resolve(null);
+  return openIDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(IDB_STORE_BYTES, 'readonly');
+      var req = tx.objectStore(IDB_STORE_BYTES).get(currentProjectId);
+      req.onsuccess = function() { resolve(req.result || null); };
+      req.onerror = function() { resolve(null); };
+    });
+  }).catch(function() { return null; });
+}
+
+function clearPdfBytesFromIDB() {
+  if (!currentProjectId) return Promise.resolve();
+  return openIDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(IDB_STORE_BYTES, 'readwrite');
+      tx.objectStore(IDB_STORE_BYTES).delete(currentProjectId);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  }).catch(function(err) {
+    console.warn('[PSB-PDF] IDB clear bytes failed:', err);
   });
 }
 
@@ -199,6 +272,9 @@ function loadPdfFromFile(file) {
     if (thisGen !== loadGeneration) return;
     pdfArrayBuffer = e.target.result;
     pdfFileName = file.name;
+
+    // Cache bytes immediately — enables silent restore on next load
+    savePdfBytesToIDB(pdfArrayBuffer, pdfFileName);
 
     loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
       if (thisGen !== loadGeneration) return;
@@ -325,7 +401,6 @@ function showPdfViewer() {
   elViewer.classList.remove('hidden');
   elResizer.classList.remove('hidden');
   elLeftPanel.classList.add('has-pdf');
-  // Remove any fixed height on viewer so flex works
   elViewer.style.height = '';
 }
 
@@ -337,6 +412,11 @@ function hidePdfViewer() {
 }
 
 // ── Close PDF ────────────────────────────────────────────
+// Clears in-memory state and hides the viewer.
+// Does NOT wipe IDB — the byte cache and handle remain available for the
+// next time this project is loaded.  The source of truth for "does this
+// project have a PDF?" is globals.pdfFileName (set to null here via
+// setPdfFileName, and persisted when the project is saved).
 function closePdf() {
   if (pdfRenderTask) { pdfRenderTask.cancel(); pdfRenderTask = null; }
   if (pdfDoc) { pdfDoc.destroy(); pdfDoc = null; }
@@ -349,11 +429,10 @@ function closePdf() {
   pdfFileHandle = null;
 
   hidePdfViewer();
-  clearPdfHandleFromIDB();
+  // IDB cache intentionally NOT cleared here — bytes persist for future loads
 
   if (PSB.setPdfFileName) PSB.setPdfFileName(null);
 
-  // Clear canvas
   if (elCanvas && elCtx) {
     elCtx.clearRect(0, 0, elCanvas.width, elCanvas.height);
     elCanvas.width = 0;
@@ -429,39 +508,65 @@ function setupPdfResizer() {
   });
 }
 
-// ── Restore PDF from IndexedDB ───────────────────────────
+// ── Restore PDF (multi-layer) ────────────────────────────
+// Layer 1: IDB bytes cache  → instant, no permissions (primary)
+// Layer 2: IDB file handle  → FSA permission re-grant (secondary)
+// Layer 3: Legacy single-slot handle → backward compat
 function tryRestorePdf(expectedFileName) {
-  return getPdfHandleFromIDB().then(function(handle) {
-    if (!handle) return false;
+  var thisGen = ++loadGeneration;
 
-    // Check permission (Chromium only)
-    return handle.queryPermission({ mode: 'read' }).then(function(perm) {
-      if (perm !== 'granted') {
-        return handle.requestPermission({ mode: 'read' });
-      }
-      return perm;
-    }).then(function(perm) {
-      if (perm !== 'granted') return false;
-      return handle.getFile();
-    }).then(function(file) {
-      if (!file) return false;
-      if (expectedFileName && file.name !== expectedFileName) {
-        clearPdfHandleFromIDB();
-        return false;
-      }
-      pdfFileHandle = handle;
-      return new Promise(function(resolve) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          pdfArrayBuffer = e.target.result;
-          pdfFileName = file.name;
-          loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
-            elFilename.textContent = pdfFileName;
-            resolve(true);
-          }).catch(function() { resolve(false); });
-        };
-        reader.onerror = function() { resolve(false); };
-        reader.readAsArrayBuffer(file);
+  // Layer 1 — bytes cache
+  return getPdfBytesFromIDB().then(function(cached) {
+    if (cached && cached.arrayBuffer &&
+        (!expectedFileName || cached.fileName === expectedFileName)) {
+      if (thisGen !== loadGeneration) return false;
+      pdfFileName = cached.fileName;
+      pdfArrayBuffer = cached.arrayBuffer;
+      return loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
+        if (thisGen !== loadGeneration) return false;
+        elFilename.textContent = pdfFileName;
+        console.log('[PSB-PDF] Restored from IDB byte cache');
+        return true;
+      }).catch(function() { return false; });
+    }
+
+    // Layer 2 — per-project file handle (falls back to legacy key internally)
+    return getPdfHandleFromIDB().then(function(handle) {
+      if (!handle) return false;
+
+      return handle.queryPermission({ mode: 'read' }).then(function(perm) {
+        if (perm !== 'granted') {
+          return handle.requestPermission({ mode: 'read' });
+        }
+        return perm;
+      }).then(function(perm) {
+        if (perm !== 'granted') return false;
+        return handle.getFile();
+      }).then(function(file) {
+        if (!file) return false;
+        if (expectedFileName && file.name !== expectedFileName) {
+          clearPdfHandleFromIDB();
+          return false;
+        }
+        if (thisGen !== loadGeneration) return false;
+        pdfFileHandle = handle;
+        return new Promise(function(resolve) {
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            if (thisGen !== loadGeneration) { resolve(false); return; }
+            pdfArrayBuffer = e.target.result;
+            pdfFileName = file.name;
+            // Cache bytes so Layer 1 wins next time
+            savePdfBytesToIDB(pdfArrayBuffer, pdfFileName);
+            loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
+              elFilename.textContent = pdfFileName;
+              console.log('[PSB-PDF] Restored from FSA handle, bytes now cached');
+              resolve(true);
+            }).catch(function() { resolve(false); });
+          };
+          reader.onerror = function() { resolve(false); };
+          reader.readAsArrayBuffer(file);
+        });
       });
     });
   }).catch(function(err) {
@@ -478,7 +583,7 @@ function promptForPdf(suggestedName) {
     types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }],
     multiple: false,
   };
-  // Start in the project file's directory if available
+  // Open picker in the project file's directory if available
   if (PSB.hasFileHandle && PSB.hasFileHandle()) {
     var projHandle = PSB.getProjectFileHandle && PSB.getProjectFileHandle();
     if (projHandle) opts.startIn = projHandle;
@@ -495,6 +600,8 @@ function promptForPdf(suggestedName) {
       reader.onload = function(e) {
         pdfArrayBuffer = e.target.result;
         pdfFileName = file.name;
+        // Cache bytes so next load is automatic
+        savePdfBytesToIDB(pdfArrayBuffer, pdfFileName);
         loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
           if (PSB.setPdfFileName) PSB.setPdfFileName(pdfFileName);
           elFilename.textContent = pdfFileName;
@@ -540,6 +647,7 @@ function loadPdfFromDirHandle(dirHandle, targetName) {
       reader.onload = function(e) {
         pdfArrayBuffer = e.target.result;
         pdfFileName = file.name;
+        savePdfBytesToIDB(pdfArrayBuffer, pdfFileName);
         loadPdfFromArrayBuffer(pdfArrayBuffer).then(function() {
           if (PSB.setPdfFileName) PSB.setPdfFileName(pdfFileName);
           elFilename.textContent = pdfFileName;
@@ -553,6 +661,11 @@ function loadPdfFromDirHandle(dirHandle, targetName) {
     console.warn('[PSB-PDF] PDF not found in directory:', err);
     return false;
   });
+}
+
+// ── Project ID injection (called by app.js on project change) ──
+function setPdfProjectId(id) {
+  currentProjectId = id || null;
 }
 
 // ── Public API ───────────────────────────────────────────
@@ -569,3 +682,4 @@ PSB.promptForPdf = promptForPdf;
 PSB.loadPdfFromDirHandle = loadPdfFromDirHandle;
 PSB.hasPdf = hasPdf;
 PSB.getPdfFileName = getPdfFileName;
+PSB.setPdfProjectId = setPdfProjectId;

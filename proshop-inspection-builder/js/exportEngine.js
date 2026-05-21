@@ -86,18 +86,52 @@ function formatExportRow(data) {
 }
 
 /**
- * Trigger a CSV file download in the browser.
+ * Trigger a CSV file download.
+ *
+ * When a projectHandle is supplied and the browser supports the File System
+ * Access API, opens a save picker starting in the same folder as the project
+ * file so the CSV lands next to it.  Falls back to a classic blob download.
  *
  * @param {string} csvContent — the CSV string
  * @param {string} [filename] — download filename
+ * @param {FileSystemFileHandle} [projectHandle] — optional project file handle
+ * @returns {Promise<boolean>} resolves true if saved, false if cancelled
  */
-function downloadCSV(csvContent, filename) {
+function downloadCSV(csvContent, filename, projectHandle) {
   if (!filename) {
     var now = new Date();
     var stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
     filename = 'ProShop_Export_' + stamp + '.csv';
   }
 
+  if (window.showSaveFilePicker) {
+    var opts = {
+      suggestedName: filename,
+      types: [{ description: 'CSV File', accept: { 'text/csv': ['.csv'] } }],
+    };
+    if (projectHandle) {
+      opts.startIn = projectHandle;
+    }
+    return window.showSaveFilePicker(opts).then(function(handle) {
+      return handle.createWritable();
+    }).then(function(writable) {
+      var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      return writable.write(blob).then(function() { return writable.close(); });
+    }).then(function() {
+      return true;
+    }).catch(function(err) {
+      if (err.name === 'AbortError') return false;
+      // Unexpected error — fall back to blob download
+      blobDownloadCSV(csvContent, filename);
+      return true;
+    });
+  }
+
+  blobDownloadCSV(csvContent, filename);
+  return Promise.resolve(true);
+}
+
+function blobDownloadCSV(csvContent, filename) {
   var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   var url = URL.createObjectURL(blob);
   var link = document.createElement('a');

@@ -15,6 +15,22 @@ var APP_VERSION = 'v1.2';
 
 console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
 
+// ── UUID generator ────────────────────────────────────────
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Ensure the active project has a stable ID; generate one if missing.
+function ensureProjectId() {
+  if (!state.globals.projectId) {
+    state.globals.projectId = generateUUID();
+    PSB.setPdfProjectId(state.globals.projectId);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
 // SAMPLE DATA (for quick testing)
 // ═══════════════════════════════════════════════════════════
@@ -306,8 +322,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
 
-    // Try to restore PDF from IndexedDB handle
+    // Try to restore PDF — set project ID first so IDB byte cache is keyed correctly
     if (state.globals.pdfFileName) {
+      PSB.setPdfProjectId(state.globals.projectId);
       PSB.tryRestorePdf(state.globals.pdfFileName).then(function(ok) {
         if (!ok) PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
       });
@@ -335,11 +352,14 @@ function bindNewButton() {
       PSB.clearAutoSave();
       PSB.clearProjectFileHandle();
       PSB.clearUndoRedo();
+      // closePdf() clears in-memory state; IDB byte cache is intentionally preserved
+      // so re-loading this project later still finds the PDF automatically.
       PSB.closePdf();
       state.rows = [];
       state.globals = PSB.defaultGlobals();
       state.auditLog = [];
       importedFileName = null;
+      PSB.setPdfProjectId(null);
       syncGlobalsToUI();
       PSB.renderOpBar(state.globals.ops, handleRemoveOp);
       PSB.renderTable(state.rows);
@@ -421,6 +441,16 @@ function bindGlobalControls() {
     recomputeAll();
     markDirty();
     scheduleAutoSave();
+    // Toast fires after user stops typing (debounced)
+    if (platingToastTimer) clearTimeout(platingToastTimer);
+    platingToastTimer = setTimeout(function() {
+      var units = state.globals.platingUnits || 'inch';
+      if (newVal > 0) {
+        PSB.showToast('Plating: ' + newVal + ' ' + units, 'info');
+      } else {
+        PSB.showToast('Plating thickness cleared', 'info');
+      }
+    }, 700);
   });
 
   // Plating units
@@ -525,13 +555,14 @@ function applyLoadedProject(jsonString, fileName) {
     setFilename(fileName);
     markClean();
 
-    // Restore PDF if project references one
+    // Restore PDF — inject project ID so IDB byte cache is keyed correctly
+    PSB.setPdfProjectId(state.globals.projectId);
     if (state.globals.pdfFileName) {
       var pdfName = state.globals.pdfFileName;
       PSB.tryRestorePdf(pdfName).then(function(ok) {
         if (ok) return;
-        // IDB handle missing or wrong file — prompt user to locate the PDF.
-        // startIn uses the project file handle so the picker opens in the same folder.
+        // All IDB layers missed — prompt user to locate the PDF once.
+        // startIn opens in the project's folder (if project was opened via FSA).
         PSB.showToast('Select ' + pdfName + ' (one-time — remembered after this)', 'info');
         return PSB.promptForPdf(pdfName);
       });
@@ -566,6 +597,7 @@ function bindFileButtons() {
 
   // Save project
   document.getElementById('btn-save').addEventListener('click', function() {
+    ensureProjectId(); // generate UUID if this project doesn't have one yet
     var result = PSB.saveProject(state, { suggestedName: getSuggestedSaveName() });
     if (result && result.then) {
       result.then(function(ok) {
@@ -681,14 +713,20 @@ function bindExportModal() {
       state.globals.exportUnits = exportUnits;
       recomputeAll();
       var csv = PSB.generateCSV(state.rows, selectedOps, state.globals);
-      PSB.downloadCSV(csv);
-      PSB.showToast('CSV exported.', 'success');
-      PSB.closeModal('export-modal');
-      PSB.hideLoading();
-
-      if (PSB.hasFileHandle()) {
-        PSB.autoSaveToDisk(state).then(function(ok) { if (ok) markClean(); });
-      }
+      PSB.downloadCSV(csv, null, PSB.getProjectFileHandle()).then(function(saved) {
+        PSB.hideLoading();
+        if (saved) {
+          PSB.showToast('CSV exported.', 'success');
+          PSB.closeModal('export-modal');
+          if (PSB.hasFileHandle()) {
+            PSB.autoSaveToDisk(state).then(function(ok) { if (ok) markClean(); });
+          }
+        }
+        // If !saved (user cancelled picker), keep modal open
+      }).catch(function() {
+        PSB.hideLoading();
+        PSB.showToast('Export failed.', 'error');
+      });
     }, 50);
   });
 }
@@ -784,7 +822,8 @@ function handleFileImport(content, fileName) {
           setFilename(fileName);
           markClean();
 
-          // Restore PDF if project references one
+          // Restore PDF — inject project ID so IDB byte cache is keyed correctly
+          PSB.setPdfProjectId(state.globals.projectId);
           if (state.globals.pdfFileName) {
             PSB.restoreOrPromptPdf(state.globals.pdfFileName, true);
           } else {
@@ -999,6 +1038,7 @@ function recomputeAll() {
 // ═══════════════════════════════════════════════════════════
 var autoSaveTimer = null;
 var diskSaveTimer = null;
+var platingToastTimer = null;
 
 function scheduleAutoSave() {
   // Quick save to sessionStorage (1s debounce)
@@ -1011,6 +1051,7 @@ function scheduleAutoSave() {
   if (diskSaveTimer) clearTimeout(diskSaveTimer);
   diskSaveTimer = setTimeout(function() {
     if (PSB.hasFileHandle()) {
+      ensureProjectId(); // make sure projectId is set before writing to disk
       PSB.autoSaveToDisk(state).then(function(ok) {
         if (ok) markClean();
       });
