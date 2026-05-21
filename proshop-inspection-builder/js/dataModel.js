@@ -252,6 +252,12 @@ function recompute(row, globals) {
   var op2000SpecUnit2 = user.overrides.specUnit2 !== null ? user.overrides.specUnit2 : (raw.specUnit2 || specUnits.su2 || '');
   var op2000SpecUnit3 = user.overrides.specUnit3 !== null ? user.overrides.specUnit3 : (raw.specUnit3 || specUnits.su3 || '');
   var op2000DrawingSpec = user.overrides.outDrawingSpec !== null ? user.overrides.outDrawingSpec : (raw.drawingSpec || '');
+
+  // Angle detection: no unit conversion applied to angle dimensions.
+  // Secondary display shows [Angle] instead of a converted value.
+  var ANGLE_RE = /angle|°/i;
+  var isAngle = ANGLE_RE.test(op2000SpecUnit1) || ANGLE_RE.test(op2000SpecUnit2) ||
+                ANGLE_RE.test(op2000SpecUnit3) || ANGLE_RE.test(op2000DrawingSpec);
   // Build OP2000 tolerance display from plus/minus overrides or raw
   var hasOp2kTolOverride = user.overrides.outTolPlus !== null || user.overrides.outTolMinus !== null;
   var op2000Tolerance;
@@ -347,9 +353,11 @@ function recompute(row, globals) {
   var secNomStr = PSB.formatPrecision(secondaryNom, secondaryPrec);
   var secTolStr = PSB.formatPrecision(secondaryTolPlus, secondaryPrec);
 
-  var dualNomStr = nominalStr + ' [' + secNomStr + ']';
+  var dualNomStr = isAngle ? nominalStr + ' [Angle]' : (nominalStr + ' [' + secNomStr + ']');
   var dualTolStr;
-  if (Math.abs(primaryTolPlus - primaryTolMinus) < 1e-10) {
+  if (isAngle) {
+    dualTolStr = tolStr;  // angles: no secondary unit
+  } else if (Math.abs(primaryTolPlus - primaryTolMinus) < 1e-10) {
     dualTolStr = tolStr + ' [' + secTolStr + ']';
   } else {
     var tolMinusStr = PSB.formatPrecision(primaryTolMinus, primaryPrec);
@@ -369,14 +377,21 @@ function recompute(row, globals) {
   var op2000DualSpec, op2000DualTol;
   if (!isNaN(op2kSpecNum)) {
     var op2kSpecStr = PSB.formatPrecision(op2kSpecNum, op2kSpecPrec);
-    var op2kSecSpec = PSB.convertUnits(op2kSpecNum, importUnits, secondaryUnits);
-    var op2kSecSpecStr = PSB.formatPrecision(op2kSecSpec, secondaryPrec);
-    op2000DualSpec = op2kSpecStr + ' [' + op2kSecSpecStr + ']';
+    if (isAngle) {
+      op2000DualSpec = op2kSpecStr + ' [Angle]';
+    } else {
+      var op2kSecSpec = PSB.convertUnits(op2kSpecNum, importUnits, secondaryUnits);
+      var op2kSecSpecStr = PSB.formatPrecision(op2kSecSpec, secondaryPrec);
+      op2000DualSpec = op2kSpecStr + ' [' + op2kSecSpecStr + ']';
+    }
   } else {
     op2000DualSpec = op2000DrawingSpec;
   }
   // OP2000 dual-unit tolerance: handle symmetric vs asymmetric
-  if (hasOp2kTolOverride && Math.abs(originalTolPlus - originalTolMinus) >= 1e-10) {
+  if (isAngle) {
+    // Angles: show primary value only, no unit conversion
+    op2000DualTol = op2000Tolerance;
+  } else if (hasOp2kTolOverride && Math.abs(originalTolPlus - originalTolMinus) >= 1e-10) {
     var op2kTpStr = PSB.formatPrecision(originalTolPlus, op2kTolPrec);
     var op2kTmStr = PSB.formatPrecision(originalTolMinus, op2kTolPrec);
     var op2kSecTp = PSB.convertUnits(originalTolPlus, importUnits, secondaryUnits);
@@ -403,8 +418,12 @@ function recompute(row, globals) {
   if (user.overrides.outputSpec !== null) {
     var ovsNum = parseFloat(user.overrides.outputSpec);
     if (!isNaN(ovsNum)) {
-      outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [' +
-        PSB.formatPrecision(PSB.convertUnits(ovsNum, importUnits, secondaryUnits), secondaryPrec) + ']';
+      if (isAngle) {
+        outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [Angle]';
+      } else {
+        outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [' +
+          PSB.formatPrecision(PSB.convertUnits(ovsNum, importUnits, secondaryUnits), secondaryPrec) + ']';
+      }
     } else {
       outDrawingSpec = user.overrides.outputSpec;
     }
@@ -482,6 +501,7 @@ function recompute(row, globals) {
   // ── Assemble computed object ─────────────────────────────
   row.computed = {
     isNote: false,
+    isAngle: isAngle,
     dimTag: raw.dimTag || '',
     outputTag: outputTag,
     specUnit1: op2000SpecUnit1,

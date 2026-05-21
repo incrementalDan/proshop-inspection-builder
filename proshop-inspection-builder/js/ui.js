@@ -232,11 +232,12 @@ function updateTableHeaders(isFaiView) {
       '<th class="col-drawing-spec">Drawing Spec</th>' +
       '<th class="col-su1">SU1</th>' +
       '<th class="col-su2">SU2</th>' +
+      '<th class="col-su3">SU3</th>' +
+      '<th class="col-plating">Plating</th>' +
       '<th class="col-nominal">Nominal</th>' +
       '<th class="col-tolerance">Tolerance</th>' +
       '<th class="col-measured">Measured</th>' +
       '<th class="col-deviation">Deviation</th>' +
-      '<th class="col-fai-notes">Notes</th>' +
       '<th class="col-run">Run</th>';
   } else {
     thead.innerHTML =
@@ -309,39 +310,9 @@ function buildFaiRowHTML(row) {
     }
   }
 
-  // Tolerance cross-check: compare CMM tol band vs plan tol band
-  var tolCellClass = 'col-tolerance';
-  var tolCellTitle = '';
-  if (lastMeasurement && pTolPlus && pTolMinus) {
-    var planBand = pTolPlus + pTolMinus;
-    var cmmBand = (lastMeasurement.plusTol || 0) + (lastMeasurement.minusTol || 0);
-    if (cmmBand > 0 && planBand > 0) {
-      var ratio = cmmBand / planBand;
-      if (ratio < 0.999) {
-        tolCellClass += ' fai-tol-tighter';  // CMM tighter than plan → yellow
-        tolCellTitle = 'CMM tol tighter than plan (' + cmmBand.toPrecision(4) + ' vs ' + planBand.toPrecision(4) + ')';
-      } else if (ratio > 1.001) {
-        tolCellClass += ' fai-tol-wider';    // CMM wider than plan → red
-        tolCellTitle = 'CMM tol wider than plan (' + cmmBand.toPrecision(4) + ' vs ' + planBand.toPrecision(4) + ')';
-      }
-    }
-  }
-
-  // Plan nominal display + nominal cross-check
   var planNominalDisplay = planNominal != null ? String(planNominal) : '—';
-  var nomCellClass = 'col-nominal';
-  var nomCellTitle = '';
-  if (lastMeasurement && planNominal != null) {
-    var nomDiff = Math.abs((lastMeasurement.nominal || 0) - planNominal);
-    if (nomDiff > 1e-6) {
-      nomCellClass += ' fai-nominal-mismatch';
-      nomCellTitle = 'CMM nominal ' + lastMeasurement.nominal + ' ≠ plan ' + planNominal;
-    }
-  }
-
   var measuredVal = lastMeasurement ? String(lastMeasurement.measured) : '—';
   var deviationVal = lastMeasurement ? String(lastMeasurement.deviation) : '—';
-  var notesVal = lastMeasurement ? (lastMeasurement.notes || '') : '';
   var runLabel = '—';
   if (lastMeasurement && appState && appState.faiRuns) {
     for (var ri = 0; ri < appState.faiRuns.length; ri++) {
@@ -352,17 +323,20 @@ function buildFaiRowHTML(row) {
     }
   }
 
+  var platingLabel = (c.platingMode && c.platingMode !== 'none') ? c.platingMode : '';
+
   return '' +
     '<td class="col-fai-status">' + statusHtml + '</td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
     '<td class="col-drawing-spec">' + formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '') + '</td>' +
     '<td class="col-su1">' + esc(c.specUnit1 || '') + '</td>' +
     '<td class="col-su2">' + esc(c.specUnit2 || '') + '</td>' +
-    '<td class="' + nomCellClass + '"' + (nomCellTitle ? ' title="' + esc(nomCellTitle) + '"' : '') + '>' + esc(planNominalDisplay) + (nomCellTitle ? ' <span class="fai-mismatch-icon">⚠</span>' : '') + '</td>' +
-    '<td class="' + tolCellClass + '"' + (tolCellTitle ? ' title="' + esc(tolCellTitle) + '"' : '') + '>' + esc(tolDisplay) + '</td>' +
+    '<td class="col-su3">' + esc(c.specUnit3 || '') + '</td>' +
+    '<td class="col-plating">' + esc(platingLabel) + '</td>' +
+    '<td class="col-nominal">' + esc(planNominalDisplay) + '</td>' +
+    '<td class="col-tolerance">' + esc(tolDisplay) + '</td>' +
     '<td class="col-measured">' + esc(measuredVal) + '</td>' +
     '<td class="col-deviation">' + esc(deviationVal) + '</td>' +
-    '<td class="col-fai-notes fai-editable">' + esc(notesVal) + '</td>' +
     '<td class="col-run">' + esc(runLabel) + '</td>';
 }
 
