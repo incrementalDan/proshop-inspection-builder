@@ -829,6 +829,24 @@ input.no-spinners {
   z-index: 10;
 }
 
+.th-group-print {
+  background: rgba(74, 158, 255, 0.18) !important;
+  color: #7ab8ff !important;
+  text-align: center !important;
+  border-bottom: 1px solid rgba(74, 158, 255, 0.3) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+}
+
+.th-group-cmm {
+  background: rgba(255, 140, 66, 0.18) !important;
+  color: #ffaa60 !important;
+  text-align: center !important;
+  border-bottom: 1px solid rgba(255, 140, 66, 0.3) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+}
+
 #data-table th {
   background: var(--bg-secondary);
   border-bottom: 2px solid var(--unit-primary, var(--accent-blue));

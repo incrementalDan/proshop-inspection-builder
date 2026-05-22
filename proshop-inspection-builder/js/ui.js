@@ -222,37 +222,45 @@ function renderTable(stateOrRows, viewConfig) {
  * Update table header cells based on the active view.
  */
 function updateTableHeaders(isFaiView) {
-  var thead = document.querySelector('#data-table thead tr');
+  var thead = document.querySelector('#data-table thead');
   if (!thead) return;
 
   if (isFaiView) {
     thead.innerHTML =
-      '<th class="col-fai-status">Status</th>' +
-      '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
-      '<th class="col-drawing-spec">Drawing Spec</th>' +
-      '<th class="col-su1">SU1</th>' +
-      '<th class="col-su2">SU2</th>' +
-      '<th class="col-su3">SU3</th>' +
-      '<th class="col-plating">Plating</th>' +
-      '<th class="col-nominal">Nominal</th>' +
-      '<th class="col-tolerance">Tolerance</th>' +
-      '<th class="col-measured">Measured</th>' +
-      '<th class="col-deviation">Deviation</th>' +
-      '<th class="col-run">Run</th>';
+      '<tr>' +
+        '<th class="th-group-print" colspan="9">Print Data</th>' +
+        '<th class="th-group-cmm" colspan="3">CMM Data</th>' +
+      '</tr>' +
+      '<tr>' +
+        '<th class="col-fai-status">Status</th>' +
+        '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
+        '<th class="col-drawing-spec">Drawing Spec</th>' +
+        '<th class="col-su1">SU1</th>' +
+        '<th class="col-su2">SU2</th>' +
+        '<th class="col-su3">SU3</th>' +
+        '<th class="col-plating">Plating</th>' +
+        '<th class="col-nominal">Nominal</th>' +
+        '<th class="col-tolerance">Tolerance</th>' +
+        '<th class="col-measured">Measured</th>' +
+        '<th class="col-deviation">Deviation</th>' +
+        '<th class="col-run">Run</th>' +
+      '</tr>';
   } else {
     thead.innerHTML =
-      '<th data-col="status" class="col-status">Status</th>' +
-      '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
-      '<th data-col="specUnit1" class="col-su1">SU1</th>' +
-      '<th data-col="outDrawingSpec" class="col-drawspec">OUT Drawing Spec</th>' +
-      '<th data-col="op2000Spec" class="col-inputspec">OP2000 Spec</th>' +
-      '<th data-col="specUnit2" class="col-su2">SU2</th>' +
-      '<th data-col="specUnit3" class="col-su3">SU3</th>' +
-      '<th data-col="pinGage" class="col-pingage">Pin/Gage</th>' +
-      '<th data-col="op2000Tol" class="col-inputtol">OP2000 Tol</th>' +
-      '<th data-col="outTolerance" class="col-outtol">OUT Tol</th>' +
-      '<th data-col="plating" class="col-plating">Plating</th>' +
-      '<th data-col="ops" class="col-ops">OPs</th>';
+      '<tr>' +
+        '<th data-col="status" class="col-status">Status</th>' +
+        '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
+        '<th data-col="specUnit1" class="col-su1">SU1</th>' +
+        '<th data-col="outDrawingSpec" class="col-drawspec">OUT Drawing Spec</th>' +
+        '<th data-col="op2000Spec" class="col-inputspec">OP2000 Spec</th>' +
+        '<th data-col="specUnit2" class="col-su2">SU2</th>' +
+        '<th data-col="specUnit3" class="col-su3">SU3</th>' +
+        '<th data-col="pinGage" class="col-pingage">Pin/Gage</th>' +
+        '<th data-col="op2000Tol" class="col-inputtol">OP2000 Tol</th>' +
+        '<th data-col="outTolerance" class="col-outtol">OUT Tol</th>' +
+        '<th data-col="plating" class="col-plating">Plating</th>' +
+        '<th data-col="ops" class="col-ops">OPs</th>' +
+      '</tr>';
     // Re-bind header sorting after DOM change
     setupTableHeaderClicks();
   }
@@ -311,8 +319,10 @@ function buildFaiRowHTML(row) {
   }
 
   var planNominalDisplay = planNominal != null ? String(planNominal) : '—';
-  var measuredVal = lastMeasurement ? String(lastMeasurement.measured) : '—';
-  var deviationVal = lastMeasurement ? String(lastMeasurement.deviation) : '—';
+  var planUnits = (appState && appState.globals && appState.globals.importUnits) || 'inch';
+  var isAngle = c.isAngle || false;
+  var measuredVal = lastMeasurement ? buildCmmDualString(lastMeasurement.measured, planUnits, isAngle) : '—';
+  var deviationVal = lastMeasurement ? buildCmmDualString(lastMeasurement.deviation, planUnits, isAngle) : '—';
   var runLabel = '—';
   if (lastMeasurement && appState && appState.faiRuns) {
     for (var ri = 0; ri < appState.faiRuns.length; ri++) {
@@ -335,8 +345,8 @@ function buildFaiRowHTML(row) {
     '<td class="col-plating">' + esc(platingLabel) + '</td>' +
     '<td class="col-nominal">' + esc(planNominalDisplay) + '</td>' +
     '<td class="col-tolerance">' + esc(tolDisplay) + '</td>' +
-    '<td class="col-measured">' + esc(measuredVal) + '</td>' +
-    '<td class="col-deviation">' + esc(deviationVal) + '</td>' +
+    '<td class="col-measured">' + formatDualDisplay(measuredVal) + '</td>' +
+    '<td class="col-deviation">' + formatDualDisplay(deviationVal) + '</td>' +
     '<td class="col-run">' + esc(runLabel) + '</td>';
 }
 
@@ -1338,6 +1348,20 @@ function setupOverrideIndicator(btnId, origId) {
 function addLeadingZero(str) {
   if (!str) return str;
   return String(str).replace(/(^|[^0-9])\.(\d)/g, '$10.$2');
+}
+
+/**
+ * Build a dual-unit display string for a CMM numeric value.
+ * Same "[secondary]" format as plan values; no decimal precision rules applied.
+ */
+function buildCmmDualString(value, planUnits, isAngle) {
+  if (value == null || isNaN(value)) return '—';
+  var primary = String(value);
+  if (isAngle) return primary + ' [Angle]';
+  var otherUnit = planUnits === 'mm' ? 'inch' : 'mm';
+  var converted = PSB.convertUnits(value, planUnits, otherUnit);
+  var secondary = String(parseFloat(converted.toFixed(5)));
+  return primary + ' [' + secondary + ']';
 }
 
 /**
