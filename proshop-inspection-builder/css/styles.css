@@ -830,23 +830,33 @@ input.no-spinners {
 }
 
 .th-group-print {
-  background: rgba(74, 158, 255, 0.35) !important;
-  color: #a8d4ff !important;
+  background: #1c3d5a !important;
+  color: #7ab8ff !important;
   text-align: center !important;
-  border-bottom: 2px solid rgba(74, 158, 255, 0.5) !important;
+  border-bottom: 2px solid #2d5f8a !important;
   font-size: 11px !important;
   letter-spacing: 0.08em;
   cursor: default !important;
 }
 
+.th-group-print:hover {
+  background: #1c3d5a !important;
+  color: #7ab8ff !important;
+}
+
 .th-group-cmm {
-  background: rgba(255, 140, 66, 0.35) !important;
-  color: #ffc590 !important;
+  background: #3d2410 !important;
+  color: #ffaa60 !important;
   text-align: center !important;
-  border-bottom: 2px solid rgba(255, 140, 66, 0.5) !important;
+  border-bottom: 2px solid #6b3c18 !important;
   font-size: 11px !important;
   letter-spacing: 0.08em;
   cursor: default !important;
+}
+
+.th-group-cmm:hover {
+  background: #3d2410 !important;
+  color: #ffaa60 !important;
 }
 
 .fai-parent-row > td {
@@ -1167,12 +1177,14 @@ td.has-override {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: transform 200ms ease;
+  transition: transform 200ms ease, width 200ms ease, min-width 200ms ease;
 }
 
 #sidebar.sidebar-closed {
   transform: translateX(100%);
   pointer-events: none;
+  width: 0;
+  min-width: 0;
 }
 
 #sidebar > .sidebar-controls {
