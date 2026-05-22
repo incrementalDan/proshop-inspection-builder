@@ -239,8 +239,8 @@ function updateTableHeaders(isFaiView) {
   if (isFaiView) {
     thead.innerHTML =
       '<tr>' +
-        '<th class="th-group-print" colspan="10">Print Data</th>' +
-        '<th class="th-group-cmm" colspan="4">CMM Data</th>' +
+        '<th class="th-group-print" colspan="9">Print Data</th>' +
+        '<th class="th-group-cmm" colspan="5">CMM Data</th>' +
       '</tr>' +
       '<tr>' +
         '<th class="col-fai-status">Status</th>' +
@@ -250,10 +250,10 @@ function updateTableHeaders(isFaiView) {
         '<th class="col-su2">SU2</th>' +
         '<th class="col-su3">SU3</th>' +
         '<th class="col-plating">Plating</th>' +
-        '<th class="col-nominal">Nominal</th>' +
         '<th class="col-op2000-tol">OP2000 Tol</th>' +
         '<th class="col-out-tol">OUT Tol</th>' +
         '<th class="col-cmm-tol">CMM Tol</th>' +
+        '<th class="col-cmm-nominal">Nominal</th>' +
         '<th class="col-measured">Measured</th>' +
         '<th class="col-deviation">Deviation</th>' +
         '<th class="col-run">Run</th>' +
@@ -315,11 +315,10 @@ function buildFaiFamilyHTML(row) {
   var op2kTolDisplay = tolStr(op2kTolPlus, op2kTolMinus);
   var outTolDisplay  = tolStr(outTolPlus, outTolMinus);
   var platingLabel = (c.platingMode && c.platingMode !== 'none') ? c.platingMode : '';
-  var planNomDisplay = planNominal != null ? String(planNominal) : '—';
 
   var faiRuns = appState && appState.faiRuns;
 
-  // The 10 print-data cells (same for parent and no-measurement rows)
+  // The 9 print-data cells (same for parent and no-measurement rows)
   var specHtml = formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '');
   var printCells =
     '<td class="col-fai-status">{STATUS}</td>' +
@@ -329,7 +328,6 @@ function buildFaiFamilyHTML(row) {
     '<td class="col-su2">' + esc(c.specUnit2 || '') + '</td>' +
     '<td class="col-su3">' + esc(c.specUnit3 || '') + '</td>' +
     '<td class="col-plating">' + esc(platingLabel) + '</td>' +
-    '<td class="col-nominal">' + esc(planNomDisplay) + '</td>' +
     '<td class="col-op2000-tol">' + esc(op2kTolDisplay) + '</td>' +
     '<td class="col-out-tol">' + esc(outTolDisplay) + '</td>';
 
@@ -344,6 +342,7 @@ function buildFaiFamilyHTML(row) {
   if (!fai || !fai.measurements || fai.measurements.length === 0) {
     return '<tr>' + printCells.replace('{STATUS}', statusBadge(null)) +
       '<td class="col-cmm-tol">—</td>' +
+      '<td class="col-cmm-nominal">—</td>' +
       '<td class="col-measured">—</td>' +
       '<td class="col-deviation">—</td>' +
       '<td class="col-run">—</td>' +
@@ -360,6 +359,7 @@ function buildFaiFamilyHTML(row) {
     return '<tr>' +
       printCells.replace('{STATUS}', statusBadge(status)) +
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
+      '<td class="col-cmm-nominal">' + formatDualDisplay(buildCmmDualString(m.nominal, planUnits, isAngle)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
       '<td class="col-deviation' + devTint + '">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
       '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + getRunPill(m.runId, faiRuns) + '</td>' +
@@ -402,6 +402,7 @@ function buildFaiFamilyHTML(row) {
   var html = '<tr class="fai-parent-row has-children">' +
     printCells.replace('{STATUS}', statusBadge(aggStatus)) +
     '<td class="col-cmm-tol">' + esc(parentCmmTol) + '</td>' +
+    '<td class="col-cmm-nominal">—</td>' +
     '<td class="col-measured">' + formatDualDisplay(measRangeStr) + '</td>' +
     '<td class="col-deviation' + parentDevTint + '">' + formatDualDisplay(devRangeStr) + '</td>' +
     '<td class="col-run">' + parentRunHtml + '</td>' +
@@ -421,10 +422,10 @@ function buildFaiFamilyHTML(row) {
       '<td class="col-su2"></td>' +
       '<td class="col-su3"></td>' +
       '<td class="col-plating"></td>' +
-      '<td class="col-nominal"></td>' +
       '<td class="col-op2000-tol"></td>' +
       '<td class="col-out-tol"></td>' +
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
+      '<td class="col-cmm-nominal">' + formatDualDisplay(buildCmmDualString(m.nominal, planUnits, isAngle)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
       '<td class="col-deviation' + mDevTint + '">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
       '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + getRunPill(m.runId, faiRuns) + '</td>' +
