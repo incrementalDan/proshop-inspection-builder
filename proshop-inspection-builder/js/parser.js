@@ -123,6 +123,21 @@ function parseCSV(csvString) {
     // Must have at least a dim tag or drawing spec
     if (!rowObj.dimTag && !rowObj.drawingSpec) continue;
 
+    // Normalize drawing spec and nominal: replace Unicode minus variants,
+    // then strip leading minus from values that parse as negative numbers.
+    // Tolerance fields are intentionally NOT touched.
+    var MINUS_VARIANTS = /[−–—‑]/g;
+    if (rowObj.drawingSpec) {
+      rowObj.drawingSpec = rowObj.drawingSpec.replace(MINUS_VARIANTS, '-');
+      var dsNum = parseFloat(rowObj.drawingSpec);
+      if (!isNaN(dsNum) && dsNum < 0) rowObj.drawingSpec = rowObj.drawingSpec.replace(/^-/, '');
+    }
+    if (rowObj.nominal) {
+      rowObj.nominal = rowObj.nominal.replace(MINUS_VARIANTS, '-');
+      var nomNum = parseFloat(rowObj.nominal);
+      if (!isNaN(nomNum) && nomNum < 0) rowObj.nominal = rowObj.nominal.replace(/^-/, '');
+    }
+
     rows.push(rowObj);
   }
 

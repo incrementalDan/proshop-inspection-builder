@@ -415,7 +415,7 @@ function buildFaiFamilyHTML(row) {
     var isLast = (mi === measurements.length - 1);
     html += '<tr class="fai-child-row' + (isLast ? ' fai-last-child' : '') + '">' +
       '<td class="col-fai-status">' + statusBadge(mStatus) + '</td>' +
-      '<td class="col-dimtag fai-child-indent">' + esc(m.cmmName || '') + '</td>' +
+      '<td class="col-dimtag fai-child-indent" title="' + esc(m.cmmName || '') + '">' + esc(String(c.dimTag)) + '</td>' +
       '<td class="col-drawing-spec"></td>' +
       '<td class="col-su1"></td>' +
       '<td class="col-su2"></td>' +

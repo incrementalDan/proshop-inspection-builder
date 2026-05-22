@@ -830,21 +830,23 @@ input.no-spinners {
 }
 
 .th-group-print {
-  background: rgba(74, 158, 255, 0.18) !important;
-  color: #7ab8ff !important;
+  background: rgba(74, 158, 255, 0.35) !important;
+  color: #a8d4ff !important;
   text-align: center !important;
-  border-bottom: 1px solid rgba(74, 158, 255, 0.3) !important;
+  border-bottom: 2px solid rgba(74, 158, 255, 0.5) !important;
   font-size: 11px !important;
   letter-spacing: 0.08em;
+  cursor: default !important;
 }
 
 .th-group-cmm {
-  background: rgba(255, 140, 66, 0.18) !important;
-  color: #ffaa60 !important;
+  background: rgba(255, 140, 66, 0.35) !important;
+  color: #ffc590 !important;
   text-align: center !important;
-  border-bottom: 1px solid rgba(255, 140, 66, 0.3) !important;
+  border-bottom: 2px solid rgba(255, 140, 66, 0.5) !important;
   font-size: 11px !important;
   letter-spacing: 0.08em;
+  cursor: default !important;
 }
 
 .fai-parent-row > td {
@@ -1929,6 +1931,17 @@ td.edit-flash {
 .fai-badge.fai-warn { background: #fef3c7; color: #d97706; }
 .fai-badge.fai-fail { background: #fee2e2; color: #dc2626; }
 .fai-badge.fai-none { background: #f3f4f6; color: #9ca3af; }
+
+/* FAI view column widths */
+.col-fai-status { width: 56px; text-align: center; }
+.col-drawing-spec { min-width: 90px; max-width: 150px; }
+.col-nominal { width: 80px; }
+.col-op2000-tol { width: 90px; }
+.col-out-tol { width: 90px; }
+.col-cmm-tol { width: 90px; }
+.col-measured { min-width: 90px; max-width: 140px; }
+.col-deviation { min-width: 80px; max-width: 130px; }
+.col-run { width: 90px; }
 
 /* FAI editable notes cell */
 .fai-editable {
