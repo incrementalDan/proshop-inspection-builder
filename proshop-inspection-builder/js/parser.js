@@ -348,6 +348,7 @@ function parseDimension(drawingSpec, toleranceText, nominalText) {
   if (isNaN(nominal)) {
     nominal = 0;
   }
+  nominal = Math.abs(nominal);
 
   return {
     featureType: featureType,

@@ -1217,12 +1217,23 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
       var isCmmAngle = ANGLE_RE_CMM.test(cmmRow.cmmName) || (planRow.computed && planRow.computed.isAngle);
       var doConvert = needConvert && !isCmmAngle;
 
-      // Convert CMM values to plan units if needed (full precision, no trimming)
+      // Convert CMM values to plan units if needed
       var measured  = doConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
       var nominal   = doConvert ? PSB.convertUnits(cmmRow.nominal,   cmmUnits, planUnits) : cmmRow.nominal;
       var deviation = doConvert ? PSB.convertUnits(cmmRow.deviation, cmmUnits, planUnits) : cmmRow.deviation;
       var plusTol   = doConvert ? PSB.convertUnits(cmmRow.plusTol,   cmmUnits, planUnits) : cmmRow.plusTol;
       var minusTol  = doConvert ? PSB.convertUnits(cmmRow.minusTol,  cmmUnits, planUnits) : cmmRow.minusTol;
+
+      // Measured and nominal are always positive; tolerance is never touched
+      measured = Math.abs(measured);
+      nominal  = Math.abs(nominal);
+
+      // Cap all stored values to 5 decimal places
+      measured  = parseFloat(measured.toFixed(5));
+      nominal   = parseFloat(nominal.toFixed(5));
+      deviation = parseFloat(deviation.toFixed(5));
+      plusTol   = parseFloat(plusTol.toFixed(5));
+      minusTol  = parseFloat(minusTol.toFixed(5));
 
       var status = PSB.computeFaiStatus(measured, nominal, plusTol, minusTol, warnThreshold);
       planRow.fai.measurements.push({
