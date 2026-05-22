@@ -138,50 +138,49 @@ function renderTable(stateOrRows, viewConfig) {
   tbody.innerHTML = '';
   for (var i = 0; i < displayRows.length; i++) {
     var row = displayRows[i];
+
+    // FAI view: emit one or more complete <tr> elements and move on
+    if (isFaiView) {
+      tbody.insertAdjacentHTML('beforeend', buildFaiFamilyHTML(row));
+      continue;
+    }
+
+    // Setup view path
     var tr = document.createElement('tr');
     tr.dataset.rowId = row.id;
 
     if (row.computed.isNote) tr.classList.add('is-note');
     if (row.id === selectedRowId) tr.classList.add('selected');
 
-    if (isFaiView) {
-      tr.innerHTML = buildFaiRowHTML(row);
-    } else {
-      tr.innerHTML = buildRowHTML(row);
-    }
+    tr.innerHTML = buildRowHTML(row);
 
     // Row click → select + open sidebar (only in setup view)
-    if (!isFaiView) {
-      (function(rowId) {
-        tr.addEventListener('click', function() { selectRow(rowId); });
-      })(row.id);
+    (function(rowId) {
+      tr.addEventListener('click', function() { selectRow(rowId); });
+    })(row.id);
 
-      // Inline editing for editable cells
-      setupInlineEditing(tr, row);
+    // Inline editing for editable cells
+    setupInlineEditing(tr, row);
 
-      // OP bubble click → toggle on/off (same as sidebar)
-      setupOpBubbleClicks(tr, row);
+    // OP bubble click → toggle on/off (same as sidebar)
+    setupOpBubbleClicks(tr, row);
 
-      // Delete row button
-      (function(rowId) {
-        var delBtn = tr.querySelector('.delete-row-btn');
-        if (delBtn) {
-          delBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            PSB.showConfirmModal({
-              title: 'Delete Row?',
-              message: 'Delete row <strong>' + esc(String(row.computed.dimTag || rowId)) + '</strong>? This cannot be undone.',
-              confirmLabel: 'Delete',
-              confirmClass: 'btn-danger',
-              onConfirm: function() { if (onDeleteRow) onDeleteRow(rowId); }
-            });
+    // Delete row button
+    (function(rowId) {
+      var delBtn = tr.querySelector('.delete-row-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          PSB.showConfirmModal({
+            title: 'Delete Row?',
+            message: 'Delete row <strong>' + esc(String(row.computed.dimTag || rowId)) + '</strong>? This cannot be undone.',
+            confirmLabel: 'Delete',
+            confirmClass: 'btn-danger',
+            onConfirm: function() { if (onDeleteRow) onDeleteRow(rowId); }
           });
-        }
-      })(row.id);
-    } else {
-      // FAI view: setup notes editing for notes field
-      setupFaiNotesEditing(tr, row);
-    }
+        });
+      }
+    })(row.id);
 
     tbody.appendChild(tr);
 
@@ -228,8 +227,8 @@ function updateTableHeaders(isFaiView) {
   if (isFaiView) {
     thead.innerHTML =
       '<tr>' +
-        '<th class="th-group-print" colspan="9">Print Data</th>' +
-        '<th class="th-group-cmm" colspan="3">CMM Data</th>' +
+        '<th class="th-group-print" colspan="10">Print Data</th>' +
+        '<th class="th-group-cmm" colspan="4">CMM Data</th>' +
       '</tr>' +
       '<tr>' +
         '<th class="col-fai-status">Status</th>' +
@@ -240,7 +239,9 @@ function updateTableHeaders(isFaiView) {
         '<th class="col-su3">SU3</th>' +
         '<th class="col-plating">Plating</th>' +
         '<th class="col-nominal">Nominal</th>' +
-        '<th class="col-tolerance">Tolerance</th>' +
+        '<th class="col-op2000-tol">OP2000 Tol</th>' +
+        '<th class="col-out-tol">OUT Tol</th>' +
+        '<th class="col-cmm-tol">CMM Tol</th>' +
         '<th class="col-measured">Measured</th>' +
         '<th class="col-deviation">Deviation</th>' +
         '<th class="col-run">Run</th>' +
@@ -267,87 +268,155 @@ function updateTableHeaders(isFaiView) {
 }
 
 /**
- * Build HTML for a single FAI view table row.
+ * Build one or more complete <tr>...</tr> HTML strings for a FAI view row.
+ * Returns a parent row, and for multiple measurements also child rows.
  */
-function buildFaiRowHTML(row) {
+function buildFaiFamilyHTML(row) {
   var c = row.computed;
   var fai = row.fai;
   var appState = getAppState();
   var compareMode = (currentViewConfig && currentViewConfig.compareMode) || 'op2000';
   var warnThreshold = (appState && appState.globals && appState.globals.faiWarnThreshold) || 0.80;
-
-  // Plan values based on compare mode
-  var planNominal, planTolPlus, planTolMinus;
-  if (compareMode === 'compensated') {
-    planNominal  = (c.output && c.output.nominal  != null) ? c.output.nominal  : c.op2000Nominal;
-    planTolPlus  = (c.output && c.output.tolPlus  != null) ? c.output.tolPlus  : c.op2kTolPlus;
-    planTolMinus = (c.output && c.output.tolMinus != null) ? c.output.tolMinus : c.op2kTolMinus;
-  } else {
-    planNominal  = c.op2000Nominal;
-    planTolPlus  = c.op2kTolPlus;
-    planTolMinus = c.op2kTolMinus;
-  }
-
-  // Last measurement
-  var lastMeasurement = null;
-  if (fai && fai.measurements && fai.measurements.length > 0) {
-    lastMeasurement = fai.measurements[fai.measurements.length - 1];
-  }
-
-  // FAI status — recomputed using PLAN nominal + tolerance, not CMM's
-  var aggStatus = null;
-  if (lastMeasurement && planNominal != null && planTolPlus != null && planTolMinus != null &&
-      planTolPlus > 0 && planTolMinus > 0) {
-    aggStatus = PSB.computeFaiStatus(lastMeasurement.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
-  } else if (fai) {
-    aggStatus = fai.aggregateStatus;
-  }
-  var statusLabel = aggStatus ? aggStatus.toUpperCase() : '—';
-  var statusClass = aggStatus ? 'fai-badge fai-' + aggStatus : 'fai-badge fai-none';
-  var statusHtml = '<span class="' + statusClass + '">' + esc(statusLabel) + '</span>';
-
-  // Plan tolerance display
-  var pTolPlus = planTolPlus || 0;
-  var pTolMinus = planTolMinus || 0;
-  var tolDisplay = '';
-  if (pTolPlus || pTolMinus) {
-    if (Math.abs(pTolPlus - pTolMinus) < 1e-10) {
-      tolDisplay = '±' + String(pTolPlus);
-    } else {
-      tolDisplay = '+' + String(pTolPlus) + ' / -' + String(pTolMinus);
-    }
-  }
-
-  var planNominalDisplay = planNominal != null ? String(planNominal) : '—';
   var planUnits = (appState && appState.globals && appState.globals.importUnits) || 'inch';
   var isAngle = c.isAngle || false;
-  var measuredVal = lastMeasurement ? buildCmmDualString(lastMeasurement.measured, planUnits, isAngle) : '—';
-  var deviationVal = lastMeasurement ? buildCmmDualString(lastMeasurement.deviation, planUnits, isAngle) : '—';
-  var runLabel = '—';
-  if (lastMeasurement && appState && appState.faiRuns) {
-    for (var ri = 0; ri < appState.faiRuns.length; ri++) {
-      if (appState.faiRuns[ri].id === lastMeasurement.runId) {
-        runLabel = appState.faiRuns[ri].label || appState.faiRuns[ri].fileName || lastMeasurement.runId;
-        break;
-      }
-    }
+
+  // Plan tolerance values
+  var op2kTolPlus  = c.op2kTolPlus  || 0;
+  var op2kTolMinus = c.op2kTolMinus || 0;
+  var outTolPlus   = (c.output && c.output.tolPlus  != null) ? c.output.tolPlus  : op2kTolPlus;
+  var outTolMinus  = (c.output && c.output.tolMinus != null) ? c.output.tolMinus : op2kTolMinus;
+
+  // Which plan tolerance is used for pass/fail (based on compare mode)
+  var planNominal  = compareMode === 'compensated'
+    ? ((c.output && c.output.nominal != null) ? c.output.nominal : c.op2000Nominal)
+    : c.op2000Nominal;
+  var planTolPlus  = compareMode === 'compensated' ? outTolPlus  : op2kTolPlus;
+  var planTolMinus = compareMode === 'compensated' ? outTolMinus : op2kTolMinus;
+
+  // Format tolerance string helper (inline)
+  function tolStr(plus, minus) {
+    if (!plus && !minus) return '—';
+    if (Math.abs(plus - minus) < 1e-10) return '±' + String(plus);
+    return '+' + String(plus) + ' / -' + String(minus);
   }
 
+  var op2kTolDisplay = tolStr(op2kTolPlus, op2kTolMinus);
+  var outTolDisplay  = tolStr(outTolPlus, outTolMinus);
   var platingLabel = (c.platingMode && c.platingMode !== 'none') ? c.platingMode : '';
+  var planNomDisplay = planNominal != null ? String(planNominal) : '—';
 
-  return '' +
-    '<td class="col-fai-status">' + statusHtml + '</td>' +
+  // Run label lookup helper (inline)
+  function getRunLabel(runId) {
+    if (!appState || !appState.faiRuns) return runId || '—';
+    for (var ri = 0; ri < appState.faiRuns.length; ri++) {
+      if (appState.faiRuns[ri].id === runId) {
+        return appState.faiRuns[ri].label || appState.faiRuns[ri].fileName || runId;
+      }
+    }
+    return runId || '—';
+  }
+
+  // The 10 print-data cells (same for parent and no-measurement rows)
+  var specHtml = formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '');
+  var printCells =
+    '<td class="col-fai-status">{STATUS}</td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
-    '<td class="col-drawing-spec">' + formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '') + '</td>' +
+    '<td class="col-drawing-spec">' + specHtml + '</td>' +
     '<td class="col-su1">' + esc(c.specUnit1 || '') + '</td>' +
     '<td class="col-su2">' + esc(c.specUnit2 || '') + '</td>' +
     '<td class="col-su3">' + esc(c.specUnit3 || '') + '</td>' +
     '<td class="col-plating">' + esc(platingLabel) + '</td>' +
-    '<td class="col-nominal">' + esc(planNominalDisplay) + '</td>' +
-    '<td class="col-tolerance">' + esc(tolDisplay) + '</td>' +
-    '<td class="col-measured">' + formatDualDisplay(measuredVal) + '</td>' +
-    '<td class="col-deviation">' + formatDualDisplay(deviationVal) + '</td>' +
-    '<td class="col-run">' + esc(runLabel) + '</td>';
+    '<td class="col-nominal">' + esc(planNomDisplay) + '</td>' +
+    '<td class="col-op2000-tol">' + esc(op2kTolDisplay) + '</td>' +
+    '<td class="col-out-tol">' + esc(outTolDisplay) + '</td>';
+
+  // Status badge helper
+  function statusBadge(status) {
+    var cls = status ? 'fai-badge fai-' + status : 'fai-badge fai-none';
+    var lbl = status ? status.toUpperCase() : '—';
+    return '<span class="' + cls + '">' + esc(lbl) + '</span>';
+  }
+
+  // No measurements
+  if (!fai || !fai.measurements || fai.measurements.length === 0) {
+    return '<tr>' + printCells.replace('{STATUS}', statusBadge(null)) +
+      '<td class="col-cmm-tol">—</td>' +
+      '<td class="col-measured">—</td>' +
+      '<td class="col-deviation">—</td>' +
+      '<td class="col-run">—</td>' +
+      '</tr>';
+  }
+
+  var measurements = fai.measurements;
+
+  // Single measurement — simple full row
+  if (measurements.length === 1) {
+    var m = measurements[0];
+    var status = PSB.computeFaiStatus(m.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
+    return '<tr>' +
+      printCells.replace('{STATUS}', statusBadge(status)) +
+      '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
+      '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
+      '<td class="col-deviation">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
+      '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + esc(getRunLabel(m.runId)) + '</td>' +
+      '</tr>';
+  }
+
+  // Multiple measurements — parent row + child rows
+
+  // Min/max across all measurements
+  var measVals = measurements.map(function(m) { return m.measured; });
+  var devVals  = measurements.map(function(m) { return m.deviation; });
+  var measMin = Math.min.apply(null, measVals);
+  var measMax = Math.max.apply(null, measVals);
+  var devMin  = Math.min.apply(null, devVals);
+  var devMax  = Math.max.apply(null, devVals);
+
+  // Aggregate status for parent
+  var aggStatus = fai.aggregateStatus;
+
+  // Parent CMM tol: use first measurement (assume same spec for all in group)
+  var parentCmmTol = tolStr(measurements[0].plusTol, measurements[0].minusTol);
+
+  // Min/max range strings with dual unit
+  var measRangeStr = buildCmmRangeString(measMin, measMax, planUnits, isAngle);
+  var devRangeStr  = buildCmmRangeString(devMin, devMax, planUnits, isAngle);
+
+  // Parent run summary: count
+  var parentRunLabel = measurements.length + '×';
+
+  var html = '<tr class="fai-parent-row">' +
+    printCells.replace('{STATUS}', statusBadge(aggStatus)) +
+    '<td class="col-cmm-tol">' + esc(parentCmmTol) + '</td>' +
+    '<td class="col-measured">' + formatDualDisplay(measRangeStr) + '</td>' +
+    '<td class="col-deviation">' + formatDualDisplay(devRangeStr) + '</td>' +
+    '<td class="col-run">' + esc(parentRunLabel) + '</td>' +
+    '</tr>';
+
+  // Child rows
+  for (var mi = 0; mi < measurements.length; mi++) {
+    var m = measurements[mi];
+    var mStatus = PSB.computeFaiStatus(m.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
+    var mRunLabel = getRunLabel(m.runId);
+    html += '<tr class="fai-child-row">' +
+      '<td class="col-fai-status">' + statusBadge(mStatus) + '</td>' +
+      '<td class="col-dimtag fai-child-indent">' + esc(m.cmmName || '') + '</td>' +
+      '<td class="col-drawing-spec"></td>' +
+      '<td class="col-su1"></td>' +
+      '<td class="col-su2"></td>' +
+      '<td class="col-su3"></td>' +
+      '<td class="col-plating"></td>' +
+      '<td class="col-nominal"></td>' +
+      '<td class="col-op2000-tol"></td>' +
+      '<td class="col-out-tol"></td>' +
+      '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
+      '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
+      '<td class="col-deviation">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
+      '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + esc(mRunLabel) + '</td>' +
+      '</tr>';
+  }
+
+  return html;
 }
 
 /**
@@ -1362,6 +1431,21 @@ function buildCmmDualString(value, planUnits, isAngle) {
   var converted = PSB.convertUnits(value, planUnits, otherUnit);
   var secondary = String(parseFloat(converted.toFixed(5)));
   return primary + ' [' + secondary + ']';
+}
+
+/**
+ * Build a min/max range display string for multiple CMM measurements.
+ * Format: "min / max [secondary_min / secondary_max]"
+ */
+function buildCmmRangeString(minVal, maxVal, planUnits, isAngle) {
+  if (minVal == null || maxVal == null) return '—';
+  var pMin = String(minVal);
+  var pMax = String(maxVal);
+  if (isAngle) return pMin + ' / ' + pMax + ' [Angle]';
+  var other = planUnits === 'mm' ? 'inch' : 'mm';
+  var sMin = String(parseFloat(PSB.convertUnits(minVal, planUnits, other).toFixed(5)));
+  var sMax = String(parseFloat(PSB.convertUnits(maxVal, planUnits, other).toFixed(5)));
+  return pMin + ' / ' + pMax + ' [' + sMin + ' / ' + sMax + ']';
 }
 
 /**

@@ -847,6 +847,24 @@ input.no-spinners {
   letter-spacing: 0.08em;
 }
 
+.fai-parent-row > td {
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.fai-child-row > td {
+  font-size: 11px;
+  border-top: none;
+  background: transparent;
+  opacity: 0.82;
+}
+
+.fai-child-indent {
+  padding-left: 28px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
 #data-table th {
   background: var(--bg-secondary);
   border-bottom: 2px solid var(--unit-primary, var(--accent-blue));
