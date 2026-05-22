@@ -98,13 +98,36 @@ function switchView(viewId) {
     }
   }
 
-  // Update toggle button label
-  var toggleBtn = document.getElementById('btn-view-toggle');
-  if (toggleBtn) {
-    toggleBtn.textContent = viewId === 'setup' ? 'FAI View' : 'Setup View';
+  // Activate the matching nav rail tab
+  var navTabs = document.querySelectorAll('.nav-tab[data-view]');
+  for (var nt = 0; nt < navTabs.length; nt++) {
+    navTabs[nt].classList.toggle('active', navTabs[nt].dataset.view === viewId);
   }
 
   PSB.renderTable(state, config);
+}
+
+function updateFaiTabBadge() {
+  var badge = document.getElementById('nav-fai-badge');
+  if (!badge) return;
+  var fails = 0, warns = 0;
+  for (var i = 0; i < state.rows.length; i++) {
+    var fai = state.rows[i].fai;
+    if (!fai) continue;
+    if (fai.aggregateStatus === 'fail') fails++;
+    else if (fai.aggregateStatus === 'warn') warns++;
+  }
+  if (fails > 0) {
+    badge.textContent = fails > 99 ? '99+' : String(fails);
+    badge.className = 'nav-tab-badge';
+    badge.classList.remove('hidden');
+  } else if (warns > 0) {
+    badge.textContent = warns > 99 ? '99+' : String(warns);
+    badge.className = 'nav-tab-badge badge-warn';
+    badge.classList.remove('hidden');
+  } else {
+    badge.className = 'nav-tab-badge hidden';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -313,6 +336,16 @@ document.addEventListener('DOMContentLoaded', function() {
     bindSettingsModal();
     bindFaiControls();
 
+    // Wire nav rail tab clicks
+    (function() {
+      var tabs = document.querySelectorAll('.nav-tab[data-view]');
+      for (var ti = 0; ti < tabs.length; ti++) {
+        (function(tab) {
+          tab.addEventListener('click', function() { switchView(tab.dataset.view); });
+        })(tabs[ti]);
+      }
+    })();
+
     // Undo / Redo buttons
     document.getElementById('btn-undo').addEventListener('click', function() {
       var descs = PSB.getUndoDescriptions();
@@ -369,6 +402,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (snapR) { restoreSnapshot(snapR); PSB.showToast('Redo: ' + (snapR._desc || 'Change'), 'info'); }
         updateUndoRedoButtons();
       }
+      if (mod && e.key === '1') { e.preventDefault(); switchView('setup'); }
+      if (mod && e.key === '2') { e.preventDefault(); switchView('fai'); }
       if (e.key === 'Escape') {
         var confirmModal = document.getElementById('confirm-modal');
         if (!confirmModal.classList.contains('hidden')) {
@@ -397,6 +432,7 @@ document.addEventListener('DOMContentLoaded', function() {
     applyUnitColors(state.globals.importUnits);
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+    updateCmmPartBadge(state.globals.cmmPartName);
     // Set version from single source
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
@@ -651,6 +687,7 @@ function applyLoadedProject(jsonString, fileName) {
       PSB.closePdf();
     }
 
+    updateCmmPartBadge(state.globals.cmmPartName);
     console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
   } catch (err) {
     PSB.showToast('Failed to load project file: ' + err.message, 'error');
@@ -1103,6 +1140,7 @@ function recomputeAll() {
     PSB.recompute(state.rows[i], state.globals);
   }
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+  updateFaiTabBadge();
 
   // Refresh sidebar if a row is selected so values stay in sync
   var selId = PSB.getSelectedRowId();
@@ -1149,12 +1187,29 @@ function deleteFaiRuns(runIds) {
   markDirty();
 }
 
+function updateCmmPartBadge(partName) {
+  var badge = document.getElementById('cmm-part-badge');
+  var text  = document.getElementById('cmm-part-name-text');
+  if (!badge || !text) return;
+  if (partName) {
+    text.textContent = partName;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
 function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   var parsed = PSB.parseCmmText(rawText);
   if (!parsed || parsed.length === 0) {
     PSB.showToast('No CMM data found in input', 'warn');
     return;
   }
+
+  var cmmHeader  = PSB.parseCmmHeader(rawText);
+  var runLabel   = cmmHeader.dateStr || fileName.replace(/\.[^.]+$/, '');
+  var runPartName = cmmHeader.partName || '';
+  if (runPartName) state.globals.cmmPartName = runPartName;
 
   // Save chosen units to globals for next time
   cmmUnits = cmmUnits || state.globals.cmmImportUnits || 'mm';
@@ -1217,12 +1272,23 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
       var isCmmAngle = ANGLE_RE_CMM.test(cmmRow.cmmName) || (planRow.computed && planRow.computed.isAngle);
       var doConvert = needConvert && !isCmmAngle;
 
-      // Convert CMM values to plan units if needed (full precision, no trimming)
+      // Convert CMM values to plan units if needed
       var measured  = doConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
       var nominal   = doConvert ? PSB.convertUnits(cmmRow.nominal,   cmmUnits, planUnits) : cmmRow.nominal;
       var deviation = doConvert ? PSB.convertUnits(cmmRow.deviation, cmmUnits, planUnits) : cmmRow.deviation;
       var plusTol   = doConvert ? PSB.convertUnits(cmmRow.plusTol,   cmmUnits, planUnits) : cmmRow.plusTol;
       var minusTol  = doConvert ? PSB.convertUnits(cmmRow.minusTol,  cmmUnits, planUnits) : cmmRow.minusTol;
+
+      // Measured and nominal are always positive; tolerance is never touched
+      measured = Math.abs(measured);
+      nominal  = Math.abs(nominal);
+
+      // Cap all stored values to 5 decimal places
+      measured  = parseFloat(measured.toFixed(5));
+      nominal   = parseFloat(nominal.toFixed(5));
+      deviation = parseFloat(deviation.toFixed(5));
+      plusTol   = parseFloat(plusTol.toFixed(5));
+      minusTol  = parseFloat(minusTol.toFixed(5));
 
       var status = PSB.computeFaiStatus(measured, nominal, plusTol, minusTol, warnThreshold);
       planRow.fai.measurements.push({
@@ -1249,7 +1315,8 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   if (!state.faiRuns) state.faiRuns = [];
   state.faiRuns.push({
     id: runId,
-    label: fileName.replace(/\.[^.]+$/, ''),
+    label: runLabel,
+    partName: runPartName,
     fileName: fileName,
     importedAt: new Date().toISOString(),
     units: cmmUnits,
@@ -1261,6 +1328,8 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'CMM import: ' + fileName });
   PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+  updateCmmPartBadge(state.globals.cmmPartName);
+  updateFaiTabBadge();
 
   // Show import summary
   showCmmImportSummary(parsed.length, matchedCount, unmatchedRows);
@@ -1291,14 +1360,6 @@ function showCmmImportSummary(totalParsed, matchedCount, unmatchedRows) {
 }
 
 function bindFaiControls() {
-  // View toggle button
-  var toggleBtn = document.getElementById('btn-view-toggle');
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', function() {
-      switchView(currentView === 'setup' ? 'fai' : 'setup');
-    });
-  }
-
   // FAI compare mode toggle
   var cmpOp2kBtn = document.getElementById('btn-fai-compare-op2000');
   var cmpCompBtn = document.getElementById('btn-fai-compare-comp');

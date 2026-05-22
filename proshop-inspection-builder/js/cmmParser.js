@@ -56,3 +56,36 @@ function shouldSkipCmmLine(line) {
 }
 
 PSB.parseCmmText = parseCmmText;
+
+/**
+ * Extract header metadata from a Zeiss CALYPSO CMM report.
+ * Returns part name and timestamp from the report header section.
+ *
+ * @param {string} rawText — full CMM report text
+ * @returns {{ partName: string, dateStr: string }}
+ */
+function parseCmmHeader(rawText) {
+  var lines = rawText.split(/\r?\n/).map(function(s) { return (s || '').trim(); }).filter(Boolean);
+  var partName = '';
+  var dateStr = '';
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+
+    if (!partName) {
+      var pm = line.match(/^Part\s+name\s+(.+)$/i);
+      if (pm) partName = pm[1].trim();
+    }
+
+    if (!dateStr) {
+      var dm = line.match(/^(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)$/i);
+      if (dm) dateStr = dm[1].trim();
+    }
+
+    if (partName && dateStr) break;
+  }
+
+  return { partName: partName, dateStr: dateStr };
+}
+
+PSB.parseCmmHeader = parseCmmHeader;
