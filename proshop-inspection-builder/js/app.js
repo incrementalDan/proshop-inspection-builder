@@ -98,13 +98,36 @@ function switchView(viewId) {
     }
   }
 
-  // Update toggle button label
-  var toggleBtn = document.getElementById('btn-view-toggle');
-  if (toggleBtn) {
-    toggleBtn.textContent = viewId === 'setup' ? 'FAI View' : 'Setup View';
+  // Activate the matching nav rail tab
+  var navTabs = document.querySelectorAll('.nav-tab[data-view]');
+  for (var nt = 0; nt < navTabs.length; nt++) {
+    navTabs[nt].classList.toggle('active', navTabs[nt].dataset.view === viewId);
   }
 
   PSB.renderTable(state, config);
+}
+
+function updateFaiTabBadge() {
+  var badge = document.getElementById('nav-fai-badge');
+  if (!badge) return;
+  var fails = 0, warns = 0;
+  for (var i = 0; i < state.rows.length; i++) {
+    var fai = state.rows[i].fai;
+    if (!fai) continue;
+    if (fai.aggregateStatus === 'fail') fails++;
+    else if (fai.aggregateStatus === 'warn') warns++;
+  }
+  if (fails > 0) {
+    badge.textContent = fails > 99 ? '99+' : String(fails);
+    badge.className = 'nav-tab-badge';
+    badge.classList.remove('hidden');
+  } else if (warns > 0) {
+    badge.textContent = warns > 99 ? '99+' : String(warns);
+    badge.className = 'nav-tab-badge badge-warn';
+    badge.classList.remove('hidden');
+  } else {
+    badge.className = 'nav-tab-badge hidden';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -313,6 +336,16 @@ document.addEventListener('DOMContentLoaded', function() {
     bindSettingsModal();
     bindFaiControls();
 
+    // Wire nav rail tab clicks
+    (function() {
+      var tabs = document.querySelectorAll('.nav-tab[data-view]');
+      for (var ti = 0; ti < tabs.length; ti++) {
+        (function(tab) {
+          tab.addEventListener('click', function() { switchView(tab.dataset.view); });
+        })(tabs[ti]);
+      }
+    })();
+
     // Undo / Redo buttons
     document.getElementById('btn-undo').addEventListener('click', function() {
       var descs = PSB.getUndoDescriptions();
@@ -369,6 +402,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (snapR) { restoreSnapshot(snapR); PSB.showToast('Redo: ' + (snapR._desc || 'Change'), 'info'); }
         updateUndoRedoButtons();
       }
+      if (mod && e.key === '1') { e.preventDefault(); switchView('setup'); }
+      if (mod && e.key === '2') { e.preventDefault(); switchView('fai'); }
       if (e.key === 'Escape') {
         var confirmModal = document.getElementById('confirm-modal');
         if (!confirmModal.classList.contains('hidden')) {
@@ -1105,6 +1140,7 @@ function recomputeAll() {
     PSB.recompute(state.rows[i], state.globals);
   }
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+  updateFaiTabBadge();
 
   // Refresh sidebar if a row is selected so values stay in sync
   var selId = PSB.getSelectedRowId();
@@ -1293,6 +1329,7 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   updateCmmPartBadge(state.globals.cmmPartName);
+  updateFaiTabBadge();
 
   // Show import summary
   showCmmImportSummary(parsed.length, matchedCount, unmatchedRows);
@@ -1323,14 +1360,6 @@ function showCmmImportSummary(totalParsed, matchedCount, unmatchedRows) {
 }
 
 function bindFaiControls() {
-  // View toggle button
-  var toggleBtn = document.getElementById('btn-view-toggle');
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', function() {
-      switchView(currentView === 'setup' ? 'fai' : 'setup');
-    });
-  }
-
   // FAI compare mode toggle
   var cmpOp2kBtn = document.getElementById('btn-fai-compare-op2000');
   var cmpCompBtn = document.getElementById('btn-fai-compare-comp');

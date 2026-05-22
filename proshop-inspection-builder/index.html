@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=23">
+  <link rel="stylesheet" href="css/styles.css?v=24">
 </head>
 <body>
 
@@ -31,15 +31,12 @@
       <button id="btn-load" class="btn btn-secondary">Load Project</button>
       <button id="btn-all-history" class="btn btn-secondary setup-only" title="View full change history">History</button>
       <button id="btn-upload-pdf" class="btn btn-secondary setup-only" title="Upload PDF">PDF</button>
-      <button id="btn-view-toggle" class="btn btn-secondary">FAI View</button>
       <button id="btn-import-cmm" class="btn btn-primary fai-only hidden">Import CMM Data</button>
       <div class="fai-only btn-group hidden" id="fai-compare-toggle">
         <button id="btn-fai-compare-op2000" class="btn btn-toggle active" title="Compare CMM against OP2000 drawing spec">OP2000</button>
         <button id="btn-fai-compare-comp" class="btn btn-toggle" title="Compare CMM against compensated (plated) spec">Compensated</button>
       </div>
       <button id="btn-export-fai" class="btn btn-secondary fai-only hidden">Export FAI</button>
-      <button id="btn-settings" class="btn btn-icon setup-only" title="Settings">&#9881;</button>
-      <button id="btn-theme" class="btn btn-icon" title="Toggle Theme">&#9681;</button>
     </div>
     <!-- Hidden inputs -->
     <input type="file" id="file-import-csv" accept=".csv" hidden>
@@ -115,6 +112,22 @@
         <span>Drop CSV, Project, or PDF file here</span>
       </div>
     </div>
+
+    <nav id="nav-rail">
+      <div class="nav-tabs">
+        <button class="nav-tab active" id="nav-tab-setup" data-view="setup" title="Setup View (Ctrl+1)">
+          <span class="nav-tab-label">Setup</span>
+        </button>
+        <button class="nav-tab" id="nav-tab-fai" data-view="fai" title="FAI View (Ctrl+2)">
+          <span class="nav-tab-label">FAI</span>
+          <span class="nav-tab-badge hidden" id="nav-fai-badge"></span>
+        </button>
+      </div>
+      <div class="nav-rail-bottom">
+        <button id="btn-settings" class="nav-icon-btn setup-only" title="Settings (Setup only)">&#9881;</button>
+        <button id="btn-theme" class="nav-icon-btn" title="Toggle Theme">&#9681;</button>
+      </div>
+    </nav>
 
     <div id="left-panel">
       <!-- PDF Viewer (hidden when no PDF loaded) -->
@@ -515,16 +528,16 @@
     window.dispatchEvent(new Event('pdfjsReady'));
   </script>
 
-  <script src="js/mathEngine.js?v=23"></script>
-  <script src="js/parser.js?v=23"></script>
-  <script src="js/dataModel.js?v=23"></script>
-  <script src="js/exportEngine.js?v=23"></script>
-  <script src="js/storage.js?v=23"></script>
-  <script src="js/history.js?v=23"></script>
-  <script src="js/pdfViewer.js?v=23"></script>
-  <script src="js/cmmParser.js?v=23"></script>
-  <script src="js/ui.js?v=23"></script>
-  <script src="js/app.js?v=23"></script>
+  <script src="js/mathEngine.js?v=24"></script>
+  <script src="js/parser.js?v=24"></script>
+  <script src="js/dataModel.js?v=24"></script>
+  <script src="js/exportEngine.js?v=24"></script>
+  <script src="js/storage.js?v=24"></script>
+  <script src="js/history.js?v=24"></script>
+  <script src="js/pdfViewer.js?v=24"></script>
+  <script src="js/cmmParser.js?v=24"></script>
+  <script src="js/ui.js?v=24"></script>
+  <script src="js/app.js?v=24"></script>
 
 </body>
 </html>

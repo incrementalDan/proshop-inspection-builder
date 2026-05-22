@@ -356,11 +356,12 @@ function buildFaiFamilyHTML(row) {
   if (measurements.length === 1) {
     var m = measurements[0];
     var status = PSB.computeFaiStatus(m.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
+    var devTint = status ? ' dev-tint-' + status : '';
     return '<tr>' +
       printCells.replace('{STATUS}', statusBadge(status)) +
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
-      '<td class="col-deviation">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
+      '<td class="col-deviation' + devTint + '">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
       '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + getRunPill(m.runId, faiRuns) + '</td>' +
       '</tr>';
   }
@@ -397,11 +398,12 @@ function buildFaiFamilyHTML(row) {
     parentRunHtml += (ri2 > 0 ? ' ' : '') + getRunPill(uniqueRunIds[ri2], faiRuns);
   }
 
-  var html = '<tr class="fai-parent-row">' +
+  var parentDevTint = aggStatus ? ' dev-tint-' + aggStatus : '';
+  var html = '<tr class="fai-parent-row has-children">' +
     printCells.replace('{STATUS}', statusBadge(aggStatus)) +
     '<td class="col-cmm-tol">' + esc(parentCmmTol) + '</td>' +
     '<td class="col-measured">' + formatDualDisplay(measRangeStr) + '</td>' +
-    '<td class="col-deviation">' + formatDualDisplay(devRangeStr) + '</td>' +
+    '<td class="col-deviation' + parentDevTint + '">' + formatDualDisplay(devRangeStr) + '</td>' +
     '<td class="col-run">' + parentRunHtml + '</td>' +
     '</tr>';
 
@@ -409,7 +411,9 @@ function buildFaiFamilyHTML(row) {
   for (var mi = 0; mi < measurements.length; mi++) {
     var m = measurements[mi];
     var mStatus = PSB.computeFaiStatus(m.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
-    html += '<tr class="fai-child-row">' +
+    var mDevTint = mStatus ? ' dev-tint-' + mStatus : '';
+    var isLast = (mi === measurements.length - 1);
+    html += '<tr class="fai-child-row' + (isLast ? ' fai-last-child' : '') + '">' +
       '<td class="col-fai-status">' + statusBadge(mStatus) + '</td>' +
       '<td class="col-dimtag fai-child-indent">' + esc(m.cmmName || '') + '</td>' +
       '<td class="col-drawing-spec"></td>' +
@@ -422,7 +426,7 @@ function buildFaiFamilyHTML(row) {
       '<td class="col-out-tol"></td>' +
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
-      '<td class="col-deviation">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
+      '<td class="col-deviation' + mDevTint + '">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
       '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + getRunPill(m.runId, faiRuns) + '</td>' +
       '</tr>';
   }
