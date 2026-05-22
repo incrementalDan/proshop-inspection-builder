@@ -865,6 +865,36 @@ input.no-spinners {
   color: var(--text-muted);
 }
 
+/* CMM part name badge in app header */
+.cmm-part-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 14px;
+  background: rgba(74, 158, 255, 0.12);
+  border: 1.5px solid rgba(74, 158, 255, 0.4);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Colored run pills in the FAI Run column */
+.run-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+}
+
 #data-table th {
   background: var(--bg-secondary);
   border-bottom: 2px solid var(--unit-primary, var(--accent-blue));

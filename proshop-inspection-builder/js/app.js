@@ -397,6 +397,7 @@ document.addEventListener('DOMContentLoaded', function() {
     applyUnitColors(state.globals.importUnits);
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+    updateCmmPartBadge(state.globals.cmmPartName);
     // Set version from single source
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
@@ -651,6 +652,7 @@ function applyLoadedProject(jsonString, fileName) {
       PSB.closePdf();
     }
 
+    updateCmmPartBadge(state.globals.cmmPartName);
     console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
   } catch (err) {
     PSB.showToast('Failed to load project file: ' + err.message, 'error');
@@ -1149,12 +1151,29 @@ function deleteFaiRuns(runIds) {
   markDirty();
 }
 
+function updateCmmPartBadge(partName) {
+  var badge = document.getElementById('cmm-part-badge');
+  var text  = document.getElementById('cmm-part-name-text');
+  if (!badge || !text) return;
+  if (partName) {
+    text.textContent = partName;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
 function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   var parsed = PSB.parseCmmText(rawText);
   if (!parsed || parsed.length === 0) {
     PSB.showToast('No CMM data found in input', 'warn');
     return;
   }
+
+  var cmmHeader  = PSB.parseCmmHeader(rawText);
+  var runLabel   = cmmHeader.dateStr || fileName.replace(/\.[^.]+$/, '');
+  var runPartName = cmmHeader.partName || '';
+  if (runPartName) state.globals.cmmPartName = runPartName;
 
   // Save chosen units to globals for next time
   cmmUnits = cmmUnits || state.globals.cmmImportUnits || 'mm';
@@ -1260,7 +1279,8 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   if (!state.faiRuns) state.faiRuns = [];
   state.faiRuns.push({
     id: runId,
-    label: fileName.replace(/\.[^.]+$/, ''),
+    label: runLabel,
+    partName: runPartName,
     fileName: fileName,
     importedAt: new Date().toISOString(),
     units: cmmUnits,
@@ -1272,6 +1292,7 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'CMM import: ' + fileName });
   PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+  updateCmmPartBadge(state.globals.cmmPartName);
 
   // Show import summary
   showCmmImportSummary(parsed.length, matchedCount, unmatchedRows);

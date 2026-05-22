@@ -14,6 +14,18 @@
 
 window.PSB = window.PSB || {};
 
+// Color palette for FAI run pills — cycles if more than 8 runs
+var FAI_RUN_COLORS = [
+  { bg: 'rgba(74,158,255,0.15)',  border: '#4a9eff', text: '#6bb3ff' },
+  { bg: 'rgba(255,140,66,0.15)', border: '#ff8c42', text: '#ffaa60' },
+  { bg: 'rgba(76,175,80,0.15)',  border: '#4caf50', text: '#6dc970' },
+  { bg: 'rgba(224,64,251,0.15)', border: '#e040fb', text: '#ea70fb' },
+  { bg: 'rgba(255,82,82,0.15)',  border: '#ff5252', text: '#ff7070' },
+  { bg: 'rgba(0,188,212,0.15)',  border: '#00bcd4', text: '#40d4e8' },
+  { bg: 'rgba(255,193,7,0.15)',  border: '#ffc107', text: '#ffcf3f' },
+  { bg: 'rgba(255,110,64,0.15)', border: '#ff6e40', text: '#ff8a65' },
+];
+
 // ── State ─────────────────────────────────────────────────
 var selectedRowId = null;
 var sortColumn = null;
@@ -305,16 +317,7 @@ function buildFaiFamilyHTML(row) {
   var platingLabel = (c.platingMode && c.platingMode !== 'none') ? c.platingMode : '';
   var planNomDisplay = planNominal != null ? String(planNominal) : '—';
 
-  // Run label lookup helper (inline)
-  function getRunLabel(runId) {
-    if (!appState || !appState.faiRuns) return runId || '—';
-    for (var ri = 0; ri < appState.faiRuns.length; ri++) {
-      if (appState.faiRuns[ri].id === runId) {
-        return appState.faiRuns[ri].label || appState.faiRuns[ri].fileName || runId;
-      }
-    }
-    return runId || '—';
-  }
+  var faiRuns = appState && appState.faiRuns;
 
   // The 10 print-data cells (same for parent and no-measurement rows)
   var specHtml = formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '');
@@ -358,7 +361,7 @@ function buildFaiFamilyHTML(row) {
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
       '<td class="col-deviation">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
-      '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + esc(getRunLabel(m.runId)) + '</td>' +
+      '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + getRunPill(m.runId, faiRuns) + '</td>' +
       '</tr>';
   }
 
@@ -382,22 +385,30 @@ function buildFaiFamilyHTML(row) {
   var measRangeStr = buildCmmRangeString(measMin, measMax, planUnits, isAngle);
   var devRangeStr  = buildCmmRangeString(devMin, devMax, planUnits, isAngle);
 
-  // Parent run summary: count
-  var parentRunLabel = measurements.length + '×';
+  // Collect distinct run IDs (in order of first appearance) for parent pills
+  var seenRunIds = {};
+  var uniqueRunIds = [];
+  for (var mi2 = 0; mi2 < measurements.length; mi2++) {
+    var rid = measurements[mi2].runId;
+    if (!seenRunIds[rid]) { seenRunIds[rid] = true; uniqueRunIds.push(rid); }
+  }
+  var parentRunHtml = '';
+  for (var ri2 = 0; ri2 < uniqueRunIds.length; ri2++) {
+    parentRunHtml += (ri2 > 0 ? ' ' : '') + getRunPill(uniqueRunIds[ri2], faiRuns);
+  }
 
   var html = '<tr class="fai-parent-row">' +
     printCells.replace('{STATUS}', statusBadge(aggStatus)) +
     '<td class="col-cmm-tol">' + esc(parentCmmTol) + '</td>' +
     '<td class="col-measured">' + formatDualDisplay(measRangeStr) + '</td>' +
     '<td class="col-deviation">' + formatDualDisplay(devRangeStr) + '</td>' +
-    '<td class="col-run">' + esc(parentRunLabel) + '</td>' +
+    '<td class="col-run">' + parentRunHtml + '</td>' +
     '</tr>';
 
   // Child rows
   for (var mi = 0; mi < measurements.length; mi++) {
     var m = measurements[mi];
     var mStatus = PSB.computeFaiStatus(m.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
-    var mRunLabel = getRunLabel(m.runId);
     html += '<tr class="fai-child-row">' +
       '<td class="col-fai-status">' + statusBadge(mStatus) + '</td>' +
       '<td class="col-dimtag fai-child-indent">' + esc(m.cmmName || '') + '</td>' +
@@ -412,7 +423,7 @@ function buildFaiFamilyHTML(row) {
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
       '<td class="col-deviation">' + formatDualDisplay(buildCmmDualString(m.deviation, planUnits, isAngle)) + '</td>' +
-      '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + esc(mRunLabel) + '</td>' +
+      '<td class="col-run" title="' + esc(m.cmmName || '') + '">' + getRunPill(m.runId, faiRuns) + '</td>' +
       '</tr>';
   }
 
@@ -1446,6 +1457,27 @@ function buildCmmRangeString(minVal, maxVal, planUnits, isAngle) {
   var sMin = String(parseFloat(PSB.convertUnits(minVal, planUnits, other).toFixed(5)));
   var sMax = String(parseFloat(PSB.convertUnits(maxVal, planUnits, other).toFixed(5)));
   return pMin + ' / ' + pMax + ' [' + sMin + ' / ' + sMax + ']';
+}
+
+/**
+ * Render a run ID as a colored pill using the run's position in faiRuns for color.
+ * Returns HTML string (not escaped — contains span tags).
+ */
+function getRunPill(runId, faiRuns) {
+  var label = '—';
+  var colorIdx = -1;
+  if (faiRuns) {
+    for (var ri = 0; ri < faiRuns.length; ri++) {
+      if (faiRuns[ri].id === runId) {
+        label = faiRuns[ri].label || faiRuns[ri].fileName || runId;
+        colorIdx = ri;
+        break;
+      }
+    }
+  }
+  if (colorIdx < 0) return esc(label);
+  var c = FAI_RUN_COLORS[colorIdx % FAI_RUN_COLORS.length];
+  return '<span class="run-pill" style="background:' + c.bg + ';border-color:' + c.border + ';color:' + c.text + '">' + esc(label) + '</span>';
 }
 
 /**
