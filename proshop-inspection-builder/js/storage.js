@@ -295,9 +295,13 @@ function deserializeState(data) {
         ov.outputTolerance = null;
       }
 
+      // Balloon-created rows keep mutable raw; CSV-imported rows stay frozen.
+      var rawCopy = Object.assign({}, r.raw);
+      var raw = (rawCopy._source === 'balloon') ? rawCopy : Object.freeze(rawCopy);
+
       return {
         id: r.id,
-        raw: Object.freeze(Object.assign({}, r.raw)),
+        raw: raw,
         user: user,
         fai: r.fai || null,
         computed: {}, // Will be recalculated by app.js on load

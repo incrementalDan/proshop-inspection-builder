@@ -141,6 +141,8 @@
           <button id="pdf-zoom-fit" class="btn btn-icon pdf-btn" title="Fit to page">⊡</button>
           <button id="pdf-zoom-in" class="btn btn-icon pdf-btn" title="Zoom in">+</button>
           <div class="pdf-toolbar-sep"></div>
+          <button id="pdf-balloon-mode" class="btn btn-icon pdf-btn" title="Balloon mode (B)">⊙</button>
+          <div class="pdf-toolbar-sep"></div>
           <span id="pdf-filename" class="pdf-filename"></span>
           <button id="pdf-close" class="btn btn-icon pdf-btn" title="Close PDF">✕</button>
         </div>
@@ -531,6 +533,10 @@
     window.dispatchEvent(new Event('pdfjsReady'));
   </script>
 
+  <!-- Vendored: Tesseract.js (local OCR) + pdf-lib (Phase 4 export). Both fully offline. -->
+  <script src="lib/tesseract/tesseract.min.js"></script>
+  <script src="lib/pdf-lib.min.js"></script>
+
   <script src="js/mathEngine.js?v=26"></script>
   <script src="js/parser.js?v=26"></script>
   <script src="js/dataModel.js?v=26"></script>
@@ -539,6 +545,8 @@
   <script src="js/history.js?v=26"></script>
   <script src="js/pdfViewer.js?v=26"></script>
   <script src="js/cmmParser.js?v=26"></script>
+  <script src="js/ocrEngine.js?v=26"></script>
+  <script src="js/balloonManager.js?v=26"></script>
   <script src="js/ui.js?v=26"></script>
   <script src="js/app.js?v=26"></script>
 

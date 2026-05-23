@@ -10,7 +10,7 @@ A browser-based, local-first engineering tool that:
 6. Displays engineering drawing PDFs alongside inspection data (Phase 1 — view only)
 
 ## Architecture Rules (DO NOT VIOLATE)
-- **Local-first**: NO backend, NO external API calls. Runs entirely from `index.html` in a browser.
+- **Local-first**: NO backend. Runs entirely from `index.html` in a browser. The **single permitted** outbound network call is the Claude OCR fallback in `js/ocrEngine.js`, which sends only a small cropped image — never the PDF, filename, part number, or any project data. See the Ballooning Feature section for the boundary.
 - **No build step**: No bundlers, no npm, no frameworks. Vanilla JS, ES5-style (`var`, function declarations), `PSB` namespace on `window`. Exception: pdf.js is loaded as an ES module (`lib/pdf.min.mjs`) via a `<script type="module">` tag, then exposed as `window.pdfjsLib`.
 - **Single source of truth**: Every row follows `{ raw, user, computed }` pattern.
   - `raw` = immutable parsed import data

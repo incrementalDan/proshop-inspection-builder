@@ -148,6 +148,7 @@ function renderTable(stateOrRows, viewConfig) {
 
   // Build table rows
   tbody.innerHTML = '';
+  var balloonMode = !isFaiView && PSB.isBalloonMode && PSB.isBalloonMode();
   for (var i = 0; i < displayRows.length; i++) {
     var row = displayRows[i];
 
@@ -157,9 +158,15 @@ function renderTable(stateOrRows, viewConfig) {
       continue;
     }
 
+    // Balloon-mode insert gutter: a thin row with a "+" that targets this row's dimTag.
+    if (balloonMode) {
+      tbody.appendChild(buildBalloonInsertTr(row, i, displayRows.length));
+    }
+
     // Setup view path
     var tr = document.createElement('tr');
     tr.dataset.rowId = row.id;
+    bindBalloonHoverSync(tr, row.id);
 
     if (row.computed.isNote) tr.classList.add('is-note');
     if (row.id === selectedRowId) tr.classList.add('selected');
@@ -208,6 +215,11 @@ function renderTable(stateOrRows, viewConfig) {
         flashCellKey = null;
       }
     }
+  }
+
+  // Final gutter "+" below the last row (balloon mode only)
+  if (balloonMode && displayRows.length > 0) {
+    tbody.appendChild(buildBalloonInsertTr(null, displayRows.length, displayRows.length));
   }
 
   // Add row button at the bottom (setup view only)
@@ -1794,6 +1806,55 @@ function closeModal(id) {
     modal.classList.add('hidden');
   }, 200);
 }
+
+// ── Balloon-mode helpers ──────────────────────────────────
+function buildBalloonInsertTr(targetRow, index, total) {
+  var tr = document.createElement('tr');
+  tr.className = 'balloon-insert-tr';
+  var td = document.createElement('td');
+  td.colSpan = 12;
+  td.className = 'balloon-insert-cell';
+  var btn = document.createElement('button');
+  btn.className = 'balloon-insert-btn';
+  btn.title = 'Insert balloon here';
+  btn.textContent = '+';
+  // Target dimTag: insert AT targetRow's effective dimTag (shifts targetRow up).
+  // If targetRow is null, append after the last.
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var insertAt = null;
+    if (targetRow) {
+      var t = parseInt(PSB.effectiveDimTag(targetRow), 10);
+      if (!isNaN(t)) insertAt = t;
+    }
+    PSB.setPendingBalloonInsert(insertAt);
+    // Highlight the gap (CSS handles via .pending class)
+    var prev = document.querySelector('.balloon-insert-cell.pending');
+    if (prev) prev.classList.remove('pending');
+    td.classList.add('pending');
+    PSB.showToast && PSB.showToast('Draw a box on the PDF to insert balloon' + (insertAt != null ? ' #' + insertAt : ''), 'info');
+  });
+  td.appendChild(btn);
+  tr.appendChild(td);
+  return tr;
+}
+
+function bindBalloonHoverSync(tr, rowId) {
+  tr.addEventListener('mouseenter', function() {
+    if (PSB.setHoveredBalloonRow) PSB.setHoveredBalloonRow(rowId);
+  });
+  tr.addEventListener('mouseleave', function() {
+    if (PSB.setHoveredBalloonRow) PSB.setHoveredBalloonRow(null);
+  });
+}
+
+// Re-render table when balloon mode toggles so the + gutter appears/disappears.
+window.addEventListener('psb:balloonModeChanged', function() {
+  if (currentViewConfig && currentViewConfig.id !== 'fai' && getAppState) {
+    var st = getAppState();
+    if (st) renderTable(st, currentViewConfig);
+  }
+});
 
 // ── Export to namespace ───────────────────────────────────
 PSB.initUI = initUI;

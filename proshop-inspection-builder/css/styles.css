@@ -2248,3 +2248,158 @@ td.edit-flash {
   height: 100%;
   border-bottom: none;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   BALLOONING (Phase 2 — manual)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Balloon mode active: crosshair cursor over the PDF canvas */
+#pdf-canvas-wrap.balloon-mode,
+#pdf-canvas-wrap.balloon-mode * { cursor: crosshair !important; }
+#pdf-canvas-wrap.balloon-mode { user-select: none; }
+
+/* Active state for the toolbar toggle */
+#pdf-balloon-mode.active {
+  background: #cc0000;
+  color: #fff;
+}
+
+/* SVG overlay sits on top of the canvas wrap */
+#pdf-balloon-layer {
+  z-index: 5;
+}
+#pdf-balloon-overlay {
+  z-index: 5;
+}
+
+/* Balloon SVG */
+.balloon-group { transition: transform 60ms linear; }
+.balloon-group:active { cursor: grabbing !important; }
+
+/* Row flash on click of a balloon */
+tr.row-flash {
+  animation: row-flash-anim 1.2s ease-out;
+}
+@keyframes row-flash-anim {
+  0%   { background: rgba(255,170,0,0.55); }
+  100% { background: transparent; }
+}
+
+/* Insert "+" row in balloon mode */
+.balloon-insert-tr td.balloon-insert-cell {
+  padding: 0;
+  height: 8px;
+  border: none;
+  background: transparent;
+  text-align: center;
+  position: relative;
+}
+.balloon-insert-tr td.balloon-insert-cell.pending {
+  background: rgba(255, 170, 0, 0.25);
+}
+.balloon-insert-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 16px;
+  line-height: 14px;
+  font-size: 14px;
+  border: 1px dashed var(--border-light, #888);
+  background: var(--bg-secondary, #fafafa);
+  color: var(--text-secondary, #666);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.45;
+  transition: opacity 100ms;
+}
+.balloon-insert-btn:hover {
+  opacity: 1;
+  border-color: #cc0000;
+  color: #cc0000;
+}
+
+/* Confirmation popover */
+.balloon-popover {
+  width: 260px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-light, #ccc);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  padding: 10px 12px 12px;
+  z-index: 30;
+  font-size: 12px;
+  pointer-events: auto;
+}
+.balloon-popover-header {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.balloon-popover-engine {
+  font-weight: normal;
+  color: var(--text-secondary, #888);
+  font-size: 11px;
+}
+.balloon-popover-warn {
+  background: #fff5db;
+  border: 1px solid #e6c200;
+  color: #856b00;
+  padding: 4px 6px;
+  border-radius: 3px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.balloon-popover-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+.balloon-popover-field label {
+  font-size: 11px;
+  color: var(--text-secondary, #666);
+  margin-bottom: 2px;
+}
+.balloon-popover-field input {
+  border: 1px solid var(--border-light, #ccc);
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #000);
+  padding: 4px 6px;
+  border-radius: 3px;
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.balloon-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* OCR spinner overlay */
+.balloon-spinner {
+  border: 1.5px dashed #e6c200;
+  background: rgba(255,245,219,0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #856b00;
+  pointer-events: none;
+}
+.balloon-spinner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #e6c200;
+  border-top-color: transparent;
+  animation: balloon-spin 0.8s linear infinite;
+  margin-bottom: 4px;
+}
+@keyframes balloon-spin {
+  to { transform: rotate(360deg); }
+}

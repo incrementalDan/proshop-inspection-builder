@@ -26,6 +26,8 @@ var pdfFileHandle = null;
 var pdfRenderTask = null;
 var loadGeneration = 0;
 var currentProjectId = null;   // set by setPdfProjectId() from app.js
+var currentViewport = null;    // last computed pdf.js viewport (for overlay/coord conversion)
+var balloonModeActive = false; // true → pan disabled, balloonManager owns the canvas mouse
 
 var PDF_MIN_ZOOM = 0.25;
 var PDF_MAX_ZOOM = 4.0;
@@ -218,6 +220,18 @@ function initPdfViewer() {
   btnZoomFit.addEventListener('click', function() { zoomFit(); });
   btnClose.addEventListener('click', function() { closePdf(); });
 
+  // Balloon mode toggle (button rendered in index.html)
+  var btnBalloon = document.getElementById('pdf-balloon-mode');
+  if (btnBalloon) {
+    btnBalloon.addEventListener('click', function() {
+      setBalloonMode(!balloonModeActive);
+      btnBalloon.classList.toggle('active', balloonModeActive);
+    });
+    window.addEventListener('psb:balloonModeChanged', function(e) {
+      btnBalloon.classList.toggle('active', !!(e.detail && e.detail.active));
+    });
+  }
+
   // Pan (click-drag scrolling)
   setupPan();
 
@@ -347,6 +361,7 @@ function renderPage() {
 
   return pdfDoc.getPage(pdfCurrentPage).then(function(page) {
     var viewport = page.getViewport({ scale: pdfZoom });
+    currentViewport = viewport;
     var dpr = window.devicePixelRatio || 1;
 
     elCanvas.width = viewport.width * dpr;
@@ -364,6 +379,10 @@ function renderPage() {
     pdfRenderTask = page.render(renderContext);
     return pdfRenderTask.promise.then(function() {
       pdfRenderTask = null;
+      // Notify overlay listeners (balloonManager) that a fresh viewport is ready.
+      window.dispatchEvent(new CustomEvent('psb:pdfPageRendered', {
+        detail: { page: pdfCurrentPage, viewport: viewport },
+      }));
     }).catch(function(err) {
       if (err && err.name === 'RenderingCancelledException') return;
       console.warn('[PSB-PDF] Render error:', err);
@@ -449,6 +468,7 @@ function setupPan() {
 
   elCanvasWrap.addEventListener('mousedown', function(e) {
     if (e.button !== 0) return;
+    if (balloonModeActive) return;  // balloonManager handles canvas drag in balloon mode
     isPanning = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -671,6 +691,26 @@ function setPdfProjectId(id) {
 // ── Public API ───────────────────────────────────────────
 function hasPdf() { return pdfDoc !== null; }
 function getPdfFileName() { return pdfFileName; }
+function getPdfDoc() { return pdfDoc; }
+function getCurrentPage() { return pdfCurrentPage; }
+function getTotalPages() { return pdfTotalPages; }
+function getZoom() { return pdfZoom; }
+function getCurrentViewport() { return currentViewport; }
+function getPdfArrayBuffer() { return pdfArrayBuffer; }
+function getCanvasWrap() { return elCanvasWrap; }
+function getCanvas() { return elCanvas; }
+function getViewerEl() { return elViewer; }
+
+function setBalloonMode(active) {
+  balloonModeActive = !!active;
+  if (elCanvasWrap) {
+    elCanvasWrap.classList.toggle('balloon-mode', balloonModeActive);
+  }
+  window.dispatchEvent(new CustomEvent('psb:balloonModeChanged', {
+    detail: { active: balloonModeActive },
+  }));
+}
+function isBalloonMode() { return balloonModeActive; }
 
 // ── Export to namespace ──────────────────────────────────
 PSB.initPdfViewer = initPdfViewer;
@@ -683,3 +723,14 @@ PSB.loadPdfFromDirHandle = loadPdfFromDirHandle;
 PSB.hasPdf = hasPdf;
 PSB.getPdfFileName = getPdfFileName;
 PSB.setPdfProjectId = setPdfProjectId;
+PSB.getPdfDoc = getPdfDoc;
+PSB.getPdfCurrentPage = getCurrentPage;
+PSB.getPdfTotalPages = getTotalPages;
+PSB.getPdfZoom = getZoom;
+PSB.getPdfViewport = getCurrentViewport;
+PSB.getPdfArrayBuffer = getPdfArrayBuffer;
+PSB.getPdfCanvasWrap = getCanvasWrap;
+PSB.getPdfCanvas = getCanvas;
+PSB.getPdfViewerEl = getViewerEl;
+PSB.setBalloonMode = setBalloonMode;
+PSB.isBalloonMode = isBalloonMode;

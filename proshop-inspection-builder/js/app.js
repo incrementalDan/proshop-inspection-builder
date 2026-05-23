@@ -191,9 +191,12 @@ function markClean() {
 function restoreSnapshot(snapshot) {
   state.globals = snapshot.globals;
   state.rows = snapshot.rows.map(function(r) {
+    // Balloon-created rows keep mutable raw; CSV rows stay frozen.
+    var rawCopy = Object.assign({}, r.raw);
+    var raw = (rawCopy._source === 'balloon') ? rawCopy : Object.freeze(rawCopy);
     return {
       id: r.id,
-      raw: Object.freeze(Object.assign({}, r.raw)),
+      raw: raw,
       user: r.user,
       computed: {},
     };
@@ -373,6 +376,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // PDF Viewer
     PSB.initPdfViewer();
 
+    // Ballooning (Phase 2 — manual)
+    PSB.initBalloonManager({
+      getState: function() { return state; },
+      onChange: function(evt) {
+        // Re-render table and re-fire autosave whenever balloons mutate state.
+        recomputeAll();
+        PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+        PSB.renderBalloonOverlay();
+        markDirty();
+        scheduleAutoSave();
+        updateUndoRedoButtons();
+      },
+    });
+
     console.log('[PSB] All controls bound');
 
     // Keyboard shortcuts
@@ -404,7 +421,29 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (mod && e.key === '1') { e.preventDefault(); switchView('setup'); }
       if (mod && e.key === '2') { e.preventDefault(); switchView('fai'); }
+
+      // Ballooning shortcuts (skip if user is typing in an input/textarea)
+      var inField = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
+      if (!mod && !inField && PSB.hasPdf()) {
+        if (e.key === 'b' || e.key === 'B') {
+          e.preventDefault();
+          PSB.setBalloonMode(!PSB.isBalloonMode());
+        }
+        if (PSB.getSelectedBalloonRowId && PSB.getSelectedBalloonRowId() != null) {
+          // Arrow keys move balloon visually; PDF Y grows up, so ArrowUp → +y, ArrowDown → -y.
+          if (e.key === 'ArrowLeft')  { e.preventDefault(); PSB.nudgeSelectedBalloon(-1, 0); }
+          if (e.key === 'ArrowRight') { e.preventDefault(); PSB.nudgeSelectedBalloon( 1, 0); }
+          if (e.key === 'ArrowUp')    { e.preventDefault(); PSB.nudgeSelectedBalloon( 0, 1); }
+          if (e.key === 'ArrowDown')  { e.preventDefault(); PSB.nudgeSelectedBalloon( 0,-1); }
+        }
+      }
+
       if (e.key === 'Escape') {
+        if (PSB.isBalloonMode && PSB.isBalloonMode()) {
+          PSB.setBalloonMode(false);
+          PSB.clearPendingBalloonInsert && PSB.clearPendingBalloonInsert();
+          return;
+        }
         var confirmModal = document.getElementById('confirm-modal');
         if (!confirmModal.classList.contains('hidden')) {
           PSB.closeModal('confirm-modal');
