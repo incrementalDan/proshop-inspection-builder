@@ -2352,10 +2352,19 @@ tr.row-flash {
   margin-bottom: 6px;
   font-size: 11px;
 }
+.balloon-popover-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px 8px;
+  margin-bottom: 4px;
+}
+.balloon-popover-field.bp-col-2 {
+  grid-column: span 3;
+}
 .balloon-popover-field {
   display: flex;
   flex-direction: column;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 .balloon-popover-field label {
   font-size: 11px;

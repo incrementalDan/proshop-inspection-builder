@@ -235,13 +235,15 @@ function parseOcrText(rawText) {
   }
 
   // Separate the spec body from any tolerance portion. We treat anything
-  // including ±, +/-, +.../-... as tolerance and the rest as spec.
-  var tolMatch = text.match(/(±[^\s]+|\+\/-\s*[0-9.]+|\+\s*\.?[0-9.]+\s*[-–]\s*\.?[0-9.]+|\+\s*\.?[0-9.]+\s+-\s*\.?[0-9.]+)/);
+  // including ±, +/-, +.../-..., +X/-Y as tolerance and the rest as spec.
+  var tolMatch = text.match(/(±\s*\.?[0-9.]+|\+\s*\/\s*-\s*\.?[0-9.]+|\+\s*\.?[0-9.]+\s*\/\s*-\s*\.?[0-9.]+|\+\s*\.?[0-9.]+\s*[-–]\s*\.?[0-9.]+)/);
   var specBody = text;
   var tolText = '';
   if (tolMatch) {
     tolText = tolMatch[0];
     specBody = (text.slice(0, tolMatch.index) + text.slice(tolMatch.index + tolMatch[0].length)).trim();
+    // Normalize "+X/-Y" → "+X -Y" so PSB.parseTolerance recognises the asymmetric form.
+    tolText = tolText.replace(/\+\s*(\.?[0-9.]+)\s*\/\s*-\s*(\.?[0-9.]+)/, '+$1 -$2');
   }
 
   var su = PSB.parseSpecUnits(specBody);

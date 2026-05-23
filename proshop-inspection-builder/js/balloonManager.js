@@ -261,12 +261,18 @@ function showPopover(anchorBox, pageNum, ocrResult) {
     (ocrFailed
       ? '<div class="balloon-popover-warn">OCR could not read this area — enter values manually</div>'
       : (lowConf ? '<div class="balloon-popover-warn">⚠ Low confidence — please verify</div>' : '')) +
-    '<div class="balloon-popover-field"><label>Drawing Spec</label>' +
-      '<input type="text" class="bp-spec" value="' + escapeAttr(parsed.drawingSpec || '') + '" /></div>' +
-    '<div class="balloon-popover-field"><label>Tolerance</label>' +
-      '<input type="text" class="bp-tol" value="' + escapeAttr(parsed.tolerance || '') + '" /></div>' +
-    '<div class="balloon-popover-field"><label>Spec Unit 2</label>' +
-      '<input type="text" class="bp-su2" value="' + escapeAttr(parsed.specUnit2 || '') + '" /></div>' +
+    '<div class="balloon-popover-grid">' +
+      '<div class="balloon-popover-field bp-col-2"><label>Drawing Spec</label>' +
+        '<input type="text" class="bp-spec" value="' + escapeAttr(parsed.drawingSpec || '') + '" /></div>' +
+      '<div class="balloon-popover-field bp-col-2"><label>Tolerance</label>' +
+        '<input type="text" class="bp-tol" value="' + escapeAttr(parsed.tolerance || '') + '" /></div>' +
+      '<div class="balloon-popover-field"><label>Spec Unit 1</label>' +
+        '<input type="text" class="bp-su1" value="' + escapeAttr(parsed.specUnit1 || '') + '" title="Ø, R, SR" /></div>' +
+      '<div class="balloon-popover-field"><label>Spec Unit 2</label>' +
+        '<input type="text" class="bp-su2" value="' + escapeAttr(parsed.specUnit2 || '') + '" title="Thru, REF, MAX, MIN, TYP, °" /></div>' +
+      '<div class="balloon-popover-field"><label>Spec Unit 3</label>' +
+        '<input type="text" class="bp-su3" value="' + escapeAttr(parsed.specUnit3 || '') + '" title="2x, 4x, PLACES, HOLES" /></div>' +
+    '</div>' +
     '<div class="balloon-popover-actions">' +
       '<button type="button" class="btn btn-secondary bp-cancel">Cancel</button>' +
       '<button type="button" class="btn btn-primary bp-confirm">Confirm (Enter)</button>' +
@@ -287,7 +293,9 @@ function showPopover(anchorBox, pageNum, ocrResult) {
   // Wire actions
   var inSpec = popoverEl.querySelector('.bp-spec');
   var inTol  = popoverEl.querySelector('.bp-tol');
+  var inSu1  = popoverEl.querySelector('.bp-su1');
   var inSu2  = popoverEl.querySelector('.bp-su2');
+  var inSu3  = popoverEl.querySelector('.bp-su3');
   popoverEl.querySelector('.bp-cancel').addEventListener('click', closePopover);
   popoverEl.querySelector('.bp-confirm').addEventListener('click', function() {
     confirmPopover(anchorBox, pageNum, ocrResult);
@@ -299,7 +307,7 @@ function showPopover(anchorBox, pageNum, ocrResult) {
   setTimeout(function() { inSpec && inSpec.focus(); inSpec && inSpec.select(); }, 0);
 
   // Stash inputs on the popover for confirmPopover to read.
-  popoverEl._inputs = { spec: inSpec, tol: inTol, su2: inSu2 };
+  popoverEl._inputs = { spec: inSpec, tol: inTol, su1: inSu1, su2: inSu2, su3: inSu3 };
 }
 
 function closePopover() {
@@ -319,7 +327,9 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
   var parsed = Object.assign({}, ocrResult.parsed || {}, {
     drawingSpec: ins.spec.value.trim(),
     tolerance: ins.tol.value.trim(),
-    specUnit2: ins.su2.value.trim(),
+    specUnit1: ins.su1 ? ins.su1.value.trim() : (ocrResult.parsed && ocrResult.parsed.specUnit1) || '',
+    specUnit2: ins.su2 ? ins.su2.value.trim() : '',
+    specUnit3: ins.su3 ? ins.su3.value.trim() : (ocrResult.parsed && ocrResult.parsed.specUnit3) || '',
     nominal: ins.spec.value.trim(),
   });
   closePopover();
@@ -447,7 +457,16 @@ function renderOverlay(viewport) {
 
   if (!viewport || !PSB.hasPdf()) return;
 
-  // Align overlay to canvas.
+  // Align overlay to the canvas. The canvas is flex-centered inside the wrap,
+  // so the overlay layer needs to track the canvas's offsetLeft/Top each render.
+  var canvas = PSB.getPdfCanvas();
+  var layer = document.getElementById('pdf-balloon-layer');
+  if (canvas && layer) {
+    layer.style.left = canvas.offsetLeft + 'px';
+    layer.style.top  = canvas.offsetTop  + 'px';
+    layer.style.width  = viewport.width  + 'px';
+    layer.style.height = viewport.height + 'px';
+  }
   svgRoot.setAttribute('width', viewport.width);
   svgRoot.setAttribute('height', viewport.height);
   svgRoot.style.width = viewport.width + 'px';
