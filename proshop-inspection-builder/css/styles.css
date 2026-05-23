@@ -1195,6 +1195,16 @@ td.editable input:focus {
   border-radius: 2px;
 }
 
+/* Hovered balloon (driven by .hovered class — see balloonManager setHoveredRow) */
+.balloon-hover-ring {
+  opacity: 0;
+  transition: opacity 80ms linear;
+  pointer-events: none;
+}
+.balloon-group.hovered .balloon-hover-ring {
+  opacity: 1;
+}
+
 /* Override highlight — faint indicator that value was manually changed */
 td.has-override {
   background: rgba(255, 140, 66, 0.10);

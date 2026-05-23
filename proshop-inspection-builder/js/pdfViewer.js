@@ -459,6 +459,10 @@ function closePdf() {
   }
   if (elPageInfo) elPageInfo.textContent = '— / —';
   if (elFilename) elFilename.textContent = '';
+
+  // Clear any leftover balloon overlay (anchor boxes, popover, spinner, draft
+  // rect, pending-insert state) — they don't apply to the next PDF.
+  if (PSB.clearBalloonOverlay) PSB.clearBalloonOverlay();
 }
 
 // ── Pan (click-drag scroll) ──────────────────────────────

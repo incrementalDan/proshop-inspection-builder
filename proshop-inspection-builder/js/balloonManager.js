@@ -55,12 +55,20 @@ function initBalloonManager(opts) {
     wrap.appendChild(inner);
   }
 
-  // Re-render overlay whenever the PDF page is rendered/zoomed.
+  // Re-render overlay whenever the PDF page is rendered/zoomed. Also close any
+  // stale popover from a previous page — its anchor coordinates no longer apply.
   window.addEventListener('psb:pdfPageRendered', function(e) {
+    closePopover();
     renderOverlay(e.detail.viewport);
   });
   // When balloon mode toggles, refresh the overlay (anchor box visibility differs).
-  window.addEventListener('psb:balloonModeChanged', function() {
+  // Exiting balloon mode also cancels any pending targeted insert and the popover.
+  window.addEventListener('psb:balloonModeChanged', function(e) {
+    var active = !!(e && e.detail && e.detail.active);
+    if (!active) {
+      clearPendingInsert();
+      closePopover();
+    }
     renderOverlay(PSB.getPdfViewport());
   });
 
@@ -154,6 +162,17 @@ function attachDrawBoxHandlers() {
     draftBox = null;
     runOcrAndConfirm(boxToRun);
   });
+
+  // Esc during an in-progress drag clears state and the draft rectangle, without
+  // waiting for mouseup. The mousemove/mouseup listeners stay attached at the
+  // document — they're gated by dragStart, so resetting it is sufficient.
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    if (dragStart == null && !draftBox) return;
+    dragStart = null;
+    draftBox = null;
+    removeDraftRect();
+  });
 }
 
 function updateDraftRect(viewport) {
@@ -198,6 +217,8 @@ function runOcrAndConfirm(anchorBox) {
     showPopover(anchorBox, pageNum, result);
   }).catch(function(err) {
     console.warn('[Balloon] OCR pipeline failed:', err);
+    var msg = (err && err.message) ? err.message : String(err);
+    PSB.showToast && PSB.showToast('OCR pipeline failed — enter values manually (' + msg + ')', 'error');
     hideSpinner();
     showPopover(anchorBox, pageNum, {
       parsed: PSB.ocrEngine.parseOcrText(''),
@@ -404,10 +425,28 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
   var newDimTag;
   if (pendingInsertAt != null) {
     newDimTag = pendingInsertAt;
+    // Collision check: a CSV row (not a balloon row) holds this dimTag and
+    // cannot be renumbered because raw is frozen. Abort the insert.
+    var collidingCsvRow = findCsvRowWithDimTag(state, newDimTag);
+    if (collidingCsvRow) {
+      PSB.showToast && PSB.showToast(
+        'Dim Tag #' + newDimTag + ' is held by a CSV-imported row — pick a different gap',
+        'error'
+      );
+      pendingInsertAt = null;
+      return;
+    }
     pendingInsertAt = null;
     renumberShiftUp(newDimTag);
   } else {
     newDimTag = existingMax + 1;
+    // Same guard for plain append — extremely rare, but a CSV row could already
+    // be at existingMax+1 if dimTags weren't contiguous in the import.
+    var collide = findCsvRowWithDimTag(state, newDimTag);
+    while (collide) {
+      newDimTag++;
+      collide = findCsvRowWithDimTag(state, newDimTag);
+    }
   }
 
   PSB.pushUndo(state, 'Add balloon #' + newDimTag);
@@ -440,6 +479,19 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
 
   ctx.onChange && ctx.onChange({ kind: 'add', rowId: row.id });
   renderOverlay(PSB.getPdfViewport());
+}
+
+// Find a CSV-imported row whose immutable raw.dimTag equals the given dimTag.
+// Balloon rows use user.balloon.dimTag and can be renumbered freely; CSV rows cannot.
+function findCsvRowWithDimTag(state, dimTag) {
+  for (var i = 0; i < state.rows.length; i++) {
+    var r = state.rows[i];
+    if (r.raw && r.raw._source !== 'balloon') {
+      var t = parseInt(r.raw.dimTag, 10);
+      if (!isNaN(t) && t === dimTag) return r;
+    }
+  }
+  return null;
 }
 
 function defaultBalloonOffset(box, dir) {
@@ -628,15 +680,16 @@ function renderOverlay(viewport) {
       group.appendChild(badge);
     }
 
-    if (row.id === hoveredRowId) {
-      var ring = document.createElementNS(SVG_NS, 'circle');
-      ring.setAttribute('cx', 0); ring.setAttribute('cy', 0);
-      ring.setAttribute('r', radius + 4);
-      ring.setAttribute('fill', 'none');
-      ring.setAttribute('stroke', '#ffaa00');
-      ring.setAttribute('stroke-width', '2');
-      group.insertBefore(ring, circle);
-    }
+    // Always render a hover ring; visibility is controlled by .hovered class via CSS.
+    var hoverRing = document.createElementNS(SVG_NS, 'circle');
+    hoverRing.setAttribute('class', 'balloon-hover-ring');
+    hoverRing.setAttribute('cx', 0); hoverRing.setAttribute('cy', 0);
+    hoverRing.setAttribute('r', radius + 4);
+    hoverRing.setAttribute('fill', 'none');
+    hoverRing.setAttribute('stroke', '#ffaa00');
+    hoverRing.setAttribute('stroke-width', '2');
+    group.insertBefore(hoverRing, circle);
+    if (row.id === hoveredRowId) group.classList.add('hovered');
 
     bindBalloonInteractions(group, row);
     svgRoot.appendChild(group);
@@ -795,10 +848,31 @@ function bindLeaderHandle(handleEl, row) {
 }
 
 // ── Hover sync (called by ui.js) ─────────────────────────
+// Toggle a .hovered class on the matching balloon group instead of re-rendering
+// the entire overlay — avoids dozens of SVG rebuilds per second on hover.
 function setHoveredRow(rowId) {
   if (hoveredRowId === rowId) return;
   hoveredRowId = rowId;
-  renderOverlay(PSB.getPdfViewport());
+  if (!svgRoot) return;
+  var groups = svgRoot.querySelectorAll('.balloon-group');
+  for (var i = 0; i < groups.length; i++) {
+    groups[i].classList.toggle('hovered', String(rowId) === groups[i].getAttribute('data-row-id'));
+  }
+}
+
+// Public: clear the entire SVG overlay and reset transient state. Called by
+// pdfViewer.closePdf so a fresh PDF doesn't inherit stale balloons.
+function clearBalloonOverlay() {
+  if (svgRoot) {
+    while (svgRoot.firstChild) svgRoot.removeChild(svgRoot.firstChild);
+  }
+  closePopover();
+  hideSpinner();
+  draftBox = null;
+  draftRectEl = null;
+  pendingInsertAt = null;
+  hoveredRowId = null;
+  selectedRowId = null;
 }
 
 // ── Keyboard nudge ───────────────────────────────────────
@@ -828,3 +902,4 @@ PSB.setPendingBalloonInsert = setPendingInsertAt;
 PSB.clearPendingBalloonInsert = clearPendingInsert;
 PSB.nudgeSelectedBalloon = nudgeSelected;
 PSB.getSelectedBalloonRowId = function() { return selectedRowId; };
+PSB.clearBalloonOverlay = clearBalloonOverlay;
