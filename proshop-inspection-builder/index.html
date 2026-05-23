@@ -520,6 +520,9 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Local config (Claude API key etc). Gitignored. onerror handles missing file. -->
+  <script src="config.js" onerror="window.PSB_CONFIG = { anthropicApiKey: null };"></script>
+
   <!-- pdf.js — loaded as ESM, exposed globally for pdfViewer.js -->
   <script type="module">
     import * as pdfjsLib from './lib/pdf.min.mjs';
