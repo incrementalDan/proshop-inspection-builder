@@ -219,7 +219,7 @@ var DIGIT_RE = /\d/;
 function parseOcrText(rawText) {
   var text = (rawText || '').trim();
   var out = {
-    drawingSpec: '', nominal: '', tolerance: '',
+    drawingSpec: '', nominal: '', tolerance: '', tolMode: 'sym',
     specUnit1: '', specUnit2: '', specUnit3: '',
     isGDT: false, isNote: false, confidence: 'low',
   };
@@ -263,12 +263,16 @@ function parseOcrText(rawText) {
   }
 
   // Tolerance normalization: parseTolerance returns numeric plus/minus.
+  // tolMode is the popover's starting mode: ± yields 'sym', +X/-Y yields 'asym'.
+  // ('minmax' is never inferred from OCR — drawings don't use that notation.)
   if (tolText) {
     var parsedTol = PSB.parseTolerance(tolText);
     if (parsedTol.isSymmetric && parsedTol.tolPlus > 0) {
       out.tolerance = String(parsedTol.tolPlus);
+      out.tolMode = 'sym';
     } else if (parsedTol.tolPlus || parsedTol.tolMinus) {
       out.tolerance = '+' + parsedTol.tolPlus + '-' + parsedTol.tolMinus;
+      out.tolMode = 'asym';
     }
   }
 

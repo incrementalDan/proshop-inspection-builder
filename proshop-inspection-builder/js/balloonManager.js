@@ -265,7 +265,7 @@ function showPopover(anchorBox, pageNum, ocrResult) {
       '<div class="balloon-popover-field bp-col-2"><label>Drawing Spec</label>' +
         '<input type="text" class="bp-spec" value="' + escapeAttr(parsed.drawingSpec || '') + '" /></div>' +
       '<div class="balloon-popover-field bp-col-2"><label>Tolerance</label>' +
-        '<input type="text" class="bp-tol" value="' + escapeAttr(parsed.tolerance || '') + '" /></div>' +
+        '<div class="bp-tol-mount"></div></div>' +
       '<div class="balloon-popover-field"><label>Spec Unit 1</label>' +
         '<input type="text" class="bp-su1" value="' + escapeAttr(parsed.specUnit1 || '') + '" title="Ø, R, SR" /></div>' +
       '<div class="balloon-popover-field"><label>Spec Unit 2</label>' +
@@ -292,22 +292,66 @@ function showPopover(anchorBox, pageNum, ocrResult) {
 
   // Wire actions
   var inSpec = popoverEl.querySelector('.bp-spec');
-  var inTol  = popoverEl.querySelector('.bp-tol');
+  var tolMount = popoverEl.querySelector('.bp-tol-mount');
   var inSu1  = popoverEl.querySelector('.bp-su1');
   var inSu2  = popoverEl.querySelector('.bp-su2');
   var inSu3  = popoverEl.querySelector('.bp-su3');
+
+  // Build the mode-aware tolerance controller. Seed plus/minus from parsed.tolerance string.
+  var seed = parseToleranceSeed(parsed.tolerance);
+  var initialMode = parsed.tolMode || seed.mode || 'sym';
+  var nominalForBounds = parseFloat(parsed.drawingSpec);
+  var tolCtrl = PSB.renderTolModeInputs(tolMount, {
+    mode: initialMode,
+    plus: seed.plus,
+    minus: seed.minus,
+    nominal: isNaN(nominalForBounds) ? null : nominalForBounds,
+    precision: 4,
+  });
+  // Keep nominal in sync if user edits Drawing Spec before confirm.
+  inSpec && inSpec.addEventListener('input', function() {
+    var n = parseFloat(inSpec.value);
+    tolCtrl.setNominal(isNaN(n) ? null : n);
+  });
+
   popoverEl.querySelector('.bp-cancel').addEventListener('click', closePopover);
   popoverEl.querySelector('.bp-confirm').addEventListener('click', function() {
     confirmPopover(anchorBox, pageNum, ocrResult);
   });
   popoverEl.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); confirmPopover(anchorBox, pageNum, ocrResult); }
+    if (e.key === 'Enter') {
+      // Don't fire confirm if focus is inside the mode-toggle button row.
+      if (e.target && e.target.classList && e.target.classList.contains('tol-mode-chip')) return;
+      e.preventDefault();
+      confirmPopover(anchorBox, pageNum, ocrResult);
+    }
     if (e.key === 'Escape') { e.preventDefault(); closePopover(); }
   });
   setTimeout(function() { inSpec && inSpec.focus(); inSpec && inSpec.select(); }, 0);
 
   // Stash inputs on the popover for confirmPopover to read.
-  popoverEl._inputs = { spec: inSpec, tol: inTol, su1: inSu1, su2: inSu2, su3: inSu3 };
+  popoverEl._inputs = { spec: inSpec, tolCtrl: tolCtrl, su1: inSu1, su2: inSu2, su3: inSu3 };
+}
+
+// Parse the tolerance string emitted by ocrEngine.parseOcrText into { plus, minus, mode }
+// so the popover can prefill the right inputs.
+//   ""              → mode 'sym', 0/0
+//   "0.005"         → mode 'sym', 0.005/0.005
+//   "+0.003-0.001"  → mode 'asym', 0.003/0.001
+function parseToleranceSeed(tolStr) {
+  var s = String(tolStr == null ? '' : tolStr).trim();
+  if (!s) return { plus: 0, minus: 0, mode: 'sym' };
+  var asym = s.match(/^\+?\s*(\.?[0-9.]+)\s*[-−]\s*(\.?[0-9.]+)\s*$/);
+  if (asym) {
+    var p = parseFloat(asym[1]);
+    var m = parseFloat(asym[2]);
+    if (!isNaN(p) && !isNaN(m)) {
+      return { plus: p, minus: m, mode: (p === m ? 'sym' : 'asym') };
+    }
+  }
+  var n = parseFloat(s);
+  if (!isNaN(n)) return { plus: Math.abs(n), minus: Math.abs(n), mode: 'sym' };
+  return { plus: 0, minus: 0, mode: 'sym' };
 }
 
 function closePopover() {
@@ -324,9 +368,25 @@ function escapeAttr(s) {
 function confirmPopover(anchorBox, pageNum, ocrResult) {
   if (!popoverEl) return;
   var ins = popoverEl._inputs;
+
+  // Run tolerance validation BEFORE closing the popover. If invalid, keep it open.
+  var tolResult = ins.tolCtrl.commit();
+  if (!tolResult.ok) return;
+
+  // Re-format the tolerance string for downstream parser (parseOcrText emits same shape).
+  var tolStr;
+  if (tolResult.tolPlus === tolResult.tolMinus) {
+    tolStr = tolResult.tolPlus > 0 ? String(tolResult.tolPlus) : '';
+  } else {
+    tolStr = '+' + tolResult.tolPlus + '-' + tolResult.tolMinus;
+  }
+
   var parsed = Object.assign({}, ocrResult.parsed || {}, {
     drawingSpec: ins.spec.value.trim(),
-    tolerance: ins.tol.value.trim(),
+    tolerance: tolStr,
+    tolMode: tolResult.tolMode,
+    tolPlus: tolResult.tolPlus,
+    tolMinus: tolResult.tolMinus,
     specUnit1: ins.su1 ? ins.su1.value.trim() : (ocrResult.parsed && ocrResult.parsed.specUnit1) || '',
     specUnit2: ins.su2 ? ins.su2.value.trim() : '',
     specUnit3: ins.su3 ? ins.su3.value.trim() : (ocrResult.parsed && ocrResult.parsed.specUnit3) || '',
@@ -364,9 +424,13 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
   };
 
   var row = PSB.createBalloonRow(newDimTag, parsed, balloonData);
+  if (parsed.tolMode && row.user && row.user.overrides) {
+    row.user.overrides.tolMode = parsed.tolMode;
+  }
   PSB.recompute(row, state.globals);
   state.rows.push(row);
   sortRowsByEffectiveDimTag(state);
+  selectedRowId = row.id;  // arrow keys nudge the new balloon immediately
 
   PSB.logChange(state.auditLog, {
     type: 'add', rowId: row.id,

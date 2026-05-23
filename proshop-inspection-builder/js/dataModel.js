@@ -118,6 +118,7 @@ function defaultUserState() {
       outputSpec: null,      // Independent OUT spec override (cleared when OP2000 spec changes)
       outputTolPlus: null,   // Independent OUT tol+ override (bypasses pipeline)
       outputTolMinus: null,  // Independent OUT tol- override (bypasses pipeline)
+      tolMode: 'sym',        // 'sym' | 'asym' | 'minmax' — per-row UI input mode (math unchanged)
       pinGageValue: null,
       specUnit1: null,
       specUnit2: null,

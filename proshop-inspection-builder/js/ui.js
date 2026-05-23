@@ -1092,50 +1092,52 @@ function setupSidebarTolEdit(elementId, plusKey, minusKey, rowId, clearPlusKey, 
     var isOp2k = plusKey === 'outTolPlus';
     var plusVal = isOp2k ? c.op2kTolPlus : c.outTolPlus;
     var minusVal = isOp2k ? c.op2kTolMinus : c.outTolMinus;
-    var plusStr = PSB.formatPrecision(plusVal, prec);
-    var minusStr = PSB.formatPrecision(minusVal, prec);
+    var curMode = (row.user.overrides && row.user.overrides.tolMode) || 'sym';
 
-    clone.innerHTML = '<div class="tol-edit-container">' +
-      '<div class="tol-input-wrap"><span class="tol-sign-label">+</span><input class="tol-input tol-plus" value="' + esc(plusStr) + '"></div>' +
-      '<div class="tol-input-wrap"><span class="tol-sign-label">−</span><input class="tol-input tol-minus" value="' + esc(minusStr) + '"></div>' +
-      '</div>';
+    // Min/max bounds are derived from the print-spec nominal (OP2000) — plating/conversion
+    // are applied downstream, not at the override layer.
+    var nominalForBounds = parseFloat(c.op2000Nominal);
+    if (isNaN(nominalForBounds)) nominalForBounds = parseFloat(c.nominal);
 
-    var plusInput = clone.querySelector('.tol-plus');
-    var minusInput = clone.querySelector('.tol-minus');
-    plusInput.focus();
-    plusInput.select();
+    clone.innerHTML = '<div class="tol-edit-container"></div>';
+    var mount = clone.querySelector('.tol-edit-container');
+    mount.style.flexDirection = 'column';
+    mount.style.alignItems = 'stretch';
+
+    var ctrl = PSB.renderTolModeInputs(mount, {
+      mode: curMode, plus: plusVal, minus: minusVal,
+      nominal: isNaN(nominalForBounds) ? null : nominalForBounds,
+      precision: prec,
+    });
+    ctrl.focus();
 
     var committed = false;
-    var commit = function() {
+    function revert() { committed = true; clone.innerHTML = originalHTML; }
+    function commit() {
       if (committed) return;
+      var r = ctrl.commit();
+      if (!r.ok) return; // error shown inline; keep editor open
       committed = true;
 
-      var pv = plusInput.value.trim();
-      var mv = minusInput.value.trim();
-      if (pv.charAt(0) === '+') pv = pv.substring(1);
-      if (mv.charAt(0) === '-' || mv.charAt(0) === '−') mv = mv.substring(1);
-
-      var pNum = parseFloat(pv);
-      var mNum = parseFloat(mv);
-
-      if (isNaN(pNum) && isNaN(mNum)) {
-        clone.innerHTML = originalHTML;
-        return;
-      }
-      if (isNaN(pNum)) pNum = mNum;
-      if (isNaN(mNum)) mNum = pNum;
-
-      if (Math.abs(pNum - plusVal) < 1e-10 && Math.abs(mNum - minusVal) < 1e-10) {
-        clone.innerHTML = originalHTML;
-        return;
-      }
+      var pNum = r.tolPlus;
+      var mNum = r.tolMinus;
+      var newMode = r.tolMode;
 
       var freshState = getAppState();
-      var freshRow = freshState.rows.find(function(r) { return r.id === rowId; });
+      var freshRow = freshState.rows.find(function(rr) { return rr.id === rowId; });
       if (!freshRow) { clone.innerHTML = originalHTML; return; }
+
+      var prevMode = (freshRow.user.overrides && freshRow.user.overrides.tolMode) || 'sym';
+      var nothingChanged =
+        Math.abs(pNum - plusVal) < 1e-10 &&
+        Math.abs(mNum - minusVal) < 1e-10 &&
+        newMode === prevMode;
+      if (nothingChanged) { clone.innerHTML = originalHTML; return; }
+
       var ov = Object.assign({}, freshRow.user.overrides);
       ov[plusKey] = String(pNum);
       ov[minusKey] = String(mNum);
+      ov.tolMode = newMode;
 
       if (clearPlusKey && (ov[clearPlusKey] !== null || ov[clearMinusKey] !== null)) {
         ov[clearPlusKey] = null;
@@ -1143,31 +1145,40 @@ function setupSidebarTolEdit(elementId, plusKey, minusKey, rowId, clearPlusKey, 
         showToast('OP2000 Tol changed — OUT Tol override cleared', 'info');
       }
       onRowUserChange(rowId, { overrides: ov });
-    };
+    }
 
-    var blurTimeout;
-    var onBlur = function() {
-      blurTimeout = setTimeout(function() {
-        if (!clone.contains(document.activeElement) || !clone.querySelector('.tol-input')) {
-          commit();
-        }
+    // Blur-commit, but only when focus leaves the entire control (not when
+    // switching between mode chip and input).
+    function onBlur() {
+      setTimeout(function() {
+        if (!clone.contains(document.activeElement)) commit();
       }, 0);
-    };
+    }
+    var inputs = ctrl.getInputs();
+    for (var i = 0; i < inputs.length; i++) {
+      inputs[i].addEventListener('blur', onBlur);
+      inputs[i].addEventListener('keydown', function(ke) {
+        if (ke.key === 'Enter')  { ke.preventDefault(); commit(); }
+        if (ke.key === 'Escape') { ke.preventDefault(); revert(); }
+      });
+    }
 
-    plusInput.addEventListener('blur', onBlur);
-    minusInput.addEventListener('blur', onBlur);
-
-    plusInput.addEventListener('keydown', function(ke) {
-      if (ke.key === 'Enter') { ke.target.blur(); setTimeout(commit, 0); }
-      if (ke.key === 'Escape') { committed = true; clone.innerHTML = originalHTML; }
-      if (ke.key === 'Tab' && !ke.shiftKey) { ke.preventDefault(); minusInput.focus(); minusInput.select(); }
-    });
-    minusInput.addEventListener('keydown', function(ke) {
-      if (ke.key === 'Enter') { ke.target.blur(); setTimeout(commit, 0); }
-      if (ke.key === 'Escape') { committed = true; clone.innerHTML = originalHTML; }
-      if (ke.key === 'Tab' && ke.shiftKey) { ke.preventDefault(); plusInput.focus(); plusInput.select(); }
-      if (ke.key === 'Tab' && !ke.shiftKey) { ke.preventDefault(); commit(); }
-    });
+    // When the mode chip is clicked, fields re-render — re-bind blur/keydown to the new inputs.
+    var chips = clone.querySelectorAll('.tol-mode-chip');
+    for (var ci = 0; ci < chips.length; ci++) {
+      chips[ci].addEventListener('click', function() {
+        setTimeout(function() {
+          var fresh = ctrl.getInputs();
+          for (var k = 0; k < fresh.length; k++) {
+            fresh[k].addEventListener('blur', onBlur);
+            fresh[k].addEventListener('keydown', function(ke) {
+              if (ke.key === 'Enter')  { ke.preventDefault(); commit(); }
+              if (ke.key === 'Escape') { ke.preventDefault(); revert(); }
+            });
+          }
+        }, 0);
+      });
+    }
   });
 }
 

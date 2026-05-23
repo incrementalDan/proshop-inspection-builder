@@ -1150,6 +1150,51 @@ td.editable input:focus {
   box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
 }
 
+/* ── Tolerance Mode Toggle (sym / asym / minmax) ────────── */
+.tol-mode-toggle {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.tol-mode-chip {
+  flex: 1;
+  padding: 2px 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.tol-mode-chip:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+.tol-mode-chip.active {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+  font-weight: 600;
+}
+.tol-mode-fields {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  width: 100%;
+}
+.tol-mode-error {
+  margin-top: 4px;
+  padding: 2px 4px;
+  background: rgba(204, 0, 0, 0.15);
+  border-left: 2px solid #cc0000;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border-radius: 2px;
+}
+
 /* Override highlight — faint indicator that value was manually changed */
 td.has-override {
   background: rgba(255, 140, 66, 0.10);
