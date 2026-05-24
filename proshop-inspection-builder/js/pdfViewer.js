@@ -326,6 +326,11 @@ function waitForPdfjsLib() {
 }
 
 function loadPdfFromArrayBuffer(buffer) {
+  // pdf.js transfers the underlying ArrayBuffer to its worker, which detaches
+  // the main-thread reference. pdfExport.js (and any other future consumer)
+  // needs a live copy long after this function returns — keep one here and
+  // hand pdf.js a fresh clone it can safely transfer.
+  pdfArrayBuffer = buffer.slice(0);
   return waitForPdfjsLib().then(function() {
     var data = new Uint8Array(buffer);
     var loadingTask = window.pdfjsLib.getDocument({ data: data });

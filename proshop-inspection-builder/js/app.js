@@ -339,6 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
     bindExportModal();
     bindSettingsModal();
     bindFaiControls();
+    bindPdfExportButton();
 
     // Wire nav rail tab clicks
     (function() {
@@ -505,6 +506,45 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+
+// ═══════════════════════════════════════════════════════════
+// PDF EXPORT (BALLOONED PDF)
+// ═══════════════════════════════════════════════════════════
+//
+// Toolbar button → call pdfExport.exportBalloonedPdf with the in-memory
+// pdfArrayBuffer. Nothing is sent over the network; pdf-lib runs locally and
+// the resulting bytes are downloaded via a transient blob URL.
+function bindPdfExportButton() {
+  var btn = document.getElementById('pdf-export-balloons');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    if (!PSB.hasPdf()) {
+      PSB.showToast('Open a PDF first', 'info');
+      return;
+    }
+    var hasBalloons = state.rows.some(function(r) { return r.user && r.user.balloon; });
+    if (!hasBalloons) {
+      PSB.showToast('No balloons to export — add some with Balloon Mode (B)', 'info');
+      return;
+    }
+    btn.disabled = true;
+    var oldTitle = btn.getAttribute('title');
+    btn.setAttribute('title', 'Exporting…');
+    PSB.exportBalloonedPdf(state, PSB.getPdfArrayBuffer(), PSB.getPdfFileName())
+      .then(function(result) {
+        PSB.showToast('Exported ' + result.balloonCount + ' balloon' +
+                      (result.balloonCount === 1 ? '' : 's') + ' → ' + result.filename, 'success');
+      })
+      .catch(function(err) {
+        console.error('[pdfExport] failed:', err);
+        PSB.showToast('PDF export failed: ' + (err && err.message || err), 'error');
+      })
+      .then(function() {
+        btn.disabled = false;
+        btn.setAttribute('title', oldTitle);
+      });
+  });
+}
 
 // ═══════════════════════════════════════════════════════════
 // NEW FILE BUTTON
