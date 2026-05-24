@@ -45,11 +45,30 @@ var GDT_SYMBOLS = {
   tangentPlane:      'Ⓣ' + VS15,    // Ⓣ
 };
 
-// Reverse lookup: symbol char → characteristic key. Used by isGdtLikely().
+// Reverse lookup: symbol char → characteristic key. Used by internal callers
+// that need to map any symbol back to its key (not the detection heuristic).
 var SYMBOL_TO_KEY = (function() {
   var m = {};
   Object.keys(GDT_SYMBOLS).forEach(function(k) { m[GDT_SYMBOLS[k]] = k; });
   return m;
+})();
+
+// Detection-only set: the 14 geometric characteristics. These are
+// unambiguously GD&T — they never appear on plain dimensions. The diameter
+// modifier (Ø) and the material-condition modifiers (Ⓜ Ⓛ Ⓢ Ⓟ Ⓕ Ⓣ) are
+// EXCLUDED — Ø is everywhere on machined-part drawings, and the circled
+// letters are too rare standalone to justify the false-positive risk. The
+// pipe-character branch in isGdtLikely catches frames that contain only
+// modifiers + a value.
+var GDT_CHARACTERISTIC_KEYS = [
+  'position','flatness','straightness','circularity','cylindricity',
+  'profileLine','profileSurface','angularity','perpendicularity',
+  'parallelism','concentricity','symmetry','circularRunout','totalRunout',
+];
+var DETECTION_SYMBOLS = (function() {
+  var s = {};
+  GDT_CHARACTERISTIC_KEYS.forEach(function(k) { s[GDT_SYMBOLS[k]] = true; });
+  return s;
 })();
 
 var GDT_REFERENCE = {
@@ -302,7 +321,7 @@ function isGdtLikely(ocrText) {
   if (!s.trim()) return false;
   if (s.indexOf('|') !== -1) return true;
   for (var i = 0; i < s.length; i++) {
-    if (SYMBOL_TO_KEY[s.charAt(i)]) return true;
+    if (DETECTION_SYMBOLS[s.charAt(i)]) return true;
   }
   // Two-char totalRunout
   if (s.indexOf(GDT_SYMBOLS.totalRunout) !== -1) return true;
