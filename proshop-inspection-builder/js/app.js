@@ -153,6 +153,7 @@ var state = {
   globals: PSB.defaultGlobals(),
   auditLog: [],
   faiRuns: [],
+  datumRefs: [],
 };
 
 // Track imported filename for save suggestion
@@ -429,6 +430,10 @@ document.addEventListener('DOMContentLoaded', function() {
           e.preventDefault();
           PSB.setBalloonMode(!PSB.isBalloonMode());
         }
+        if (e.key === 'd' || e.key === 'D') {
+          e.preventDefault();
+          PSB.setDatumMode && PSB.setDatumMode(!PSB.isDatumMode());
+        }
         if (PSB.getSelectedBalloonRowId && PSB.getSelectedBalloonRowId() != null) {
           // Arrow keys move balloon visually; PDF Y grows up, so ArrowUp → +y, ArrowDown → -y.
           if (e.key === 'ArrowLeft')  { e.preventDefault(); PSB.nudgeSelectedBalloon(-1, 0); }
@@ -442,6 +447,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (PSB.isBalloonMode && PSB.isBalloonMode()) {
           PSB.setBalloonMode(false);
           PSB.clearPendingBalloonInsert && PSB.clearPendingBalloonInsert();
+          return;
+        }
+        if (PSB.isDatumMode && PSB.isDatumMode()) {
+          PSB.setDatumMode(false);
           return;
         }
         var confirmModal = document.getElementById('confirm-modal');

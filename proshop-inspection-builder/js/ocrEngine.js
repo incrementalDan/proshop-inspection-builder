@@ -201,6 +201,91 @@ function callClaudeOcr(base64ImagePng) {
   });
 }
 
+// ── GD&T: Claude vision with structured-JSON prompt ──────
+//
+// Feature control frames are visually complex and Tesseract can't read them.
+// This skips the text-layer/Tesseract steps and goes straight to Claude with
+// a prompt that demands a JSON-only response. The result is parsed and
+// validated by gdtParser.parseGdtResponse — caller gets the populated
+// user.gdt shape or an { _error } sentinel.
+var GDT_OCR_MODEL = 'claude-sonnet-4-6';
+var GDT_OCR_SYSTEM_PROMPT =
+  'You are an engineering drawing OCR assistant specializing in GD&T ' +
+  '(Geometric Dimensioning and Tolerancing). Extract the feature control frame ' +
+  'from this image. Respond ONLY with a JSON object — no commentary, no markdown, ' +
+  'no code fences, no explanation. JSON shape: { ' +
+  '"characteristic": string (one of: position, flatness, straightness, circularity, ' +
+  'cylindricity, profileLine, profileSurface, angularity, perpendicularity, parallelism, ' +
+  'concentricity, symmetry, circularRunout, totalRunout), ' +
+  '"hasDiameter": boolean, ' +
+  '"tolerance": string (numeric, unrounded, e.g. "0.014"), ' +
+  '"materialCondition": string or null (one of "mmc", "lmc", "rfs", or null), ' +
+  '"datums": array of { "letter": string, "materialCondition": string or null }, ' +
+  '"isComposite": boolean, ' +
+  '"compositeUpper": null, ' +
+  '"compositeLower": null }';
+
+function stripJsonFences(text) {
+  // Some responses wrap the JSON in ```json … ``` despite the prompt. Strip them.
+  var s = String(text || '').trim();
+  if (s.indexOf('```') !== 0) return s;
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  return s.trim();
+}
+
+function extractGdtFromCrop(base64ImagePng) {
+  var apiKey = getApiKey();
+  if (!apiKey) {
+    return Promise.resolve({ _error: 'no_api_key', rawText: null });
+  }
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: GDT_OCR_MODEL,
+      max_tokens: 600,
+      system: GDT_OCR_SYSTEM_PROMPT,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64ImagePng } },
+          { type: 'text', text: 'Extract this feature control frame as JSON.' },
+        ],
+      }],
+    }),
+  }).then(function(resp) {
+    if (!resp.ok) return { _error: 'http_' + resp.status, rawText: null };
+    return resp.json();
+  }).then(function(data) {
+    if (data && data._error) return data;
+    if (!data || !data.content || !data.content[0]) {
+      return { _error: 'no_content', rawText: null };
+    }
+    var rawText = (data.content[0].text || '').trim();
+    var jsonText = stripJsonFences(rawText);
+    var parsed;
+    try { parsed = JSON.parse(jsonText); }
+    catch (err) {
+      return { _error: 'parse_failed', rawText: rawText };
+    }
+    parsed._raw = rawText;
+    var gdt = PSB.parseGdtResponse(parsed);
+    if (gdt && gdt._error) {
+      gdt.rawText = rawText;
+      return gdt;
+    }
+    return gdt;
+  }).catch(function(err) {
+    console.warn('[GD&T OCR] Claude call failed:', err);
+    return { _error: 'network', rawText: String(err && err.message || err) };
+  });
+}
+
 // ── Parsing the raw OCR text ─────────────────────────────
 var GDT_CHARS = /[⏤⏥○⌭⌒⌓⊚↗⌖⊕⊘◎ⒶⒻⓂⓁⓅⓈⓉⓊ]/;
 var DIGIT_RE = /\d/;
@@ -304,9 +389,52 @@ function extractDimension(page, anchorBox, viewport, opts) {
   opts = opts || {};
   var notify = opts.onProgress || function() {};
 
+  // GD&T branch: render crop, call Claude with structured JSON prompt, wrap
+  // the validated gdt object into the same { parsed, engine, … } envelope so
+  // the popover can branch on parsed.isGDT without changing its signature.
+  function runGdt(reason) {
+    notify('claude-gdt');
+    return renderAnchorCrop(page, anchorBox, 3.0).then(function(crop) {
+      var b64 = canvasToBase64Png(crop);
+      return extractGdtFromCrop(b64).then(function(gdt) {
+        if (!gdt || gdt._error) {
+          // Surface the error in the parsed shell so the popover can fall back
+          // to manual entry with an empty form + warning toast.
+          return {
+            parsed: parseOcrText(''),
+            engine: 'claude-gdt',
+            rawText: (gdt && gdt.rawText) || '',
+            ocrConfidence: 0,
+            gdtError: gdt ? gdt._error : 'unknown',
+            gdt: null,
+          };
+        }
+        return {
+          parsed: {
+            drawingSpec: gdt.tolerance,
+            nominal: gdt.tolerance,
+            tolerance: '',
+            specUnit1: gdt.su1,
+            specUnit2: gdt.su2,
+            specUnit3: '',
+            isGDT: true,
+            isNote: true,
+            confidence: 'high',
+          },
+          engine: 'claude-gdt',
+          rawText: gdt.rawOcrText || '',
+          ocrConfidence: 0.9,
+          gdt: gdt,
+          gdtSignalSource: reason,
+        };
+      });
+    });
+  }
+
   // ── Step 1 ────────────────────────────────────────────
   notify('pdfjs');
   return extractTextFromPdfLayer(page, anchorBox, viewport).then(function(layerText) {
+    if (layerText && PSB.isGdtLikely(layerText)) return runGdt('pdfjs');
     if (layerText && DIGIT_RE.test(layerText)) {
       var parsed = parseOcrText(layerText);
       return { parsed: parsed, engine: 'pdfjs', rawText: layerText, ocrConfidence: 0.95 };
@@ -315,6 +443,7 @@ function extractDimension(page, anchorBox, viewport, opts) {
     notify('tesseract');
     return renderAnchorCrop(page, anchorBox, 3.0).then(function(crop) {
       return runTesseract(crop).then(function(tres) {
+        if (tres.text && PSB.isGdtLikely(tres.text)) return runGdt('tesseract');
         if (tres.text && DIGIT_RE.test(tres.text) && tres.confidence > 0.55) {
           var parsed = parseOcrText(tres.text);
           return { parsed: parsed, engine: 'tesseract', rawText: tres.text, ocrConfidence: tres.confidence };
@@ -332,6 +461,9 @@ function extractDimension(page, anchorBox, viewport, opts) {
             var fallback = parseOcrText(tres.text || layerText || '');
             return { parsed: fallback, engine: null, rawText: tres.text || '', ocrConfidence: 0 };
           }
+          // Claude text-mode may itself surface a GD&T frame we'd missed; one
+          // more heuristic pass before parsing as a plain dimension.
+          if (PSB.isGdtLikely(claudeText)) return runGdt('claude-text');
           var parsed = parseOcrText(claudeText);
           return { parsed: parsed, engine: 'claude', rawText: claudeText, ocrConfidence: 0.7 };
         });
@@ -361,6 +493,7 @@ PSB.ocrEngine = {
   renderAnchorCrop: renderAnchorCrop,
   runTesseract: runTesseract,
   callClaudeOcr: callClaudeOcr,
+  extractGdtFromCrop: extractGdtFromCrop,
   parseOcrText: parseOcrText,
   getApiKey: getApiKey,
 };

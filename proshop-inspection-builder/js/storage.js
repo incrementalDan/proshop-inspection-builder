@@ -258,6 +258,7 @@ function serializeState(state) {
     }),
     auditLog: state.auditLog || [],
     faiRuns: state.faiRuns || [],
+    datumRefs: state.datumRefs || [],
   };
 }
 
@@ -308,6 +309,7 @@ function deserializeState(data) {
       };
     }),
     faiRuns: data.faiRuns || [],
+    datumRefs: data.datumRefs || [],
   };
 }
 

@@ -111,6 +111,7 @@ function defaultUserState() {
     pinGageEnabled: false,
     status: 'none',          // 'none', 'edited', 'complete'
     balloon: null,           // ballooning spatial data (see balloonManager.js); null = no balloon
+    gdt: null,               // GD&T structured data (see gdtParser.js); null = not a GD&T row
     overrides: {
       outDrawingSpec: null,  // OP2000 base spec override (drives OUT spec via pipeline)
       outTolPlus: null,      // OP2000 base tol+ override (feeds pipeline)

@@ -28,6 +28,7 @@ var loadGeneration = 0;
 var currentProjectId = null;   // set by setPdfProjectId() from app.js
 var currentViewport = null;    // last computed pdf.js viewport (for overlay/coord conversion)
 var balloonModeActive = false; // true → pan disabled, balloonManager owns the canvas mouse
+var datumModeActive = false;   // true → pan disabled, balloonManager owns the canvas mouse (datum draw)
 
 var PDF_MIN_ZOOM = 0.25;
 var PDF_MAX_ZOOM = 4.0;
@@ -229,6 +230,18 @@ function initPdfViewer() {
     });
     window.addEventListener('psb:balloonModeChanged', function(e) {
       btnBalloon.classList.toggle('active', !!(e.detail && e.detail.active));
+    });
+  }
+
+  // Datum mode toggle (button rendered in index.html). Mutex with balloon mode
+  // is enforced inside setDatumMode/setBalloonMode below.
+  var btnDatum = document.getElementById('pdf-datum-mode');
+  if (btnDatum) {
+    btnDatum.addEventListener('click', function() {
+      setDatumMode(!datumModeActive);
+    });
+    window.addEventListener('psb:datumModeChanged', function(e) {
+      btnDatum.classList.toggle('active', !!(e.detail && e.detail.active));
     });
   }
 
@@ -472,7 +485,7 @@ function setupPan() {
 
   elCanvasWrap.addEventListener('mousedown', function(e) {
     if (e.button !== 0) return;
-    if (balloonModeActive) return;  // balloonManager handles canvas drag in balloon mode
+    if (balloonModeActive || datumModeActive) return;  // balloonManager owns canvas drag in either edit mode
     isPanning = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -706,7 +719,11 @@ function getCanvas() { return elCanvas; }
 function getViewerEl() { return elViewer; }
 
 function setBalloonMode(active) {
-  balloonModeActive = !!active;
+  active = !!active;
+  if (balloonModeActive === active) return;
+  balloonModeActive = active;
+  // Mutex: turning on balloon mode forces datum mode off.
+  if (active && datumModeActive) setDatumMode(false);
   if (elCanvasWrap) {
     elCanvasWrap.classList.toggle('balloon-mode', balloonModeActive);
   }
@@ -715,6 +732,21 @@ function setBalloonMode(active) {
   }));
 }
 function isBalloonMode() { return balloonModeActive; }
+
+function setDatumMode(active) {
+  active = !!active;
+  if (datumModeActive === active) return;
+  datumModeActive = active;
+  // Mutex: turning on datum mode forces balloon mode off.
+  if (active && balloonModeActive) setBalloonMode(false);
+  if (elCanvasWrap) {
+    elCanvasWrap.classList.toggle('datum-mode', datumModeActive);
+  }
+  window.dispatchEvent(new CustomEvent('psb:datumModeChanged', {
+    detail: { active: datumModeActive },
+  }));
+}
+function isDatumMode() { return datumModeActive; }
 
 // ── Export to namespace ──────────────────────────────────
 PSB.initPdfViewer = initPdfViewer;
@@ -738,3 +770,5 @@ PSB.getPdfCanvas = getCanvas;
 PSB.getPdfViewerEl = getViewerEl;
 PSB.setBalloonMode = setBalloonMode;
 PSB.isBalloonMode = isBalloonMode;
+PSB.setDatumMode = setDatumMode;
+PSB.isDatumMode = isDatumMode;

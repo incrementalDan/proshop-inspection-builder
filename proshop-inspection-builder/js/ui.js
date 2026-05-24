@@ -523,7 +523,11 @@ function buildRowHTML(row) {
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span><button class="delete-row-btn" title="Delete row">&times;</button></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
     '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
-    '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) + '</td>' +
+    '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) +
+      (row.user.gdt
+        ? ' <span class="gdt-info-badge" data-gdt-char="' + esc(row.user.gdt.characteristic) + '" tabindex="0" aria-label="GD&T info">ℹ</span>'
+        : '') +
+    '</td>' +
     '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.op2000DualSpec) + '</td>' +
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
@@ -580,6 +584,10 @@ function populateSidebar(rowId) {
   document.getElementById('sidebar-dimtag').innerHTML =
     '<span class="dimtag-label">DIM TAG# </span><span class="dimtag-number">' + esc(c.dimTag || '—') + '</span>';
   document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
+
+  // GD&T info panel — only for GD&T rows. Inserted/removed between the header
+  // and the comparison grid; container persists in DOM so we just toggle content.
+  renderSidebarGdtPanel(row);
 
   // OP2000 values (left column — smaller/faded, dual-unit format)
   document.getElementById('sidebar-op2000-spec').innerHTML = formatDualDisplay(c.op2000DualSpec) || '—';
@@ -1064,6 +1072,101 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
       }
     });
   });
+}
+
+// ── GD&T tooltip + sidebar panel ─────────────────────────
+//
+// One shared tooltip element, positioned absolutely on first hover. Uses
+// PSB.getGdtTooltipHtml (reference data only, safe innerHTML — no user data).
+// Hovering a `.gdt-info-badge[data-gdt-char]` shows the characteristic panel;
+// hovering a `.gdt-modifier[data-modifier]` shows the modifier explanation.
+
+var _gdtTooltipEl = null;
+var _gdtTooltipHideTimer = null;
+
+function ensureGdtTooltip() {
+  if (_gdtTooltipEl) return _gdtTooltipEl;
+  _gdtTooltipEl = document.createElement('div');
+  _gdtTooltipEl.id = 'psb-gdt-tooltip';
+  _gdtTooltipEl.style.display = 'none';
+  _gdtTooltipEl.addEventListener('mouseenter', function() {
+    if (_gdtTooltipHideTimer) { clearTimeout(_gdtTooltipHideTimer); _gdtTooltipHideTimer = null; }
+  });
+  _gdtTooltipEl.addEventListener('mouseleave', scheduleHideGdtTooltip);
+  document.body.appendChild(_gdtTooltipEl);
+  return _gdtTooltipEl;
+}
+
+function showGdtTooltipFor(target, html) {
+  var tip = ensureGdtTooltip();
+  if (_gdtTooltipHideTimer) { clearTimeout(_gdtTooltipHideTimer); _gdtTooltipHideTimer = null; }
+  tip.innerHTML = html;
+  tip.style.display = '';
+  var rect = target.getBoundingClientRect();
+  var pad = 8;
+  // Default placement: above the target, centered.
+  var left = rect.left + rect.width / 2 - tip.offsetWidth / 2;
+  var top  = rect.top - tip.offsetHeight - pad;
+  // Clamp to viewport. If above is clipped, flip to below.
+  if (top < pad) top = rect.bottom + pad;
+  if (left < pad) left = pad;
+  if (left + tip.offsetWidth > window.innerWidth - pad) {
+    left = window.innerWidth - tip.offsetWidth - pad;
+  }
+  tip.style.left = left + 'px';
+  tip.style.top  = top  + 'px';
+}
+
+function scheduleHideGdtTooltip() {
+  if (_gdtTooltipHideTimer) clearTimeout(_gdtTooltipHideTimer);
+  _gdtTooltipHideTimer = setTimeout(function() {
+    if (_gdtTooltipEl) _gdtTooltipEl.style.display = 'none';
+  }, 200);
+}
+
+// Event delegation — single document listener handles all current and future
+// GD&T badges/modifiers without per-render rebinding.
+document.addEventListener('mouseover', function(e) {
+  var badge = e.target && e.target.closest && e.target.closest('.gdt-info-badge[data-gdt-char]');
+  if (badge) {
+    var html = PSB.getGdtTooltipHtml(badge.getAttribute('data-gdt-char'));
+    if (html) showGdtTooltipFor(badge, html);
+    return;
+  }
+  var mod = e.target && e.target.closest && e.target.closest('.gdt-modifier[data-modifier]');
+  if (mod) {
+    var tips = PSB.MODIFIER_TOOLTIPS || {};
+    var key = mod.getAttribute('data-modifier');
+    if (tips[key]) {
+      showGdtTooltipFor(mod, '<div class="gdt-tooltip"><div class="gdt-tooltip-modifier">' + esc(tips[key]) + '</div></div>');
+    }
+  }
+});
+document.addEventListener('mouseout', function(e) {
+  var leftBadge = e.target && e.target.closest && (e.target.closest('.gdt-info-badge') || e.target.closest('.gdt-modifier'));
+  if (leftBadge) scheduleHideGdtTooltip();
+});
+
+// Always-visible GD&T panel in the sidebar for GD&T rows.
+function renderSidebarGdtPanel(row) {
+  var panel = document.getElementById('sidebar-gdt-panel');
+  if (!panel) return;
+  if (!row.user.gdt) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+  var gdt = row.user.gdt;
+  panel.style.display = '';
+  // The reference tooltip HTML is reused inline; it already includes the
+  // category badge, controls/requires/common text, and the Learn-more link.
+  panel.innerHTML =
+    '<div class="sidebar-gdt-header">' +
+      '<span class="gdt-symbol">' + esc(PSB.GDT_SYMBOLS[gdt.characteristic] || '') + '</span>' +
+      '<span class="gdt-name">' + esc(gdt.characteristicName || '') + '</span>' +
+    '</div>' +
+    '<div class="sidebar-gdt-frame gdt-frame">' + esc(gdt.nominalFrame || '') + '</div>' +
+    PSB.getGdtTooltipHtml(gdt.characteristic);
 }
 
 // ── Sidebar Tolerance Editing (dual +/- inputs) ──────
