@@ -148,6 +148,7 @@ function renderTable(stateOrRows, viewConfig) {
 
   // Build table rows
   tbody.innerHTML = '';
+  var balloonMode = !isFaiView && PSB.isBalloonMode && PSB.isBalloonMode();
   for (var i = 0; i < displayRows.length; i++) {
     var row = displayRows[i];
 
@@ -157,9 +158,15 @@ function renderTable(stateOrRows, viewConfig) {
       continue;
     }
 
+    // Balloon-mode insert gutter: a thin row with a "+" that targets this row's dimTag.
+    if (balloonMode) {
+      tbody.appendChild(buildBalloonInsertTr(row, i, displayRows.length));
+    }
+
     // Setup view path
     var tr = document.createElement('tr');
     tr.dataset.rowId = row.id;
+    bindBalloonHoverSync(tr, row.id);
 
     if (row.computed.isNote) tr.classList.add('is-note');
     if (row.id === selectedRowId) tr.classList.add('selected');
@@ -208,6 +215,11 @@ function renderTable(stateOrRows, viewConfig) {
         flashCellKey = null;
       }
     }
+  }
+
+  // Final gutter "+" below the last row (balloon mode only)
+  if (balloonMode && displayRows.length > 0) {
+    tbody.appendChild(buildBalloonInsertTr(null, displayRows.length, displayRows.length));
   }
 
   // Add row button at the bottom (setup view only)
@@ -511,7 +523,11 @@ function buildRowHTML(row) {
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span><button class="delete-row-btn" title="Delete row">&times;</button></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
     '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
-    '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) + '</td>' +
+    '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) +
+      (row.user.gdt
+        ? ' <span class="gdt-info-badge" data-gdt-char="' + esc(row.user.gdt.characteristic) + '" tabindex="0" aria-label="GD&T info">ℹ</span>'
+        : '') +
+    '</td>' +
     '<td class="col-inputspec editable' + (ov.outDrawingSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.op2000DualSpec) + '</td>' +
     '<td class="col-su2 editable">' + esc(c.specUnit2) + '</td>' +
     '<td class="col-su3 editable">' + esc(c.specUnit3) + '</td>' +
@@ -568,6 +584,10 @@ function populateSidebar(rowId) {
   document.getElementById('sidebar-dimtag').innerHTML =
     '<span class="dimtag-label">DIM TAG# </span><span class="dimtag-number">' + esc(c.dimTag || '—') + '</span>';
   document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
+
+  // GD&T info panel — only for GD&T rows. Inserted/removed between the header
+  // and the comparison grid; container persists in DOM so we just toggle content.
+  renderSidebarGdtPanel(row);
 
   // OP2000 values (left column — smaller/faded, dual-unit format)
   document.getElementById('sidebar-op2000-spec').innerHTML = formatDualDisplay(c.op2000DualSpec) || '—';
@@ -1054,6 +1074,101 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
   });
 }
 
+// ── GD&T tooltip + sidebar panel ─────────────────────────
+//
+// One shared tooltip element, positioned absolutely on first hover. Uses
+// PSB.getGdtTooltipHtml (reference data only, safe innerHTML — no user data).
+// Hovering a `.gdt-info-badge[data-gdt-char]` shows the characteristic panel;
+// hovering a `.gdt-modifier[data-modifier]` shows the modifier explanation.
+
+var _gdtTooltipEl = null;
+var _gdtTooltipHideTimer = null;
+
+function ensureGdtTooltip() {
+  if (_gdtTooltipEl) return _gdtTooltipEl;
+  _gdtTooltipEl = document.createElement('div');
+  _gdtTooltipEl.id = 'psb-gdt-tooltip';
+  _gdtTooltipEl.style.display = 'none';
+  _gdtTooltipEl.addEventListener('mouseenter', function() {
+    if (_gdtTooltipHideTimer) { clearTimeout(_gdtTooltipHideTimer); _gdtTooltipHideTimer = null; }
+  });
+  _gdtTooltipEl.addEventListener('mouseleave', scheduleHideGdtTooltip);
+  document.body.appendChild(_gdtTooltipEl);
+  return _gdtTooltipEl;
+}
+
+function showGdtTooltipFor(target, html) {
+  var tip = ensureGdtTooltip();
+  if (_gdtTooltipHideTimer) { clearTimeout(_gdtTooltipHideTimer); _gdtTooltipHideTimer = null; }
+  tip.innerHTML = html;
+  tip.style.display = '';
+  var rect = target.getBoundingClientRect();
+  var pad = 8;
+  // Default placement: above the target, centered.
+  var left = rect.left + rect.width / 2 - tip.offsetWidth / 2;
+  var top  = rect.top - tip.offsetHeight - pad;
+  // Clamp to viewport. If above is clipped, flip to below.
+  if (top < pad) top = rect.bottom + pad;
+  if (left < pad) left = pad;
+  if (left + tip.offsetWidth > window.innerWidth - pad) {
+    left = window.innerWidth - tip.offsetWidth - pad;
+  }
+  tip.style.left = left + 'px';
+  tip.style.top  = top  + 'px';
+}
+
+function scheduleHideGdtTooltip() {
+  if (_gdtTooltipHideTimer) clearTimeout(_gdtTooltipHideTimer);
+  _gdtTooltipHideTimer = setTimeout(function() {
+    if (_gdtTooltipEl) _gdtTooltipEl.style.display = 'none';
+  }, 200);
+}
+
+// Event delegation — single document listener handles all current and future
+// GD&T badges/modifiers without per-render rebinding.
+document.addEventListener('mouseover', function(e) {
+  var badge = e.target && e.target.closest && e.target.closest('.gdt-info-badge[data-gdt-char]');
+  if (badge) {
+    var html = PSB.getGdtTooltipHtml(badge.getAttribute('data-gdt-char'));
+    if (html) showGdtTooltipFor(badge, html);
+    return;
+  }
+  var mod = e.target && e.target.closest && e.target.closest('.gdt-modifier[data-modifier]');
+  if (mod) {
+    var tips = PSB.MODIFIER_TOOLTIPS || {};
+    var key = mod.getAttribute('data-modifier');
+    if (tips[key]) {
+      showGdtTooltipFor(mod, '<div class="gdt-tooltip"><div class="gdt-tooltip-modifier">' + esc(tips[key]) + '</div></div>');
+    }
+  }
+});
+document.addEventListener('mouseout', function(e) {
+  var leftBadge = e.target && e.target.closest && (e.target.closest('.gdt-info-badge') || e.target.closest('.gdt-modifier'));
+  if (leftBadge) scheduleHideGdtTooltip();
+});
+
+// Always-visible GD&T panel in the sidebar for GD&T rows.
+function renderSidebarGdtPanel(row) {
+  var panel = document.getElementById('sidebar-gdt-panel');
+  if (!panel) return;
+  if (!row.user.gdt) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+  var gdt = row.user.gdt;
+  panel.style.display = '';
+  // The reference tooltip HTML is reused inline; it already includes the
+  // category badge, controls/requires/common text, and the Learn-more link.
+  panel.innerHTML =
+    '<div class="sidebar-gdt-header">' +
+      '<span class="gdt-symbol">' + esc(PSB.GDT_SYMBOLS[gdt.characteristic] || '') + '</span>' +
+      '<span class="gdt-name">' + esc(gdt.characteristicName || '') + '</span>' +
+    '</div>' +
+    '<div class="sidebar-gdt-frame gdt-frame">' + esc(gdt.nominalFrame || '') + '</div>' +
+    PSB.getGdtTooltipHtml(gdt.characteristic);
+}
+
 // ── Sidebar Tolerance Editing (dual +/- inputs) ──────
 
 function setupSidebarTolEdit(elementId, plusKey, minusKey, rowId, clearPlusKey, clearMinusKey) {
@@ -1080,50 +1195,52 @@ function setupSidebarTolEdit(elementId, plusKey, minusKey, rowId, clearPlusKey, 
     var isOp2k = plusKey === 'outTolPlus';
     var plusVal = isOp2k ? c.op2kTolPlus : c.outTolPlus;
     var minusVal = isOp2k ? c.op2kTolMinus : c.outTolMinus;
-    var plusStr = PSB.formatPrecision(plusVal, prec);
-    var minusStr = PSB.formatPrecision(minusVal, prec);
+    var curMode = (row.user.overrides && row.user.overrides.tolMode) || 'sym';
 
-    clone.innerHTML = '<div class="tol-edit-container">' +
-      '<div class="tol-input-wrap"><span class="tol-sign-label">+</span><input class="tol-input tol-plus" value="' + esc(plusStr) + '"></div>' +
-      '<div class="tol-input-wrap"><span class="tol-sign-label">−</span><input class="tol-input tol-minus" value="' + esc(minusStr) + '"></div>' +
-      '</div>';
+    // Min/max bounds are derived from the print-spec nominal (OP2000) — plating/conversion
+    // are applied downstream, not at the override layer.
+    var nominalForBounds = parseFloat(c.op2000Nominal);
+    if (isNaN(nominalForBounds)) nominalForBounds = parseFloat(c.nominal);
 
-    var plusInput = clone.querySelector('.tol-plus');
-    var minusInput = clone.querySelector('.tol-minus');
-    plusInput.focus();
-    plusInput.select();
+    clone.innerHTML = '<div class="tol-edit-container"></div>';
+    var mount = clone.querySelector('.tol-edit-container');
+    mount.style.flexDirection = 'column';
+    mount.style.alignItems = 'stretch';
+
+    var ctrl = PSB.renderTolModeInputs(mount, {
+      mode: curMode, plus: plusVal, minus: minusVal,
+      nominal: isNaN(nominalForBounds) ? null : nominalForBounds,
+      precision: prec,
+    });
+    ctrl.focus();
 
     var committed = false;
-    var commit = function() {
+    function revert() { committed = true; clone.innerHTML = originalHTML; }
+    function commit() {
       if (committed) return;
+      var r = ctrl.commit();
+      if (!r.ok) return; // error shown inline; keep editor open
       committed = true;
 
-      var pv = plusInput.value.trim();
-      var mv = minusInput.value.trim();
-      if (pv.charAt(0) === '+') pv = pv.substring(1);
-      if (mv.charAt(0) === '-' || mv.charAt(0) === '−') mv = mv.substring(1);
-
-      var pNum = parseFloat(pv);
-      var mNum = parseFloat(mv);
-
-      if (isNaN(pNum) && isNaN(mNum)) {
-        clone.innerHTML = originalHTML;
-        return;
-      }
-      if (isNaN(pNum)) pNum = mNum;
-      if (isNaN(mNum)) mNum = pNum;
-
-      if (Math.abs(pNum - plusVal) < 1e-10 && Math.abs(mNum - minusVal) < 1e-10) {
-        clone.innerHTML = originalHTML;
-        return;
-      }
+      var pNum = r.tolPlus;
+      var mNum = r.tolMinus;
+      var newMode = r.tolMode;
 
       var freshState = getAppState();
-      var freshRow = freshState.rows.find(function(r) { return r.id === rowId; });
+      var freshRow = freshState.rows.find(function(rr) { return rr.id === rowId; });
       if (!freshRow) { clone.innerHTML = originalHTML; return; }
+
+      var prevMode = (freshRow.user.overrides && freshRow.user.overrides.tolMode) || 'sym';
+      var nothingChanged =
+        Math.abs(pNum - plusVal) < 1e-10 &&
+        Math.abs(mNum - minusVal) < 1e-10 &&
+        newMode === prevMode;
+      if (nothingChanged) { clone.innerHTML = originalHTML; return; }
+
       var ov = Object.assign({}, freshRow.user.overrides);
       ov[plusKey] = String(pNum);
       ov[minusKey] = String(mNum);
+      ov.tolMode = newMode;
 
       if (clearPlusKey && (ov[clearPlusKey] !== null || ov[clearMinusKey] !== null)) {
         ov[clearPlusKey] = null;
@@ -1131,31 +1248,40 @@ function setupSidebarTolEdit(elementId, plusKey, minusKey, rowId, clearPlusKey, 
         showToast('OP2000 Tol changed — OUT Tol override cleared', 'info');
       }
       onRowUserChange(rowId, { overrides: ov });
-    };
+    }
 
-    var blurTimeout;
-    var onBlur = function() {
-      blurTimeout = setTimeout(function() {
-        if (!clone.contains(document.activeElement) || !clone.querySelector('.tol-input')) {
-          commit();
-        }
+    // Blur-commit, but only when focus leaves the entire control (not when
+    // switching between mode chip and input).
+    function onBlur() {
+      setTimeout(function() {
+        if (!clone.contains(document.activeElement)) commit();
       }, 0);
-    };
+    }
+    var inputs = ctrl.getInputs();
+    for (var i = 0; i < inputs.length; i++) {
+      inputs[i].addEventListener('blur', onBlur);
+      inputs[i].addEventListener('keydown', function(ke) {
+        if (ke.key === 'Enter')  { ke.preventDefault(); commit(); }
+        if (ke.key === 'Escape') { ke.preventDefault(); revert(); }
+      });
+    }
 
-    plusInput.addEventListener('blur', onBlur);
-    minusInput.addEventListener('blur', onBlur);
-
-    plusInput.addEventListener('keydown', function(ke) {
-      if (ke.key === 'Enter') { ke.target.blur(); setTimeout(commit, 0); }
-      if (ke.key === 'Escape') { committed = true; clone.innerHTML = originalHTML; }
-      if (ke.key === 'Tab' && !ke.shiftKey) { ke.preventDefault(); minusInput.focus(); minusInput.select(); }
-    });
-    minusInput.addEventListener('keydown', function(ke) {
-      if (ke.key === 'Enter') { ke.target.blur(); setTimeout(commit, 0); }
-      if (ke.key === 'Escape') { committed = true; clone.innerHTML = originalHTML; }
-      if (ke.key === 'Tab' && ke.shiftKey) { ke.preventDefault(); plusInput.focus(); plusInput.select(); }
-      if (ke.key === 'Tab' && !ke.shiftKey) { ke.preventDefault(); commit(); }
-    });
+    // When the mode chip is clicked, fields re-render — re-bind blur/keydown to the new inputs.
+    var chips = clone.querySelectorAll('.tol-mode-chip');
+    for (var ci = 0; ci < chips.length; ci++) {
+      chips[ci].addEventListener('click', function() {
+        setTimeout(function() {
+          var fresh = ctrl.getInputs();
+          for (var k = 0; k < fresh.length; k++) {
+            fresh[k].addEventListener('blur', onBlur);
+            fresh[k].addEventListener('keydown', function(ke) {
+              if (ke.key === 'Enter')  { ke.preventDefault(); commit(); }
+              if (ke.key === 'Escape') { ke.preventDefault(); revert(); }
+            });
+          }
+        }, 0);
+      });
+    }
   });
 }
 
@@ -1794,6 +1920,55 @@ function closeModal(id) {
     modal.classList.add('hidden');
   }, 200);
 }
+
+// ── Balloon-mode helpers ──────────────────────────────────
+function buildBalloonInsertTr(targetRow, index, total) {
+  var tr = document.createElement('tr');
+  tr.className = 'balloon-insert-tr';
+  var td = document.createElement('td');
+  td.colSpan = 12;
+  td.className = 'balloon-insert-cell';
+  var btn = document.createElement('button');
+  btn.className = 'balloon-insert-btn';
+  btn.title = 'Insert balloon here';
+  btn.textContent = '+';
+  // Target dimTag: insert AT targetRow's effective dimTag (shifts targetRow up).
+  // If targetRow is null, append after the last.
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var insertAt = null;
+    if (targetRow) {
+      var t = parseInt(PSB.effectiveDimTag(targetRow), 10);
+      if (!isNaN(t)) insertAt = t;
+    }
+    PSB.setPendingBalloonInsert(insertAt);
+    // Highlight the gap (CSS handles via .pending class)
+    var prev = document.querySelector('.balloon-insert-cell.pending');
+    if (prev) prev.classList.remove('pending');
+    td.classList.add('pending');
+    PSB.showToast && PSB.showToast('Draw a box on the PDF to insert balloon' + (insertAt != null ? ' #' + insertAt : ''), 'info');
+  });
+  td.appendChild(btn);
+  tr.appendChild(td);
+  return tr;
+}
+
+function bindBalloonHoverSync(tr, rowId) {
+  tr.addEventListener('mouseenter', function() {
+    if (PSB.setHoveredBalloonRow) PSB.setHoveredBalloonRow(rowId);
+  });
+  tr.addEventListener('mouseleave', function() {
+    if (PSB.setHoveredBalloonRow) PSB.setHoveredBalloonRow(null);
+  });
+}
+
+// Re-render table when balloon mode toggles so the + gutter appears/disappears.
+window.addEventListener('psb:balloonModeChanged', function() {
+  if (currentViewConfig && currentViewConfig.id !== 'fai' && getAppState) {
+    var st = getAppState();
+    if (st) renderTable(st, currentViewConfig);
+  }
+});
 
 // ── Export to namespace ───────────────────────────────────
 PSB.initUI = initUI;

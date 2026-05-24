@@ -141,6 +141,9 @@
           <button id="pdf-zoom-fit" class="btn btn-icon pdf-btn" title="Fit to page">⊡</button>
           <button id="pdf-zoom-in" class="btn btn-icon pdf-btn" title="Zoom in">+</button>
           <div class="pdf-toolbar-sep"></div>
+          <button id="pdf-balloon-mode" class="btn btn-icon pdf-btn" title="Balloon mode (B)">⊙</button>
+          <button id="pdf-datum-mode" class="btn btn-icon pdf-btn" title="Datum mode (D)">Ⓐ</button>
+          <div class="pdf-toolbar-sep"></div>
           <span id="pdf-filename" class="pdf-filename"></span>
           <button id="pdf-close" class="btn btn-icon pdf-btn" title="Close PDF">✕</button>
         </div>
@@ -192,6 +195,8 @@
         </div>
         <button id="sidebar-close" class="btn btn-icon" title="Close">✕</button>
       </div>
+
+      <div id="sidebar-gdt-panel" class="sidebar-gdt-panel" style="display:none"></div>
 
       <div class="sidebar-output-preview">
         <div class="preview-comparison-grid">
@@ -520,6 +525,9 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- SCRIPTS — loaded in dependency order               -->
   <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Local config (Claude API key etc). Gitignored. onerror handles missing file. -->
+  <script src="config.js" onerror="window.PSB_CONFIG = { anthropicApiKey: null };"></script>
+
   <!-- pdf.js — loaded as ESM, exposed globally for pdfViewer.js -->
   <script type="module">
     import * as pdfjsLib from './lib/pdf.min.mjs';
@@ -528,16 +536,24 @@
     window.dispatchEvent(new Event('pdfjsReady'));
   </script>
 
-  <script src="js/mathEngine.js?v=26"></script>
-  <script src="js/parser.js?v=26"></script>
-  <script src="js/dataModel.js?v=26"></script>
-  <script src="js/exportEngine.js?v=26"></script>
-  <script src="js/storage.js?v=26"></script>
-  <script src="js/history.js?v=26"></script>
-  <script src="js/pdfViewer.js?v=26"></script>
-  <script src="js/cmmParser.js?v=26"></script>
-  <script src="js/ui.js?v=26"></script>
-  <script src="js/app.js?v=26"></script>
+  <!-- Vendored: Tesseract.js (local OCR) + pdf-lib (Phase 4 export). Both fully offline. -->
+  <script src="lib/tesseract/tesseract.min.js"></script>
+  <script src="lib/pdf-lib.min.js"></script>
+
+  <script src="js/mathEngine.js?v=28"></script>
+  <script src="js/parser.js?v=28"></script>
+  <script src="js/dataModel.js?v=28"></script>
+  <script src="js/exportEngine.js?v=28"></script>
+  <script src="js/storage.js?v=28"></script>
+  <script src="js/history.js?v=28"></script>
+  <script src="js/pdfViewer.js?v=28"></script>
+  <script src="js/cmmParser.js?v=28"></script>
+  <script src="js/gdtParser.js?v=28"></script>
+  <script src="js/ocrEngine.js?v=28"></script>
+  <script src="js/tolModeInput.js?v=28"></script>
+  <script src="js/balloonManager.js?v=28"></script>
+  <script src="js/ui.js?v=28"></script>
+  <script src="js/app.js?v=28"></script>
 
 </body>
 </html>

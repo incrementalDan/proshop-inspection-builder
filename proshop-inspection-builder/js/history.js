@@ -16,15 +16,19 @@ var MAX_UNDO = 10;
 
 /**
  * Deep-clone the parts of state needed for undo/redo.
- * Skips computed (recalculated) and raw (immutable/frozen).
+ * Skips computed (recalculated). CSV-imported rows keep raw by reference
+ * (frozen); balloon-created rows clone raw because the user can edit it.
  */
 function cloneStateForSnapshot(state) {
   return {
     globals: JSON.parse(JSON.stringify(state.globals)),
     rows: state.rows.map(function(row) {
+      var rawSnap = (row.raw && row.raw._source === 'balloon')
+        ? JSON.parse(JSON.stringify(row.raw))
+        : row.raw;
       return {
         id: row.id,
-        raw: row.raw, // frozen, no need to clone
+        raw: rawSnap,
         user: JSON.parse(JSON.stringify(row.user)),
       };
     }),

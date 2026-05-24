@@ -1150,6 +1150,61 @@ td.editable input:focus {
   box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
 }
 
+/* ── Tolerance Mode Toggle (sym / asym / minmax) ────────── */
+.tol-mode-toggle {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.tol-mode-chip {
+  flex: 1;
+  padding: 2px 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.tol-mode-chip:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+.tol-mode-chip.active {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+  font-weight: 600;
+}
+.tol-mode-fields {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  width: 100%;
+}
+.tol-mode-error {
+  margin-top: 4px;
+  padding: 2px 4px;
+  background: rgba(204, 0, 0, 0.15);
+  border-left: 2px solid #cc0000;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border-radius: 2px;
+}
+
+/* Hovered balloon (driven by .hovered class — see balloonManager setHoveredRow) */
+.balloon-hover-ring {
+  opacity: 0;
+  transition: opacity 80ms linear;
+  pointer-events: none;
+}
+.balloon-group.hovered .balloon-hover-ring {
+  opacity: 1;
+}
+
 /* Override highlight — faint indicator that value was manually changed */
 td.has-override {
   background: rgba(255, 140, 66, 0.10);
@@ -2247,4 +2302,414 @@ td.edit-flash {
 .fai-child-row:not(.fai-last-child) .col-dimtag.fai-child-indent::before {
   height: 100%;
   border-bottom: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BALLOONING (Phase 2 — manual)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Balloon mode active: crosshair cursor over the PDF canvas */
+#pdf-canvas-wrap.balloon-mode,
+#pdf-canvas-wrap.balloon-mode * { cursor: crosshair !important; }
+#pdf-canvas-wrap.balloon-mode { user-select: none; }
+
+/* Active state for the toolbar toggle */
+#pdf-balloon-mode.active {
+  background: #cc0000;
+  color: #fff;
+}
+
+/* SVG overlay sits on top of the canvas wrap */
+#pdf-balloon-layer {
+  z-index: 5;
+}
+#pdf-balloon-overlay {
+  z-index: 5;
+}
+
+/* Balloon SVG */
+.balloon-group { transition: transform 60ms linear; }
+.balloon-group:active { cursor: grabbing !important; }
+
+/* Row flash on click of a balloon */
+tr.row-flash {
+  animation: row-flash-anim 1.2s ease-out;
+}
+@keyframes row-flash-anim {
+  0%   { background: rgba(255,170,0,0.55); }
+  100% { background: transparent; }
+}
+
+/* Insert "+" row in balloon mode */
+.balloon-insert-tr td.balloon-insert-cell {
+  padding: 0;
+  height: 8px;
+  border: none;
+  background: transparent;
+  text-align: center;
+  position: relative;
+}
+.balloon-insert-tr td.balloon-insert-cell.pending {
+  background: rgba(255, 170, 0, 0.25);
+}
+.balloon-insert-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 16px;
+  line-height: 14px;
+  font-size: 14px;
+  border: 1px dashed var(--border-light, #888);
+  background: var(--bg-secondary, #fafafa);
+  color: var(--text-secondary, #666);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.45;
+  transition: opacity 100ms;
+}
+.balloon-insert-btn:hover {
+  opacity: 1;
+  border-color: #cc0000;
+  color: #cc0000;
+}
+
+/* Confirmation popover */
+.balloon-popover {
+  width: 260px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-light, #ccc);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  padding: 10px 12px 12px;
+  z-index: 30;
+  font-size: 12px;
+  pointer-events: auto;
+}
+.balloon-popover-header {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.balloon-popover-engine {
+  font-weight: normal;
+  color: var(--text-secondary, #888);
+  font-size: 11px;
+}
+.balloon-popover-warn {
+  background: #fff5db;
+  border: 1px solid #e6c200;
+  color: #856b00;
+  padding: 4px 6px;
+  border-radius: 3px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.balloon-popover-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px 8px;
+  margin-bottom: 4px;
+}
+.balloon-popover-field.bp-col-2 {
+  grid-column: span 3;
+}
+.balloon-popover-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.balloon-popover-field label {
+  font-size: 11px;
+  color: var(--text-secondary, #666);
+  margin-bottom: 2px;
+}
+.balloon-popover-field input {
+  border: 1px solid var(--border-light, #ccc);
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #000);
+  padding: 4px 6px;
+  border-radius: 3px;
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.balloon-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* OCR spinner overlay */
+.balloon-spinner {
+  border: 1.5px dashed #e6c200;
+  background: rgba(255,245,219,0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #856b00;
+  pointer-events: none;
+}
+.balloon-spinner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #e6c200;
+  border-top-color: transparent;
+  animation: balloon-spin 0.8s linear infinite;
+  margin-bottom: 4px;
+}
+@keyframes balloon-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ────────────────────────────────────────────────────────
+   GD&T — symbols, badges, tooltips, datum circles
+   ──────────────────────────────────────────────────────── */
+
+/* Force text rendering on every element that displays GD&T symbols/modifiers.
+   Without this, circled letters (Ⓜ Ⓛ Ⓢ Ⓟ Ⓕ Ⓣ) render as colored emoji in
+   most browsers — the VS15 suffix on the constants is the primary defence,
+   font-variant-emoji: text is the belt-and-suspenders. */
+.gdt-symbol, .gdt-modifier, .gdt-frame, .gdt-info-badge,
+.datum-letter-btn, .datum-group text {
+  font-variant-emoji: text;
+  font-family: 'Segoe UI Symbol', 'Apple Symbols', 'Symbola', 'Noto Sans Symbols', sans-serif;
+}
+
+/* GD&T info badge on the DIM Spec cell */
+.gdt-info-badge {
+  cursor: help;
+  opacity: 0.65;
+  font-size: 0.85em;
+  margin-left: 4px;
+  vertical-align: super;
+  user-select: none;
+}
+.gdt-info-badge:hover, .gdt-info-badge:focus { opacity: 1; outline: none; }
+
+/* Tooltip panel — shared by badges and modifier spans */
+#psb-gdt-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.gdt-tooltip {
+  background: var(--bg-surface, #1e1e2e);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 8px;
+  padding: 12px;
+  max-width: 320px;
+  font-size: 0.85em;
+  line-height: 1.45;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  color: var(--text-primary);
+}
+.gdt-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 1.1em;
+}
+.gdt-tooltip-header .gdt-symbol { font-size: 1.4em; }
+.gdt-tooltip-header .gdt-name { font-weight: 600; flex: 1; }
+.gdt-tooltip-controls, .gdt-tooltip-requires, .gdt-tooltip-common,
+.gdt-tooltip-modifier {
+  margin-bottom: 6px;
+}
+.gdt-tooltip-link {
+  display: block;
+  margin-top: 8px;
+  color: var(--accent-blue, #4a9eff);
+  text-decoration: none;
+}
+.gdt-tooltip-link:hover { text-decoration: underline; }
+
+/* Category color badges */
+.gdt-category {
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.gdt-cat-form        { background: #3B82F6; color: white; }
+.gdt-cat-profile     { background: #10B981; color: white; }
+.gdt-cat-orientation { background: #F59E0B; color: #000; }
+.gdt-cat-runout      { background: #8B5CF6; color: white; }
+.gdt-cat-location    { background: #EF4444; color: white; }
+
+/* Sidebar GD&T panel — always visible for GD&T rows */
+.sidebar-gdt-panel {
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  background: rgba(74, 158, 255, 0.06);
+  border-left: 3px solid var(--accent-blue, #4a9eff);
+  border-radius: 4px;
+}
+.sidebar-gdt-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.sidebar-gdt-header .gdt-symbol { font-size: 1.4em; }
+.sidebar-gdt-header .gdt-name   { font-weight: 600; font-size: 1em; }
+.sidebar-gdt-frame {
+  padding: 4px 6px;
+  margin-bottom: 8px;
+  background: var(--bg-surface);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.sidebar-gdt-panel .gdt-tooltip {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  max-width: 100%;
+}
+
+/* Datum circles (yellow) */
+.datum-group circle {
+  transition: filter 80ms linear;
+}
+.datum-group.datum-highlight circle {
+  filter: drop-shadow(0 0 6px #F5C518);
+}
+.datum-group.datum-highlight {
+  animation: datum-pulse 0.6s ease-in-out 2;
+}
+@keyframes datum-pulse {
+  0%   { transform: var(--datum-base-transform, translate(0,0)); }
+  50%  { filter: brightness(1.25); }
+  100% { transform: var(--datum-base-transform, translate(0,0)); }
+}
+
+/* Datum letter picker (shown after the user draws a circle in datum mode) */
+.datum-letter-picker {
+  width: 200px;
+  padding: 10px;
+  background: var(--bg-surface, #1e1e2e);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 50;
+  pointer-events: auto;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.datum-picker-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.datum-picker-buttons {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.datum-letter-btn {
+  padding: 4px 0;
+  background: #F5C518;
+  border: 1px solid #7a6500;
+  border-radius: 3px;
+  color: #000;
+  font-weight: 700;
+  cursor: pointer;
+}
+.datum-letter-btn:hover { background: #ffd83d; }
+.datum-letter-btn:focus { outline: 2px solid var(--accent-blue, #4a9eff); }
+.datum-picker-other {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.datum-letter-input {
+  flex: 1;
+  padding: 4px 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
+.datum-picker-cancel {
+  text-align: right;
+}
+
+/* Datum-mode crosshair cursor */
+#pdf-canvas-wrap.datum-mode { cursor: crosshair; }
+
+/* GD&T popover layout (wider than dimension popover; has a live preview) */
+.balloon-popover.gdt-popover {
+  width: 360px;
+}
+.gdt-popover-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+  margin: 8px 0;
+}
+.gdt-popover-field            { display: flex; flex-direction: column; min-width: 0; }
+.gdt-popover-field.gdt-col-2  { grid-column: span 2; }
+.gdt-popover-field label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.gdt-popover-field input[type="text"], .gdt-popover-field select {
+  padding: 4px 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.gp-preview {
+  padding: 4px 6px;
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-color, #444);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.gp-fields-preview {
+  margin-top: 4px;
+  padding: 4px 6px;
+  background: rgba(74, 158, 255, 0.05);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.gp-fields-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.gp-fields-label {
+  flex: 0 0 60px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.gp-fields-row .gdt-frame, .gp-fields-row .gp-dimspec {
+  flex: 1;
+  font-family: var(--font-mono);
 }
