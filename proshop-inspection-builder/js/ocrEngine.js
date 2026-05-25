@@ -33,12 +33,15 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
   // anchorBox is in PDF user space (Y grows UP). Text items are also in PDF
   // user space, so both can be compared without flipping.
   //
-  // A text item is captured only when its bounding box lies MOSTLY inside the
-  // anchor box (>= 50% of the item's own area). Edge-intersection grabbed the
-  // neighbour to the right; pure center-point grabbed the dimension on the line
-  // above. "Mostly inside" keys on the text the user actually boxed and rejects
-  // both: a neighbour clipping an edge contributes little of its area, and a
-  // line above the box has zero vertical overlap.
+  // A text item is captured if EITHER its center lies inside the box (with a
+  // small tolerance) OR at least half of its area is inside. The center test
+  // is forgiving: a box drawn tightly around — or slightly off from — the
+  // visible glyphs still captures the value even when the PDF's text-layer
+  // boxes don't line up exactly with the ink (common on real drawings). The
+  // area test additionally captures an item larger than the box. Both reject
+  // the neighbour to the right and the dimension on the line above, since those
+  // have their center outside the box AND little area inside it.
+  var M = 2;                 // center-test tolerance (PDF points)
   var MIN_INSIDE = 0.5;
   return page.getTextContent().then(function(content) {
     var hits = [];
@@ -51,9 +54,12 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
                            item.transform[1] * item.transform[1]) || 10;
       var w = item.width || (item.str.length * size * 0.5);
       var h = item.height || size;
-      var textRect = { x: x, y: yBottom, w: w, h: h };
+      var cx = x + w / 2;
+      var cy = yBottom + h / 2;
+      var centerIn = cx >= anchorBox.x - M && cx <= anchorBox.x + anchorBox.w + M &&
+                     cy >= anchorBox.y - M && cy <= anchorBox.y + anchorBox.h + M;
 
-      if (areaInsideFraction(textRect, anchorBox) >= MIN_INSIDE) {
+      if (centerIn || areaInsideFraction({ x: x, y: yBottom, w: w, h: h }, anchorBox) >= MIN_INSIDE) {
         hits.push({ str: item.str, x: x, y: yBottom, h: h });
       }
     }
