@@ -16,7 +16,15 @@
 window.PSB = window.PSB || {};
 
 var SVG_NS = 'http://www.w3.org/2000/svg';
-var BALLOON_BASE_RADIUS = 11;  // px at zoom 1.0
+var BALLOON_BASE_RADIUS = 11;  // px at zoom 1.0 — fallback if globals.balloonRadius unset
+
+// Base balloon radius in PDF points (= screen px at zoom 1.0). User-adjustable
+// via the toolbar size control; persisted in globals.balloonRadius.
+function getBalloonRadius() {
+  var st = ctx && ctx.getState && ctx.getState();
+  var r = st && st.globals && st.globals.balloonRadius;
+  return (typeof r === 'number' && r > 0) ? r : BALLOON_BASE_RADIUS;
+}
 var MIN_BOX_PX = { w: 10, h: 5 };
 
 // ── Module state ─────────────────────────────────────────
@@ -102,6 +110,14 @@ function pdfToScreen(pdfX, pdfY, viewport) {
 function screenToPdf(screenX, screenY, viewport) {
   var pt = viewport.convertToPdfPoint(screenX, screenY);
   return { x: pt[0], y: pt[1] };
+}
+
+// Shortest distance from a point to a rectangle (0 if inside). Used to decide
+// whether the balloon circle is clear of the anchor box (→ draw a leader).
+function pointToRectDistance(px, py, r) {
+  var dx = Math.max(r.x - px, 0, px - (r.x + r.w));
+  var dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+  return Math.hypot(dx, dy);
 }
 
 /**
@@ -1026,8 +1042,11 @@ function findCsvRowWithDimTag(state, dimTag) {
   return null;
 }
 
+// New balloons sit with their circle just touching the box edge (no leader by
+// default — see the leader rule in renderOverlay). pad = radius places the
+// circle edge against the box edge.
 function defaultBalloonOffset(box, dir) {
-  var pad = 30;
+  var pad = getBalloonRadius();
   if (dir === 'rtl') return { dx: box.w / 2 + pad, dy: 0 };
   return { dx: -(box.w / 2 + pad), dy: 0 };
 }
@@ -1124,7 +1143,7 @@ function renderOverlay(viewport) {
   var pageNum = PSB.getPdfCurrentPage();
   var balloonMode = PSB.isBalloonMode();
   var datumMode = PSB.isDatumMode && PSB.isDatumMode();
-  var radius = BALLOON_BASE_RADIUS * (viewport.scale || PSB.getPdfZoom() || 1.0);
+  var radius = getBalloonRadius() * (viewport.scale || PSB.getPdfZoom() || 1.0);
 
   // Datum pass — render before balloons so balloon circles sit on top.
   // In datum mode, datums are click-through (pointer-events: none) so the
@@ -1202,9 +1221,13 @@ function renderOverlay(viewport) {
     var connPdf = leaderPointToPdf(b.anchorBox, b.leaderConnectionPoint);
     var connScreen = pdfToScreen(connPdf.x, connPdf.y, viewport);
 
-    // Suppress leader if very close (≤5px screen)
-    var dist = Math.hypot(balloonScreen.x - connScreen.x, balloonScreen.y - connScreen.y);
-    if (dist > 5) {
+    // Leader line only when the balloon circle has been dragged clear of the
+    // anchor box. While the circle still touches/overlaps the box (the default
+    // placement), no leader is drawn. anchorScreen is the box in screen space;
+    // gap = distance from the balloon center to the nearest box edge.
+    var anchorScreen = pdfRectToScreen(b.anchorBox, viewport);
+    var gap = pointToRectDistance(balloonScreen.x, balloonScreen.y, anchorScreen);
+    if (gap > radius + 2) {
       var line = document.createElementNS(SVG_NS, 'line');
       line.setAttribute('class', 'balloon-leader');
       line.setAttribute('x1', connScreen.x);

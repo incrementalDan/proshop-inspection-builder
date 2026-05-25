@@ -32,7 +32,14 @@ function getApiKey() {
 function extractTextFromPdfLayer(page, anchorBox, viewport) {
   // anchorBox is in PDF user space (Y grows UP). Text items are also in PDF
   // user space, so both can be compared without flipping.
-  var margin = 5;
+  //
+  // Matching uses the text item's CENTER point, not edge intersection: a value
+  // sitting just outside the box (e.g. the next dimension to the right) can
+  // clip the box edge and get wrongly grabbed if we test intersection. Keying
+  // on the center means we only capture text the user actually boxed. A small
+  // margin tolerates a tightly-drawn box.
+  var margin = 2;
+  var hitArea = expandRect(anchorBox, margin);
   return page.getTextContent().then(function(content) {
     var hits = [];
     for (var i = 0; i < content.items.length; i++) {
@@ -44,9 +51,10 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
                            item.transform[1] * item.transform[1]) || 10;
       var w = item.width || (item.str.length * size * 0.5);
       var h = size;
-      var rect = { x: x, y: yBottom, w: w, h: h };
+      var cx = x + w / 2;
+      var cy = yBottom + h / 2;
 
-      if (rectsIntersect(rect, expandRect(anchorBox, margin))) {
+      if (pointInRect(cx, cy, hitArea)) {
         hits.push({ str: item.str, x: x, y: yBottom, h: h });
       }
     }
@@ -71,6 +79,10 @@ function rectsIntersect(a, b) {
            b.x + b.w < a.x ||
            a.y + a.h < b.y ||
            b.y + b.h < a.y);
+}
+
+function pointInRect(px, py, r) {
+  return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
 }
 
 // ── Step 2: Tesseract.js ─────────────────────────────────

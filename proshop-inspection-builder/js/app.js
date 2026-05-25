@@ -340,6 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
     bindSettingsModal();
     bindFaiControls();
     bindPdfExportButton();
+    bindBalloonSizeControl();
 
     // Wire nav rail tab clicks
     (function() {
@@ -547,6 +548,24 @@ function bindPdfExportButton() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// BALLOON SIZE CONTROL (global, applies to all balloons)
+// ═══════════════════════════════════════════════════════════
+function bindBalloonSizeControl() {
+  var slider = document.getElementById('pdf-balloon-size');
+  if (!slider) return;
+  // Reflect the persisted value on load.
+  if (state.globals.balloonRadius > 0) slider.value = state.globals.balloonRadius;
+  slider.addEventListener('input', function() {
+    var r = parseInt(slider.value, 10);
+    if (!(r > 0)) return;
+    state.globals.balloonRadius = r;
+    if (PSB.renderBalloonOverlay) PSB.renderBalloonOverlay();
+    markDirty();
+    scheduleAutoSave();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
 // NEW FILE BUTTON
 // ═══════════════════════════════════════════════════════════
 function bindNewButton() {
@@ -700,6 +719,10 @@ function syncGlobalsToUI() {
   document.getElementById('plating-units').value = state.globals.platingUnits;
   document.getElementById('inch-precision').value = state.globals.inchPrecision;
   document.getElementById('mm-precision').value = state.globals.mmPrecision;
+  var sizeSlider = document.getElementById('pdf-balloon-size');
+  if (sizeSlider && state.globals.balloonRadius > 0) {
+    sizeSlider.value = state.globals.balloonRadius;
+  }
 }
 
 function syncUnitToggle(unit) {

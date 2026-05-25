@@ -26,6 +26,13 @@
     return { x: pdfX, y: pdfY };
   }
 
+  // Shortest distance from a point to a rectangle (0 if inside).
+  function pointToRectDistance(px, py, r) {
+    var dx = Math.max(r.x - px, 0, px - (r.x + r.w));
+    var dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   function deriveExportFilename(orig) {
     if (!orig) return 'drawing-ballooned.pdf';
     var dot = orig.lastIndexOf('.');
@@ -117,9 +124,10 @@
           var size = page.getSize();
           var pageWidth = size.width;
           var pageHeight = size.height;
-          // Match the on-screen base of ~22px at 100% scale, scaled to page width.
-          var radius = pageWidth * 0.013;
-          if (radius < 8) radius = 8;
+          // Balloon size is the global balloonRadius (PDF points), matching the
+          // on-screen base radius so export visually matches the editor.
+          var radius = (state.globals && state.globals.balloonRadius > 0)
+                       ? state.globals.balloonRadius : 11;
 
           balloonsByPage[pn].forEach(function(bal) {
             var anchorCenter = {
@@ -143,13 +151,11 @@
                            bp.x.toFixed(1) + ',' + bp.y.toFixed(1) + ')');
             }
 
-            // Leader line — suppress if balloon center is on top of the
-            // connection point (drag-direction default placement before any
-            // user nudge).
-            var dx = bp.x - cp.x;
-            var dy = bp.y - cp.y;
-            var dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > 15) {
+            // Leader line only when the balloon circle is clear of the anchor
+            // box — same rule as the on-screen overlay. Computed in PDF user
+            // space (balloonCenter and anchorBox share that space).
+            var gap = pointToRectDistance(balloonCenter.x, balloonCenter.y, bal.anchorBox);
+            if (gap > radius + 2) {
               page.drawLine({
                 start: { x: cp.x, y: cp.y },
                 end:   { x: bp.x, y: bp.y },

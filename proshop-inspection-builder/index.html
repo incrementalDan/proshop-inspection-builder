@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=26">
+  <link rel="stylesheet" href="css/styles.css?v=30">
 </head>
 <body>
 
@@ -143,6 +143,10 @@
           <div class="pdf-toolbar-sep"></div>
           <button id="pdf-balloon-mode" class="btn btn-icon pdf-btn" title="Balloon mode (B)">⊙</button>
           <button id="pdf-datum-mode" class="btn btn-icon pdf-btn" title="Datum mode (D)">Ⓐ</button>
+          <label id="pdf-balloon-size-wrap" class="pdf-balloon-size" title="Balloon size (applies to all balloons)">
+            <span class="pdf-balloon-size-icon">⊙</span>
+            <input id="pdf-balloon-size" type="range" min="6" max="28" step="1" value="11">
+          </label>
           <div class="pdf-toolbar-sep"></div>
           <button id="pdf-export-balloons" class="btn btn-icon pdf-btn" title="Export ballooned PDF">⬇</button>
           <div class="pdf-toolbar-sep"></div>
@@ -542,22 +546,22 @@
   <script src="lib/tesseract/tesseract.min.js"></script>
   <script src="lib/pdf-lib.min.js"></script>
 
-  <script src="lib/pdf-lib.min.js?v=29"></script>
-  <script src="js/mathEngine.js?v=29"></script>
-  <script src="js/parser.js?v=29"></script>
-  <script src="js/dataModel.js?v=29"></script>
-  <script src="js/exportEngine.js?v=29"></script>
-  <script src="js/storage.js?v=29"></script>
-  <script src="js/history.js?v=29"></script>
-  <script src="js/pdfViewer.js?v=29"></script>
-  <script src="js/cmmParser.js?v=29"></script>
-  <script src="js/gdtParser.js?v=29"></script>
-  <script src="js/ocrEngine.js?v=29"></script>
-  <script src="js/tolModeInput.js?v=29"></script>
-  <script src="js/balloonManager.js?v=29"></script>
-  <script src="js/pdfExport.js?v=29"></script>
-  <script src="js/ui.js?v=29"></script>
-  <script src="js/app.js?v=29"></script>
+  <script src="lib/pdf-lib.min.js?v=30"></script>
+  <script src="js/mathEngine.js?v=30"></script>
+  <script src="js/parser.js?v=30"></script>
+  <script src="js/dataModel.js?v=30"></script>
+  <script src="js/exportEngine.js?v=30"></script>
+  <script src="js/storage.js?v=30"></script>
+  <script src="js/history.js?v=30"></script>
+  <script src="js/pdfViewer.js?v=30"></script>
+  <script src="js/cmmParser.js?v=30"></script>
+  <script src="js/gdtParser.js?v=30"></script>
+  <script src="js/ocrEngine.js?v=30"></script>
+  <script src="js/tolModeInput.js?v=30"></script>
+  <script src="js/balloonManager.js?v=30"></script>
+  <script src="js/pdfExport.js?v=30"></script>
+  <script src="js/ui.js?v=30"></script>
+  <script src="js/app.js?v=30"></script>
 
 </body>
 </html>
