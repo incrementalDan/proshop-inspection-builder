@@ -780,6 +780,10 @@ input.no-spinners {
   justify-content: center;
   background: var(--bg-primary);
   outline: none;
+  /* Containing block for #pdf-balloon-layer so the overlay scrolls WITH the
+     canvas during pan. Without this the layer anchors to an outer ancestor and
+     balloons drift off their dimensions when the user pans. */
+  position: relative;
 }
 
 #pdf-canvas-wrap.panning {
@@ -2320,6 +2324,23 @@ td.edit-flash {
 }
 
 /* SVG overlay sits on top of the canvas wrap */
+.pdf-balloon-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+.pdf-balloon-size-icon {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+.pdf-balloon-size input[type="range"] {
+  width: 64px;
+  cursor: pointer;
+  accent-color: #cc0000;
+}
+
 #pdf-balloon-layer {
   z-index: 5;
 }
