@@ -93,7 +93,7 @@ function defaultGlobals() {
     pdfFileName: null,
     pdfRevision: null,            // string e.g. "Rev B", set when PDF is linked/updated
     pdfRevisionsHistory: [],      // [{ rev, linkedAt }] for record keeping
-    balloonRadius: 11,            // balloon circle radius in PDF points — global size for all balloons
+    balloonRadius: 6,             // balloon circle radius in PDF points — global size for all balloons
   };
 }
 

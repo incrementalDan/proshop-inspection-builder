@@ -127,7 +127,7 @@
           // Balloon size is the global balloonRadius (PDF points), matching the
           // on-screen base radius so export visually matches the editor.
           var radius = (state.globals && state.globals.balloonRadius > 0)
-                       ? state.globals.balloonRadius : 11;
+                       ? state.globals.balloonRadius : 6;
 
           balloonsByPage[pn].forEach(function(bal) {
             var anchorCenter = {
