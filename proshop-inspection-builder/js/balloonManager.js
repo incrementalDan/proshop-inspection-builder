@@ -16,7 +16,7 @@
 window.PSB = window.PSB || {};
 
 var SVG_NS = 'http://www.w3.org/2000/svg';
-var BALLOON_BASE_RADIUS = 11;  // px at zoom 1.0 — fallback if globals.balloonRadius unset
+var BALLOON_BASE_RADIUS = 6;   // px at zoom 1.0 — fallback if globals.balloonRadius unset
 
 // Base balloon radius in PDF points (= screen px at zoom 1.0). User-adjustable
 // via the toolbar size control; persisted in globals.balloonRadius.
