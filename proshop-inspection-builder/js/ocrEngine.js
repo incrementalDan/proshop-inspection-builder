@@ -33,28 +33,27 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
   // anchorBox is in PDF user space (Y grows UP). Text items are also in PDF
   // user space, so both can be compared without flipping.
   //
-  // Matching uses the text item's CENTER point, not edge intersection: a value
-  // sitting just outside the box (e.g. the next dimension to the right) can
-  // clip the box edge and get wrongly grabbed if we test intersection. Keying
-  // on the center means we only capture text the user actually boxed. A small
-  // margin tolerates a tightly-drawn box.
-  var margin = 2;
-  var hitArea = expandRect(anchorBox, margin);
+  // A text item is captured only when its bounding box lies MOSTLY inside the
+  // anchor box (>= 50% of the item's own area). Edge-intersection grabbed the
+  // neighbour to the right; pure center-point grabbed the dimension on the line
+  // above. "Mostly inside" keys on the text the user actually boxed and rejects
+  // both: a neighbour clipping an edge contributes little of its area, and a
+  // line above the box has zero vertical overlap.
+  var MIN_INSIDE = 0.5;
   return page.getTextContent().then(function(content) {
     var hits = [];
     for (var i = 0; i < content.items.length; i++) {
       var item = content.items[i];
-      if (!item.transform || !item.str) continue;
+      if (!item.transform || !item.str || !item.str.trim()) continue;
       var x = item.transform[4];
-      var yBottom = item.transform[5];
+      var yBottom = item.transform[5];   // text baseline in PDF user space (Y up)
       var size = Math.sqrt(item.transform[0] * item.transform[0] +
                            item.transform[1] * item.transform[1]) || 10;
       var w = item.width || (item.str.length * size * 0.5);
-      var h = size;
-      var cx = x + w / 2;
-      var cy = yBottom + h / 2;
+      var h = item.height || size;
+      var textRect = { x: x, y: yBottom, w: w, h: h };
 
-      if (pointInRect(cx, cy, hitArea)) {
+      if (areaInsideFraction(textRect, anchorBox) >= MIN_INSIDE) {
         hits.push({ str: item.str, x: x, y: yBottom, h: h });
       }
     }
@@ -70,19 +69,12 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
   });
 }
 
-function expandRect(r, m) {
-  return { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m };
-}
-
-function rectsIntersect(a, b) {
-  return !(a.x + a.w < b.x ||
-           b.x + b.w < a.x ||
-           a.y + a.h < b.y ||
-           b.y + b.h < a.y);
-}
-
-function pointInRect(px, py, r) {
-  return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+// Fraction of rect A's area that lies within rect B (0..1).
+function areaInsideFraction(a, b) {
+  var ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  var oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  if (ox <= 0 || oy <= 0) return 0;
+  return (ox * oy) / Math.max(a.w * a.h, 1e-6);
 }
 
 // ── Step 2: Tesseract.js ─────────────────────────────────
