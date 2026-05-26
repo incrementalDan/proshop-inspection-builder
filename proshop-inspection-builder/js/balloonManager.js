@@ -497,18 +497,17 @@ function deleteDatumRef(id) {
 
 // ── Title block default tolerance injection ──────────────
 /**
- * If the OCR result has no tolerance and the drawing spec has a recognisable
- * decimal count, fill in the matching title-block default from globals.
- * The result is returned with `titleBlockDefault` truthy so the popover can
- * show a visual indicator that the tolerance was not read from the drawing.
+ * Look up the symmetrical title-block default tolerance for a given drawing
+ * spec string. Returns { tol: '0.005', source: true | 'gdt-profile' } when a
+ * matching default exists, otherwise null. The drawing spec must be a clean
+ * decimal — its decimal-place count selects the bucket. A configured GD&T
+ * profile tolerance overrides the decimal buckets. Converts between the
+ * title-block unit and the drawing (import) unit when they differ.
  */
-function applyTitleBlockDefault(ocrResult, globals) {
-  if (!globals || !ocrResult) return ocrResult;
-  var parsed = ocrResult.parsed;
-  if (!parsed || parsed.tolerance || parsed.isNote || parsed.isGDT) return ocrResult;
-
-  var spec = String(parsed.drawingSpec || '').trim();
-  if (!spec || !/\d/.test(spec)) return ocrResult;
+function lookupTitleBlockTol(spec, globals) {
+  if (!globals) return null;
+  spec = String(spec || '').trim();
+  if (!spec || !/\d/.test(spec)) return null;
 
   var defaultTol = '';
   var source = false;
@@ -519,14 +518,14 @@ function applyTitleBlockDefault(ocrResult, globals) {
     source = 'gdt-profile';
   } else {
     var decimals = PSB.detectPrecision ? PSB.detectPrecision(spec) : null;
-    if (decimals === null || decimals === 0) return ocrResult;
+    if (decimals === null || decimals === 0) return null;
     if      (decimals === 1 && globals.titleBlockTol1d) { defaultTol = globals.titleBlockTol1d; source = true; }
     else if (decimals === 2 && globals.titleBlockTol2d) { defaultTol = globals.titleBlockTol2d; source = true; }
     else if (decimals === 3 && globals.titleBlockTol3d) { defaultTol = globals.titleBlockTol3d; source = true; }
     else if (decimals >= 4 && globals.titleBlockTol4d)  { defaultTol = globals.titleBlockTol4d; source = true; }
   }
 
-  if (!defaultTol || !source) return ocrResult;
+  if (!defaultTol || !source) return null;
 
   // Unit conversion: title block tolerances may be stored in a different unit
   // than the drawing dimensions (importUnits). Convert if needed.
@@ -538,7 +537,7 @@ function applyTitleBlockDefault(ocrResult, globals) {
     tolStr = defaultTol;
   } else if (PSB.convertUnits) {
     var tolNum = parseFloat(defaultTol);
-    if (isNaN(tolNum)) return ocrResult;
+    if (isNaN(tolNum)) return null;
     tolNum = PSB.convertUnits(tolNum, tolUnits, drawingUnits);
     var prec = (drawingUnits === 'mm') ? 3 : 4;
     tolStr = tolNum.toFixed(prec).replace(/0+$/, '').replace(/\.$/, '') || tolNum.toString();
@@ -546,14 +545,31 @@ function applyTitleBlockDefault(ocrResult, globals) {
     tolStr = defaultTol;
   }
 
+  return { tol: tolStr, source: source };
+}
+
+/**
+ * If the OCR result has no tolerance and the drawing spec has a recognisable
+ * decimal count, fill in the matching title-block default from globals.
+ * The result is returned with `titleBlockDefault` truthy so the popover can
+ * show a visual indicator that the tolerance was not read from the drawing.
+ */
+function applyTitleBlockDefault(ocrResult, globals) {
+  if (!ocrResult) return ocrResult;
+  var parsed = ocrResult.parsed;
+  if (!parsed || parsed.tolerance || parsed.isNote || parsed.isGDT) return ocrResult;
+
+  var hit = lookupTitleBlockTol(parsed.drawingSpec, globals);
+  if (!hit) return ocrResult;
+
   var newParsed = Object.assign({}, parsed, {
-    tolerance: tolStr,
+    tolerance: hit.tol,
     tolMode: 'sym',
   });
 
   return Object.assign({}, ocrResult, {
     parsed: newParsed,
-    titleBlockDefault: source,
+    titleBlockDefault: hit.source,
   });
 }
 
@@ -651,9 +667,8 @@ function showPopover(anchorBox, pageNum, ocrResult) {
     (ocrFailed
       ? '<div class="balloon-popover-warn">OCR could not read this area — enter values manually</div>'
       : (lowConf ? '<div class="balloon-popover-warn">⚠ Low confidence — please verify</div>' : '')) +
-    (ocrResult.titleBlockDefault
-      ? '<div class="balloon-popover-tblock-default">ⓘ Tolerance from title block default</div>'
-      : '') +
+    '<div class="balloon-popover-tblock-default" style="display:' +
+      (ocrResult.titleBlockDefault ? 'block' : 'none') + '">ⓘ Tolerance from title block default</div>' +
     '<div class="balloon-popover-grid">' +
       '<div class="balloon-popover-field bp-col-2"><label>Drawing Spec</label>' +
         '<input type="text" class="bp-spec" value="' + escapeAttr(parsed.drawingSpec || '') + '" /></div>' +
@@ -701,10 +716,31 @@ function showPopover(anchorBox, pageNum, ocrResult) {
     nominal: isNaN(nominalForBounds) ? null : nominalForBounds,
     precision: 4,
   });
-  // Keep nominal in sync if user edits Drawing Spec before confirm.
+  // Title-block default re-application. If OCR read a real (non-default)
+  // tolerance, the user owns it from the start and we never auto-fill. Once the
+  // user types anything into the tolerance inputs, they own it too. Until then,
+  // correcting the Drawing Spec re-derives the default for the new decimal count
+  // — this is the common case when OCR returns junk and the user fixes the spec.
+  var tbBadge = popoverEl.querySelector('.balloon-popover-tblock-default');
+  var tolUserOwned = !!(parsed.tolerance && !ocrResult.titleBlockDefault);
+  tolMount.addEventListener('input', function() { tolUserOwned = true; });
+
+  // Keep nominal in sync if user edits Drawing Spec before confirm, and
+  // re-derive the title-block default tolerance from the corrected spec.
   inSpec && inSpec.addEventListener('input', function() {
     var n = parseFloat(inSpec.value);
     tolCtrl.setNominal(isNaN(n) ? null : n);
+    if (tolUserOwned) return;
+    var globals = ctx.getState && ctx.getState().globals;
+    var hit = lookupTitleBlockTol(inSpec.value, globals);
+    if (hit) {
+      if (tolCtrl.getMode() !== 'sym') tolCtrl.setMode('sym');
+      tolCtrl.setValue(hit.tol, hit.tol);
+      if (tbBadge) tbBadge.style.display = 'block';
+    } else {
+      tolCtrl.setValue(0, 0);
+      if (tbBadge) tbBadge.style.display = 'none';
+    }
   });
 
   popoverEl.querySelector('.bp-cancel').addEventListener('click', closePopover);
