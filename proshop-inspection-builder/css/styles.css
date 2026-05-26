@@ -745,6 +745,16 @@ input.no-spinners {
   padding: 0 !important;
 }
 
+/* Balloon- and datum-mode toggles carry meaning-bearing glyphs the user must
+   recognise at a glance — give them more room and a larger, legible icon than
+   the plain nav/zoom buttons. */
+#pdf-balloon-mode,
+#pdf-datum-mode {
+  width: 34px !important;
+  font-size: 19px !important;
+  line-height: 1;
+}
+
 .pdf-page-info {
   font-size: 11px;
   font-family: var(--font-mono);
@@ -776,8 +786,12 @@ input.no-spinners {
   overflow: auto;
   cursor: grab;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* "safe" centering: center the page when it fits, but fall back to start
+     alignment when it is larger than the viewport (zoomed in). Plain "center"
+     pushes the overflow equally to both sides and makes the top/left edges
+     unreachable by scroll/pan — so part of the print gets cut off. */
+  align-items: safe center;
+  justify-content: safe center;
   background: var(--bg-primary);
   outline: none;
   /* Containing block for #pdf-balloon-layer so the overlay scrolls WITH the

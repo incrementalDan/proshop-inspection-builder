@@ -99,6 +99,26 @@ function initBalloonManager(opts) {
     }
     renderOverlay(PSB.getPdfViewport());
   });
+
+  // Re-align the overlay whenever the canvas wrap changes size. The canvas is
+  // flex-centered, so resizing the viewer (dragging the sidebar or table split,
+  // not just the window) shifts the canvas's offset without firing a page
+  // re-render — leaving balloons drifted off their dimensions until a manual
+  // refresh. A plain renderOverlay() re-reads canvas.offsetLeft/Top and fixes it.
+  // Safe from feedback loops: the overlay layer is absolutely positioned, so it
+  // never changes the wrap's measured size.
+  if (wrap && typeof ResizeObserver !== 'undefined') {
+    var roQueued = false;
+    var ro = new ResizeObserver(function() {
+      if (roQueued) return;
+      roQueued = true;
+      requestAnimationFrame(function() {
+        roQueued = false;
+        if (PSB.hasPdf()) renderOverlay(PSB.getPdfViewport());
+      });
+    });
+    ro.observe(wrap);
+  }
 }
 
 // ── Coordinate helpers ───────────────────────────────────

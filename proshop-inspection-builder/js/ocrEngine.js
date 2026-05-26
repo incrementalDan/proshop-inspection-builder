@@ -33,15 +33,14 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
   // anchorBox is in PDF user space (Y grows UP). Text items are also in PDF
   // user space, so both can be compared without flipping.
   //
-  // A text item is captured if EITHER its center lies inside the box (with a
-  // small tolerance) OR at least half of its area is inside. The center test
-  // is forgiving: a box drawn tightly around — or slightly off from — the
-  // visible glyphs still captures the value even when the PDF's text-layer
-  // boxes don't line up exactly with the ink (common on real drawings). The
-  // area test additionally captures an item larger than the box. Both reject
-  // the neighbour to the right and the dimension on the line above, since those
-  // have their center outside the box AND little area inside it.
-  var M = 2;                 // center-test tolerance (PDF points)
+  // A text item is captured only when its bounding box lies MOSTLY inside the
+  // anchor box (>= 50% of the item's own area). This rejects two failure modes:
+  // a neighbour clipping an edge contributes little of its area, and a line
+  // above/below the box has no vertical overlap. A looser center-point test was
+  // tried but grabbed stray layer items near the box on drawings whose text
+  // layer doesn't match the visible ink; that wrong hit then short-circuited the
+  // OCR fallback (see extractDimension). When a real dimension isn't in the text
+  // layer, this rule correctly returns nothing so pixel OCR runs instead.
   var MIN_INSIDE = 0.5;
   return page.getTextContent().then(function(content) {
     var hits = [];
@@ -54,12 +53,9 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
                            item.transform[1] * item.transform[1]) || 10;
       var w = item.width || (item.str.length * size * 0.5);
       var h = item.height || size;
-      var cx = x + w / 2;
-      var cy = yBottom + h / 2;
-      var centerIn = cx >= anchorBox.x - M && cx <= anchorBox.x + anchorBox.w + M &&
-                     cy >= anchorBox.y - M && cy <= anchorBox.y + anchorBox.h + M;
+      var textRect = { x: x, y: yBottom, w: w, h: h };
 
-      if (centerIn || areaInsideFraction({ x: x, y: yBottom, w: w, h: h }, anchorBox) >= MIN_INSIDE) {
+      if (areaInsideFraction(textRect, anchorBox) >= MIN_INSIDE) {
         hits.push({ str: item.str, x: x, y: yBottom, h: h });
       }
     }
@@ -329,6 +325,19 @@ function parseOcrText(rawText) {
     return out;
   }
 
+  // Thread / general-note short-circuit. A thread callout ("M4X0.7 - 6H THRU")
+  // or a shop note contains digits but is NOT a dimension: it must keep its
+  // full text and be flagged as a note so the math pipeline skips it, rather
+  // than being decomposed into a bogus nominal/tolerance. detectFeatureType
+  // owns the thread/note patterns — reuse it instead of duplicating them here.
+  var featureType = (PSB.detectFeatureType ? PSB.detectFeatureType(text) : 'dimension');
+  if (featureType === 'thread' || featureType === 'note') {
+    out.drawingSpec = text;
+    out.isNote = true;
+    out.confidence = DIGIT_RE.test(text) ? 'medium' : 'low';
+    return out;
+  }
+
   // Separate the spec body from any tolerance portion. We treat anything
   // including ±, +/-, +.../-..., +X/-Y as tolerance and the rest as spec.
   var tolMatch = text.match(/(±\s*\.?[0-9.]+|\+\s*\/\s*-\s*\.?[0-9.]+|\+\s*\.?[0-9.]+\s*\/\s*-\s*\.?[0-9.]+|\+\s*\.?[0-9.]+\s*[-–]\s*\.?[0-9.]+)/);
@@ -444,6 +453,16 @@ function extractDimension(page, anchorBox, viewport, opts) {
   // ── Step 1 ────────────────────────────────────────────
   notify('pdfjs');
   return extractTextFromPdfLayer(page, anchorBox, viewport).then(function(layerText) {
+    // Threads and notes are neither dimensions nor GD&T frames. Classify them
+    // from the text layer BEFORE the GD&T heuristic so a thread like
+    // "M4X0.7 - 6H THRU" — or a note with a stray capital letter — isn't routed
+    // to the GD&T extractor or split into a fake dimension.
+    if (layerText) {
+      var ft = PSB.detectFeatureType(layerText);
+      if (ft === 'thread' || ft === 'note') {
+        return { parsed: parseOcrText(layerText), engine: 'pdfjs', rawText: layerText, ocrConfidence: 0.95 };
+      }
+    }
     if (layerText && PSB.isGdtLikely(layerText)) return runGdt('pdfjs');
     if (layerText && DIGIT_RE.test(layerText)) {
       var parsed = parseOcrText(layerText);
