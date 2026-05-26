@@ -1009,9 +1009,10 @@ function bindSettingsModal() {
     // Populate equipment list
     document.getElementById('settings-equipment-list').value =
       state.globals.equipmentList.join('\n');
-    // Populate balloon OCR mode
+    // Populate balloon OCR mode (treat legacy 'tesseract' value as 'pdfjs')
+    var savedOcrMode = state.globals.ocrMode || 'pdfjs';
     document.getElementById('settings-ocr-mode').value =
-      state.globals.ocrMode || 'tesseract';
+      (savedOcrMode === 'claude') ? 'claude' : 'pdfjs';
     // Populate title block defaults
     document.getElementById('settings-tblock-units').value =
       state.globals.titleBlockTolUnits || 'inch';
@@ -1039,7 +1040,7 @@ function bindSettingsModal() {
       .sort();
     // Save balloon OCR mode
     var ocrMode = document.getElementById('settings-ocr-mode').value;
-    state.globals.ocrMode = (ocrMode === 'claude') ? 'claude' : 'tesseract';
+    state.globals.ocrMode = (ocrMode === 'claude') ? 'claude' : 'pdfjs';
     // Save title block defaults
     state.globals.titleBlockTolUnits = document.getElementById('settings-tblock-units').value || 'inch';
     state.globals.titleBlockTol1d  = document.getElementById('settings-tblock-1d').value.trim();

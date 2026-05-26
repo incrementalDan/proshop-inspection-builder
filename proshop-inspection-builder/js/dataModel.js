@@ -94,7 +94,7 @@ function defaultGlobals() {
     pdfRevision: null,            // string e.g. "Rev B", set when PDF is linked/updated
     pdfRevisionsHistory: [],      // [{ rev, linkedAt }] for record keeping
     balloonRadius: 6,             // balloon circle radius in PDF points — global size for all balloons
-    ocrMode: 'tesseract',         // balloon OCR engine: 'tesseract' (local Tesseract, Claude fallback) | 'claude' (always Claude vision)
+    ocrMode: 'pdfjs',             // balloon OCR engine: 'pdfjs' (PDF.js text layer, Claude fallback) | 'claude' (always Claude vision)
     titleBlockTolUnits: 'inch',   // unit system the title block tolerance values are entered in
     titleBlockTol1d: '',          // default tolerance for .X dimensions  (1 decimal place)
     titleBlockTol2d: '',          // default tolerance for .XX dimensions (2 decimal places)
