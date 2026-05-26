@@ -33,15 +33,14 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
   // anchorBox is in PDF user space (Y grows UP). Text items are also in PDF
   // user space, so both can be compared without flipping.
   //
-  // A text item is captured if EITHER its center lies inside the box (with a
-  // small tolerance) OR at least half of its area is inside. The center test
-  // is forgiving: a box drawn tightly around — or slightly off from — the
-  // visible glyphs still captures the value even when the PDF's text-layer
-  // boxes don't line up exactly with the ink (common on real drawings). The
-  // area test additionally captures an item larger than the box. Both reject
-  // the neighbour to the right and the dimension on the line above, since those
-  // have their center outside the box AND little area inside it.
-  var M = 2;                 // center-test tolerance (PDF points)
+  // A text item is captured only when its bounding box lies MOSTLY inside the
+  // anchor box (>= 50% of the item's own area). This rejects two failure modes:
+  // a neighbour clipping an edge contributes little of its area, and a line
+  // above/below the box has no vertical overlap. A looser center-point test was
+  // tried but grabbed stray layer items near the box on drawings whose text
+  // layer doesn't match the visible ink; that wrong hit then short-circuited the
+  // OCR fallback (see extractDimension). When a real dimension isn't in the text
+  // layer, this rule correctly returns nothing so pixel OCR runs instead.
   var MIN_INSIDE = 0.5;
   return page.getTextContent().then(function(content) {
     var hits = [];
@@ -54,12 +53,9 @@ function extractTextFromPdfLayer(page, anchorBox, viewport) {
                            item.transform[1] * item.transform[1]) || 10;
       var w = item.width || (item.str.length * size * 0.5);
       var h = item.height || size;
-      var cx = x + w / 2;
-      var cy = yBottom + h / 2;
-      var centerIn = cx >= anchorBox.x - M && cx <= anchorBox.x + anchorBox.w + M &&
-                     cy >= anchorBox.y - M && cy <= anchorBox.y + anchorBox.h + M;
+      var textRect = { x: x, y: yBottom, w: w, h: h };
 
-      if (centerIn || areaInsideFraction({ x: x, y: yBottom, w: w, h: h }, anchorBox) >= MIN_INSIDE) {
+      if (areaInsideFraction(textRect, anchorBox) >= MIN_INSIDE) {
         hits.push({ str: item.str, x: x, y: yBottom, h: h });
       }
     }
@@ -329,6 +325,19 @@ function parseOcrText(rawText) {
     return out;
   }
 
+  // Thread / general-note short-circuit. A thread callout ("M4X0.7 - 6H THRU")
+  // or a shop note contains digits but is NOT a dimension: it must keep its
+  // full text and be flagged as a note so the math pipeline skips it, rather
+  // than being decomposed into a bogus nominal/tolerance. detectFeatureType
+  // owns the thread/note patterns — reuse it instead of duplicating them here.
+  var featureType = (PSB.detectFeatureType ? PSB.detectFeatureType(text) : 'dimension');
+  if (featureType === 'thread' || featureType === 'note') {
+    out.drawingSpec = text;
+    out.isNote = true;
+    out.confidence = DIGIT_RE.test(text) ? 'medium' : 'low';
+    return out;
+  }
+
   // Separate the spec body from any tolerance portion. We treat anything
   // including ±, +/-, +.../-..., +X/-Y as tolerance and the rest as spec.
   var tolMatch = text.match(/(±\s*\.?[0-9.]+|\+\s*\/\s*-\s*\.?[0-9.]+|\+\s*\.?[0-9.]+\s*\/\s*-\s*\.?[0-9.]+|\+\s*\.?[0-9.]+\s*[-–]\s*\.?[0-9.]+)/);
@@ -385,108 +394,114 @@ function parseOcrText(rawText) {
 }
 
 // ── Orchestrator ─────────────────────────────────────────
+
+// Padding (PDF points) added around the user's drawn box before OCR. The PDF
+// text layer proved unreliable — misaligned on digital prints and, on scanned
+// "searchable" PDFs, a hidden OCR layer offset from the ink — so extraction now
+// reads the rendered PIXELS inside the box. A little padding means a slightly
+// loose box still captures the whole glyph run. Only the OCR crop is padded;
+// the caller's anchorBox (balloon anchor + leader target) is left untouched.
+var OCR_CROP_PAD_PT = 5;
+function padBoxForOcr(box) {
+  var m = OCR_CROP_PAD_PT;
+  return { x: box.x - m, y: box.y - m, w: box.w + 2 * m, h: box.h + 2 * m };
+}
+
 /**
- * Run the full OCR pipeline for an anchor box on a given pdf.js page.
+ * Run the pixel-based OCR pipeline for an anchor box on a given pdf.js page.
+ *
+ * Modes (opts.ocrMode):
+ *   'tesseract' (default) — local Tesseract first; Claude vision only as a
+ *                           fallback when Tesseract is weak/empty.
+ *   'claude'              — always Claude vision (skips Tesseract). Falls back
+ *                           to Tesseract if no API key is configured.
  *
  * @param {Object} page       — pdf.js page proxy
  * @param {Object} anchorBox  — { x, y, w, h } in PDF user space
- * @param {Object} viewport   — current pdf.js viewport (for coord conversion)
+ * @param {Object} viewport   — current pdf.js viewport (unused now; kept for API stability)
  * @param {Object} [opts]
- * @param {Function} [opts.onProgress] — receives 'pdfjs' | 'tesseract' | 'claude' | 'done'
+ * @param {Function} [opts.onProgress] — receives 'tesseract' | 'claude' | 'claude-gdt' | 'done'
+ * @param {string} [opts.ocrMode]      — 'tesseract' | 'claude'
  * @returns {Promise<{ parsed, engine, rawText, ocrConfidence }>}
  */
 function extractDimension(page, anchorBox, viewport, opts) {
   opts = opts || {};
   var notify = opts.onProgress || function() {};
+  var mode = (opts.ocrMode === 'claude') ? 'claude' : 'tesseract';
+  var ocrBox = padBoxForOcr(anchorBox);
 
-  // GD&T branch: render crop, call Claude with structured JSON prompt, wrap
-  // the validated gdt object into the same { parsed, engine, … } envelope so
-  // the popover can branch on parsed.isGDT without changing its signature.
+  function done(result) { notify('done'); return result; }
+
+  // GD&T branch: structured JSON via Claude, wrapped in the standard envelope.
   function runGdt(reason) {
     notify('claude-gdt');
-    return renderAnchorCrop(page, anchorBox, 3.0).then(function(crop) {
+    return renderAnchorCrop(page, ocrBox, 3.0).then(function(crop) {
       var b64 = canvasToBase64Png(crop);
       return extractGdtFromCrop(b64).then(function(gdt) {
         if (!gdt || gdt._error) {
-          // Surface the error in the parsed shell so the popover can fall back
-          // to manual entry with an empty form + warning toast.
           return {
-            parsed: parseOcrText(''),
-            engine: 'claude-gdt',
-            rawText: (gdt && gdt.rawText) || '',
-            ocrConfidence: 0,
-            gdtError: gdt ? gdt._error : 'unknown',
-            gdt: null,
+            parsed: parseOcrText(''), engine: 'claude-gdt',
+            rawText: (gdt && gdt.rawText) || '', ocrConfidence: 0,
+            gdtError: gdt ? gdt._error : 'unknown', gdt: null,
           };
         }
         return {
           parsed: {
-            drawingSpec: gdt.tolerance,
-            nominal: gdt.tolerance,
-            tolerance: '',
-            specUnit1: gdt.su1,
-            specUnit2: gdt.su2,
-            specUnit3: '',
-            isGDT: true,
-            isNote: true,
-            confidence: 'high',
+            drawingSpec: gdt.tolerance, nominal: gdt.tolerance, tolerance: '',
+            specUnit1: gdt.su1, specUnit2: gdt.su2, specUnit3: '',
+            isGDT: true, isNote: true, confidence: 'high',
           },
-          engine: 'claude-gdt',
-          rawText: gdt.rawOcrText || '',
-          ocrConfidence: 0.9,
-          gdt: gdt,
-          gdtSignalSource: reason,
+          engine: 'claude-gdt', rawText: gdt.rawOcrText || '',
+          ocrConfidence: 0.9, gdt: gdt, gdtSignalSource: reason,
         };
       });
     });
   }
 
-  // ── Step 1 ────────────────────────────────────────────
-  notify('pdfjs');
-  return extractTextFromPdfLayer(page, anchorBox, viewport).then(function(layerText) {
-    if (layerText && PSB.isGdtLikely(layerText)) return runGdt('pdfjs');
-    if (layerText && DIGIT_RE.test(layerText)) {
-      var parsed = parseOcrText(layerText);
-      return { parsed: parsed, engine: 'pdfjs', rawText: layerText, ocrConfidence: 0.95 };
-    }
-    // ── Step 2 ───────────────────────────────────────
-    notify('tesseract');
-    return renderAnchorCrop(page, anchorBox, 3.0).then(function(crop) {
-      return runTesseract(crop).then(function(tres) {
-        if (tres.text && PSB.isGdtLikely(tres.text)) return runGdt('tesseract');
-        if (tres.text && DIGIT_RE.test(tres.text) && tres.confidence > 0.55) {
-          var parsed = parseOcrText(tres.text);
-          return { parsed: parsed, engine: 'tesseract', rawText: tres.text, ocrConfidence: tres.confidence };
-        }
-        // ── Step 3 ───────────────────────────────
-        if (!getApiKey()) {
-          // No key → return whatever we have, even if blank.
-          var fallback = parseOcrText(tres.text || layerText || '');
-          return { parsed: fallback, engine: tres.text ? 'tesseract' : null, rawText: tres.text || '', ocrConfidence: tres.confidence };
-        }
-        notify('claude');
-        var b64 = canvasToBase64Png(crop);
-        return callClaudeOcr(b64).then(function(claudeText) {
-          if (!claudeText) {
-            var fallback = parseOcrText(tres.text || layerText || '');
-            return { parsed: fallback, engine: null, rawText: tres.text || '', ocrConfidence: 0 };
-          }
-          // Claude text-mode may itself surface a GD&T frame we'd missed; one
-          // more heuristic pass before parsing as a plain dimension.
-          if (PSB.isGdtLikely(claudeText)) return runGdt('claude-text');
-          var parsed = parseOcrText(claudeText);
-          return { parsed: parsed, engine: 'claude', rawText: claudeText, ocrConfidence: 0.7 };
-        });
-      });
-    }).catch(function(err) {
-      console.warn('[OCR] Tesseract/Claude path failed:', err);
-      var parsed = parseOcrText(layerText || '');
-      return { parsed: parsed, engine: layerText ? 'pdfjs' : null, rawText: layerText || '', ocrConfidence: 0 };
+  // Turn a finished OCR string into the standard envelope. parseOcrText handles
+  // thread/note classification (so "M4X0.7 - 6H THRU" becomes a note, not a
+  // bogus dimension); GD&T frames route to the structured extractor.
+  function fromText(text, engine, conf) {
+    if (text && PSB.isGdtLikely(text)) return runGdt(engine);
+    return { parsed: parseOcrText(text || ''), engine: text ? engine : null, rawText: text || '', ocrConfidence: conf };
+  }
+
+  function viaClaude(crop) {
+    notify('claude');
+    return callClaudeOcr(canvasToBase64Png(crop)).then(function(claudeText) {
+      if (!claudeText) return { parsed: parseOcrText(''), engine: null, rawText: '', ocrConfidence: 0 };
+      return fromText(claudeText, 'claude', 0.85);
     });
-  }).then(function(result) {
-    notify('done');
-    return result;
-  });
+  }
+
+  return renderAnchorCrop(page, ocrBox, 3.0).then(function(crop) {
+    // Always-Claude mode (global setting). Degrades to Tesseract only when no
+    // API key is present, so ballooning still works before the key is added.
+    if (mode === 'claude' && getApiKey()) return viaClaude(crop);
+
+    // Default: Tesseract first (local, cheap), Claude as the accuracy backstop.
+    notify('tesseract');
+    return runTesseract(crop).then(function(tres) {
+      if (tres.text && PSB.isGdtLikely(tres.text)) return runGdt('tesseract');
+      if (tres.text && DIGIT_RE.test(tres.text) && tres.confidence > 0.55) {
+        return { parsed: parseOcrText(tres.text), engine: 'tesseract', rawText: tres.text, ocrConfidence: tres.confidence };
+      }
+      // Tesseract weak/empty → Claude vision fallback when a key is available.
+      if (!getApiKey()) {
+        return { parsed: parseOcrText(tres.text || ''), engine: tres.text ? 'tesseract' : null, rawText: tres.text || '', ocrConfidence: tres.confidence };
+      }
+      notify('claude');
+      return callClaudeOcr(canvasToBase64Png(crop)).then(function(claudeText) {
+        if (!claudeText) {
+          return { parsed: parseOcrText(tres.text || ''), engine: tres.text ? 'tesseract' : null, rawText: tres.text || '', ocrConfidence: tres.confidence };
+        }
+        return fromText(claudeText, 'claude', 0.7);
+      });
+    });
+  }).catch(function(err) {
+    console.warn('[OCR] extraction failed:', err);
+    return { parsed: parseOcrText(''), engine: null, rawText: '', ocrConfidence: 0 };
+  }).then(done);
 }
 
 // ── Cleanup ──────────────────────────────────────────────

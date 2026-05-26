@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=32">
+  <link rel="stylesheet" href="css/styles.css?v=34">
 </head>
 <body>
 
@@ -366,6 +366,14 @@
       </div>
       <div class="modal-body">
         <fieldset>
+          <legend>Balloon OCR</legend>
+          <p class="hint">How dimension text inside a balloon box is read. Reads the pixels you draw around — the PDF text layer is not used.</p>
+          <select id="settings-ocr-mode">
+            <option value="tesseract">Tesseract + Claude fallback (cheap)</option>
+            <option value="claude">Always Claude vision (best, needs API key)</option>
+          </select>
+        </fieldset>
+        <fieldset>
           <legend>Equipment List</legend>
           <p class="hint">One item per line. Saved automatically.</p>
           <textarea id="settings-equipment-list" rows="12"></textarea>
@@ -546,22 +554,22 @@
   <script src="lib/tesseract/tesseract.min.js"></script>
   <script src="lib/pdf-lib.min.js"></script>
 
-  <script src="lib/pdf-lib.min.js?v=32"></script>
-  <script src="js/mathEngine.js?v=32"></script>
-  <script src="js/parser.js?v=32"></script>
-  <script src="js/dataModel.js?v=32"></script>
-  <script src="js/exportEngine.js?v=32"></script>
-  <script src="js/storage.js?v=32"></script>
-  <script src="js/history.js?v=32"></script>
-  <script src="js/pdfViewer.js?v=32"></script>
-  <script src="js/cmmParser.js?v=32"></script>
-  <script src="js/gdtParser.js?v=32"></script>
-  <script src="js/ocrEngine.js?v=32"></script>
-  <script src="js/tolModeInput.js?v=32"></script>
-  <script src="js/balloonManager.js?v=32"></script>
-  <script src="js/pdfExport.js?v=32"></script>
-  <script src="js/ui.js?v=32"></script>
-  <script src="js/app.js?v=32"></script>
+  <script src="lib/pdf-lib.min.js?v=34"></script>
+  <script src="js/mathEngine.js?v=34"></script>
+  <script src="js/parser.js?v=34"></script>
+  <script src="js/dataModel.js?v=34"></script>
+  <script src="js/exportEngine.js?v=34"></script>
+  <script src="js/storage.js?v=34"></script>
+  <script src="js/history.js?v=34"></script>
+  <script src="js/pdfViewer.js?v=34"></script>
+  <script src="js/cmmParser.js?v=34"></script>
+  <script src="js/gdtParser.js?v=34"></script>
+  <script src="js/ocrEngine.js?v=34"></script>
+  <script src="js/tolModeInput.js?v=34"></script>
+  <script src="js/balloonManager.js?v=34"></script>
+  <script src="js/pdfExport.js?v=34"></script>
+  <script src="js/ui.js?v=34"></script>
+  <script src="js/app.js?v=34"></script>
 
 </body>
 </html>

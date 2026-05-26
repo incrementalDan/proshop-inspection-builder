@@ -1009,6 +1009,9 @@ function bindSettingsModal() {
     // Populate equipment list
     document.getElementById('settings-equipment-list').value =
       state.globals.equipmentList.join('\n');
+    // Populate balloon OCR mode
+    document.getElementById('settings-ocr-mode').value =
+      state.globals.ocrMode || 'tesseract';
 
     PSB.openModal('settings-modal');
   });
@@ -1021,6 +1024,9 @@ function bindSettingsModal() {
       .map(function(s) { return s.trim(); })
       .filter(function(s) { return s !== ''; })
       .sort();
+    // Save balloon OCR mode
+    var ocrMode = document.getElementById('settings-ocr-mode').value;
+    state.globals.ocrMode = (ocrMode === 'claude') ? 'claude' : 'tesseract';
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Updated equipment list' });
 
     PSB.closeModal('settings-modal');
