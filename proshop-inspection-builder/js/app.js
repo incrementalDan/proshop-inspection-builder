@@ -1012,6 +1012,19 @@ function bindSettingsModal() {
     // Populate balloon OCR mode
     document.getElementById('settings-ocr-mode').value =
       state.globals.ocrMode || 'tesseract';
+    // Populate title block defaults
+    document.getElementById('settings-tblock-units').value =
+      state.globals.titleBlockTolUnits || 'inch';
+    document.getElementById('settings-tblock-1d').value =
+      state.globals.titleBlockTol1d || '';
+    document.getElementById('settings-tblock-2d').value =
+      state.globals.titleBlockTol2d || '';
+    document.getElementById('settings-tblock-3d').value =
+      state.globals.titleBlockTol3d || '';
+    document.getElementById('settings-tblock-4d').value =
+      state.globals.titleBlockTol4d || '';
+    document.getElementById('settings-tblock-gdt').value =
+      state.globals.titleBlockTolGdt || '';
 
     PSB.openModal('settings-modal');
   });
@@ -1027,7 +1040,14 @@ function bindSettingsModal() {
     // Save balloon OCR mode
     var ocrMode = document.getElementById('settings-ocr-mode').value;
     state.globals.ocrMode = (ocrMode === 'claude') ? 'claude' : 'tesseract';
-    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Updated equipment list' });
+    // Save title block defaults
+    state.globals.titleBlockTolUnits = document.getElementById('settings-tblock-units').value || 'inch';
+    state.globals.titleBlockTol1d  = document.getElementById('settings-tblock-1d').value.trim();
+    state.globals.titleBlockTol2d  = document.getElementById('settings-tblock-2d').value.trim();
+    state.globals.titleBlockTol3d  = document.getElementById('settings-tblock-3d').value.trim();
+    state.globals.titleBlockTol4d  = document.getElementById('settings-tblock-4d').value.trim();
+    state.globals.titleBlockTolGdt = document.getElementById('settings-tblock-gdt').value.trim();
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Updated settings' });
 
     PSB.closeModal('settings-modal');
     markDirty();

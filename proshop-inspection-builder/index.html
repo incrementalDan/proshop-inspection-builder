@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=34">
+  <link rel="stylesheet" href="css/styles.css?v=35">
 </head>
 <body>
 
@@ -374,6 +374,38 @@
           </select>
         </fieldset>
         <fieldset>
+          <legend>Title Block Defaults</legend>
+          <p class="hint">Default symmetrical tolerances applied when a balloon box contains no tolerance callout. Matches engineering drawing title block conventions.</p>
+          <div class="settings-tblock-row">
+            <label>Tolerance unit</label>
+            <select id="settings-tblock-units">
+              <option value="inch">Inch</option>
+              <option value="mm">MM</option>
+            </select>
+          </div>
+          <div class="settings-tblock-row">
+            <label>.X &nbsp;&nbsp;(1 decimal)</label>
+            <input type="text" id="settings-tblock-1d" placeholder="e.g. 0.1" class="settings-tblock-input" />
+          </div>
+          <div class="settings-tblock-row">
+            <label>.XX &nbsp;(2 decimals)</label>
+            <input type="text" id="settings-tblock-2d" placeholder="e.g. 0.03" class="settings-tblock-input" />
+          </div>
+          <div class="settings-tblock-row">
+            <label>.XXX (3 decimals)</label>
+            <input type="text" id="settings-tblock-3d" placeholder="e.g. 0.005" class="settings-tblock-input" />
+          </div>
+          <div class="settings-tblock-row">
+            <label>.XXXX (4 decimals)</label>
+            <input type="text" id="settings-tblock-4d" placeholder="e.g. 0.0005" class="settings-tblock-input" />
+          </div>
+          <div class="settings-tblock-row">
+            <label>GD&amp;T Profile (overrides all)</label>
+            <input type="text" id="settings-tblock-gdt" placeholder="e.g. 0.005" class="settings-tblock-input" />
+            <span class="hint" style="margin:0">Applies as default when no tolerance found, regardless of decimal count</span>
+          </div>
+        </fieldset>
+        <fieldset>
           <legend>Equipment List</legend>
           <p class="hint">One item per line. Saved automatically.</p>
           <textarea id="settings-equipment-list" rows="12"></textarea>
@@ -554,22 +586,22 @@
   <script src="lib/tesseract/tesseract.min.js"></script>
   <script src="lib/pdf-lib.min.js"></script>
 
-  <script src="lib/pdf-lib.min.js?v=34"></script>
-  <script src="js/mathEngine.js?v=34"></script>
-  <script src="js/parser.js?v=34"></script>
-  <script src="js/dataModel.js?v=34"></script>
-  <script src="js/exportEngine.js?v=34"></script>
-  <script src="js/storage.js?v=34"></script>
-  <script src="js/history.js?v=34"></script>
-  <script src="js/pdfViewer.js?v=34"></script>
-  <script src="js/cmmParser.js?v=34"></script>
-  <script src="js/gdtParser.js?v=34"></script>
-  <script src="js/ocrEngine.js?v=34"></script>
-  <script src="js/tolModeInput.js?v=34"></script>
-  <script src="js/balloonManager.js?v=34"></script>
-  <script src="js/pdfExport.js?v=34"></script>
-  <script src="js/ui.js?v=34"></script>
-  <script src="js/app.js?v=34"></script>
+  <script src="lib/pdf-lib.min.js?v=35"></script>
+  <script src="js/mathEngine.js?v=35"></script>
+  <script src="js/parser.js?v=35"></script>
+  <script src="js/dataModel.js?v=35"></script>
+  <script src="js/exportEngine.js?v=35"></script>
+  <script src="js/storage.js?v=35"></script>
+  <script src="js/history.js?v=35"></script>
+  <script src="js/pdfViewer.js?v=35"></script>
+  <script src="js/cmmParser.js?v=35"></script>
+  <script src="js/gdtParser.js?v=35"></script>
+  <script src="js/ocrEngine.js?v=35"></script>
+  <script src="js/tolModeInput.js?v=35"></script>
+  <script src="js/balloonManager.js?v=35"></script>
+  <script src="js/pdfExport.js?v=35"></script>
+  <script src="js/ui.js?v=35"></script>
+  <script src="js/app.js?v=35"></script>
 
 </body>
 </html>
