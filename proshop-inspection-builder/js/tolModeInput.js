@@ -210,6 +210,13 @@ function renderTolModeInputs(container, opts) {
       var n = parseFloat(v);
       nominal = isNaN(n) ? null : n;
     },
+    setValue: function(p, m) {
+      var pp = parseFloat(p);
+      var mm = parseFloat(m == null ? p : m);
+      plus = isNaN(pp) ? 0 : pp;
+      minus = isNaN(mm) ? 0 : mm;
+      renderFields();
+    },
   };
 }
 
