@@ -504,8 +504,10 @@ function runOcrAndConfirm(anchorBox) {
 
   doc.getPage(pageNum).then(function(page) {
     var viewport = PSB.getPdfViewport();
+    var globals = ctx.getState && ctx.getState().globals;
     return PSB.ocrEngine.extractDimension(page, anchorBox, viewport, {
       onProgress: function(stage) { updateSpinnerStage(stage); },
+      ocrMode: globals && globals.ocrMode,
     });
   }).then(function(result) {
     hideSpinner();
@@ -547,6 +549,7 @@ function updateSpinnerStage(stage) {
   if (stage === 'pdfjs') lbl.textContent = 'Reading PDF text…';
   else if (stage === 'tesseract') lbl.textContent = 'OCR…';
   else if (stage === 'claude') lbl.textContent = '☁ Sending crop to Claude OCR…';
+  else if (stage === 'claude-gdt') lbl.textContent = '☁ Reading GD&T with Claude…';
   else if (stage === 'done') lbl.textContent = 'Done';
 }
 function hideSpinner() {

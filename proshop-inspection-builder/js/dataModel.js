@@ -94,6 +94,7 @@ function defaultGlobals() {
     pdfRevision: null,            // string e.g. "Rev B", set when PDF is linked/updated
     pdfRevisionsHistory: [],      // [{ rev, linkedAt }] for record keeping
     balloonRadius: 6,             // balloon circle radius in PDF points — global size for all balloons
+    ocrMode: 'tesseract',         // balloon OCR engine: 'tesseract' (local Tesseract, Claude fallback) | 'claude' (always Claude vision)
   };
 }
 
