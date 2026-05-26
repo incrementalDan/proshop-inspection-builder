@@ -611,7 +611,6 @@ function updateSpinnerStage(stage) {
   var lbl = spinnerEl.querySelector('.balloon-spinner-label');
   if (!lbl) return;
   if (stage === 'pdfjs') lbl.textContent = 'Reading PDF text…';
-  else if (stage === 'tesseract') lbl.textContent = 'OCR…';
   else if (stage === 'claude') lbl.textContent = '☁ Sending crop to Claude OCR…';
   else if (stage === 'claude-gdt') lbl.textContent = '☁ Reading GD&T with Claude…';
   else if (stage === 'done') lbl.textContent = 'Done';

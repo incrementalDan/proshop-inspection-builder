@@ -3,8 +3,8 @@
  *
  * Pipeline (stop at first usable result):
  *   1. PDF.js text layer    — fully local, fastest, best for digital PDFs
- *   2. Tesseract.js + WASM  — local OCR on a rendered crop, no network
- *   3. Claude vision API    — last resort, only the crop image is sent
+ *   2. Claude vision API    — fallback when the text layer returns nothing or
+ *                             no numeric characters; only the crop image is sent
  *
  * Coordinates are in PDF user space (the same space pdf.js gives us in
  * page.getTextContent() transforms). Callers pass anchor boxes already in
@@ -14,10 +14,6 @@
 window.PSB = window.PSB || {};
 
 var OCR_FALLBACK_MODEL = 'claude-sonnet-4-6';
-
-// Tesseract worker — created once, reused for every crop.
-var _tesseractWorker = null;
-var _tesseractWorkerPromise = null;
 
 function getApiKey() {
   return (window.PSB_CONFIG && window.PSB_CONFIG.anthropicApiKey) || null;
@@ -79,43 +75,13 @@ function areaInsideFraction(a, b) {
   return (ox * oy) / Math.max(a.w * a.h, 1e-6);
 }
 
-// ── Step 2: Tesseract.js ─────────────────────────────────
+// ── Step 2: Render crop for Claude vision ────────────────
 /**
- * Initialize the Tesseract worker pointed at our vendored core + traineddata.
- * Runs once; subsequent calls return the same promise.
- */
-function getTesseractWorker() {
-  if (_tesseractWorker) return Promise.resolve(_tesseractWorker);
-  if (_tesseractWorkerPromise) return _tesseractWorkerPromise;
-
-  if (typeof Tesseract === 'undefined') {
-    return Promise.reject(new Error('Tesseract library not loaded'));
-  }
-
-  // Resolve lib paths relative to index.html.
-  var base = 'lib/tesseract/';
-  _tesseractWorkerPromise = Tesseract.createWorker('eng', 1, {
-    workerPath: base + 'worker.min.js',
-    corePath:   base + 'tesseract-core-simd.wasm.js',
-    langPath:   base,                // expects eng.traineddata or .traineddata.gz here
-    gzip:       true,
-  }).then(function(worker) {
-    _tesseractWorker = worker;
-    _tesseractWorkerPromise = null;
-    return worker;
-  }).catch(function(err) {
-    _tesseractWorkerPromise = null;
-    throw err;
-  });
-  return _tesseractWorkerPromise;
-}
-
-/**
- * Render the anchor box region from a PDF page to an offscreen canvas at 2x scale.
- * Returns { canvas, dataUrl }. Caller is responsible for the canvas lifecycle.
+ * Render the anchor box region from a PDF page to an offscreen canvas at 3x scale.
+ * Returns a canvas element. Caller is responsible for the canvas lifecycle.
  */
 function renderAnchorCrop(page, anchorBox, baseScale) {
-  var scale = (baseScale || 2.0);
+  var scale = (baseScale || 3.0);
   var viewport = page.getViewport({ scale: scale });
   var pageHeight = viewport.height;
   var pageWidth = viewport.width;
@@ -158,19 +124,7 @@ function canvasToBase64Png(canvas) {
   return dataUrl.replace(/^data:image\/png;base64,/, '');
 }
 
-function runTesseract(cropCanvas) {
-  return getTesseractWorker().then(function(worker) {
-    return worker.recognize(cropCanvas);
-  }).then(function(result) {
-    var d = (result && result.data) || {};
-    return {
-      text: (d.text || '').trim(),
-      confidence: typeof d.confidence === 'number' ? (d.confidence / 100) : 0,
-    };
-  });
-}
-
-// ── Step 3: Claude vision fallback ───────────────────────
+// ── Step 2: Claude vision fallback ───────────────────────
 function callClaudeOcr(base64ImagePng) {
   var apiKey = getApiKey();
   if (!apiKey) return Promise.resolve(null);
@@ -209,11 +163,10 @@ function callClaudeOcr(base64ImagePng) {
 
 // ── GD&T: Claude vision with structured-JSON prompt ──────
 //
-// Feature control frames are visually complex and Tesseract can't read them.
-// This skips the text-layer/Tesseract steps and goes straight to Claude with
-// a prompt that demands a JSON-only response. The result is parsed and
-// validated by gdtParser.parseGdtResponse — caller gets the populated
-// user.gdt shape or an { _error } sentinel.
+// Feature control frames are visually complex. This skips the text-layer step
+// and goes straight to Claude with a prompt that demands a JSON-only response.
+// The result is parsed and validated by gdtParser.parseGdtResponse — caller
+// gets the populated user.gdt shape or an { _error } sentinel.
 var GDT_OCR_MODEL = 'claude-sonnet-4-6';
 var GDT_OCR_SYSTEM_PROMPT =
   'You are an engineering drawing OCR assistant specializing in GD&T ' +
@@ -395,12 +348,11 @@ function parseOcrText(rawText) {
 
 // ── Orchestrator ─────────────────────────────────────────
 
-// Padding (PDF points) added around the user's drawn box before OCR. The PDF
-// text layer proved unreliable — misaligned on digital prints and, on scanned
-// "searchable" PDFs, a hidden OCR layer offset from the ink — so extraction now
-// reads the rendered PIXELS inside the box. A little padding means a slightly
-// loose box still captures the whole glyph run. Only the OCR crop is padded;
-// the caller's anchorBox (balloon anchor + leader target) is left untouched.
+// Padding (PDF points) added around the user's drawn box before extraction.
+// A little padding means a slightly loose box still captures the whole glyph run
+// in the text layer, and ensures the crop sent to Claude includes the full glyphs.
+// Only the OCR crop is padded; the caller's anchorBox (balloon anchor + leader
+// target) is left untouched.
 var OCR_CROP_PAD_PT = 5;
 function padBoxForOcr(box) {
   var m = OCR_CROP_PAD_PT;
@@ -408,26 +360,29 @@ function padBoxForOcr(box) {
 }
 
 /**
- * Run the pixel-based OCR pipeline for an anchor box on a given pdf.js page.
+ * Run the OCR pipeline for an anchor box on a given pdf.js page.
+ *
+ * Pipeline:
+ *   1. PDF.js text layer  — fully local; used when result contains digits.
+ *   2. Claude vision API  — fallback when text layer is empty or has no digits.
  *
  * Modes (opts.ocrMode):
- *   'tesseract' (default) — local Tesseract first; Claude vision only as a
- *                           fallback when Tesseract is weak/empty.
- *   'claude'              — always Claude vision (skips Tesseract). Falls back
- *                           to Tesseract if no API key is configured.
+ *   'pdfjs' (default) — text layer first; Claude only as fallback.
+ *   'claude'          — always Claude vision (skips text layer).
+ *                       Falls back to text layer if no API key is configured.
  *
  * @param {Object} page       — pdf.js page proxy
  * @param {Object} anchorBox  — { x, y, w, h } in PDF user space
- * @param {Object} viewport   — current pdf.js viewport (unused now; kept for API stability)
+ * @param {Object} viewport   — current pdf.js viewport (kept for API stability)
  * @param {Object} [opts]
- * @param {Function} [opts.onProgress] — receives 'tesseract' | 'claude' | 'claude-gdt' | 'done'
- * @param {string} [opts.ocrMode]      — 'tesseract' | 'claude'
+ * @param {Function} [opts.onProgress] — receives 'claude' | 'claude-gdt' | 'done'
+ * @param {string} [opts.ocrMode]      — 'pdfjs' | 'claude'
  * @returns {Promise<{ parsed, engine, rawText, ocrConfidence }>}
  */
 function extractDimension(page, anchorBox, viewport, opts) {
   opts = opts || {};
   var notify = opts.onProgress || function() {};
-  var mode = (opts.ocrMode === 'claude') ? 'claude' : 'tesseract';
+  var mode = (opts.ocrMode === 'claude') ? 'claude' : 'pdfjs';
   var ocrBox = padBoxForOcr(anchorBox);
 
   function done(result) { notify('done'); return result; }
@@ -458,65 +413,58 @@ function extractDimension(page, anchorBox, viewport, opts) {
     });
   }
 
-  // Turn a finished OCR string into the standard envelope. parseOcrText handles
-  // thread/note classification (so "M4X0.7 - 6H THRU" becomes a note, not a
-  // bogus dimension); GD&T frames route to the structured extractor.
+  // Turn a finished OCR string into the standard envelope.
   function fromText(text, engine, conf) {
     if (text && PSB.isGdtLikely(text)) return runGdt(engine);
     return { parsed: parseOcrText(text || ''), engine: text ? engine : null, rawText: text || '', ocrConfidence: conf };
   }
 
-  function viaClaude(crop) {
+  // Render crop and call Claude vision for regular (non-GD&T) dimensions.
+  function viaClaude() {
     notify('claude');
-    return callClaudeOcr(canvasToBase64Png(crop)).then(function(claudeText) {
-      if (!claudeText) return { parsed: parseOcrText(''), engine: null, rawText: '', ocrConfidence: 0 };
-      return fromText(claudeText, 'claude', 0.85);
+    return renderAnchorCrop(page, ocrBox, 3.0).then(function(crop) {
+      return callClaudeOcr(canvasToBase64Png(crop)).then(function(claudeText) {
+        if (!claudeText) return { parsed: parseOcrText(''), engine: null, rawText: '', ocrConfidence: 0 };
+        return fromText(claudeText, 'claude', 0.85);
+      });
     });
   }
 
-  return renderAnchorCrop(page, ocrBox, 3.0).then(function(crop) {
-    // Always-Claude mode (global setting). Degrades to Tesseract only when no
-    // API key is present, so ballooning still works before the key is added.
-    if (mode === 'claude' && getApiKey()) return viaClaude(crop);
+  var promise;
 
-    // Default: Tesseract first (local, cheap), Claude as the accuracy backstop.
-    notify('tesseract');
-    return runTesseract(crop).then(function(tres) {
-      if (tres.text && PSB.isGdtLikely(tres.text)) return runGdt('tesseract');
-      if (tres.text && DIGIT_RE.test(tres.text) && tres.confidence > 0.55) {
-        return { parsed: parseOcrText(tres.text), engine: 'tesseract', rawText: tres.text, ocrConfidence: tres.confidence };
+  // Always-Claude mode (global setting): skip text layer, go straight to Claude.
+  // Degrades to the text-layer path if no API key is configured.
+  if (mode === 'claude' && getApiKey()) {
+    promise = viaClaude();
+  } else {
+    // Default: PDF.js text layer first; Claude as the fallback when the text
+    // layer returns nothing or has no numeric characters.
+    promise = extractTextFromPdfLayer(page, ocrBox, viewport).then(function(layerText) {
+      // Text layer returned content with at least one digit → use it directly.
+      if (layerText && DIGIT_RE.test(layerText)) {
+        return fromText(layerText, 'pdfjs', 1.0);
       }
-      // Tesseract weak/empty → Claude vision fallback when a key is available.
-      if (!getApiKey()) {
-        return { parsed: parseOcrText(tres.text || ''), engine: tres.text ? 'tesseract' : null, rawText: tres.text || '', ocrConfidence: tres.confidence };
-      }
-      notify('claude');
-      return callClaudeOcr(canvasToBase64Png(crop)).then(function(claudeText) {
-        if (!claudeText) {
-          return { parsed: parseOcrText(tres.text || ''), engine: tres.text ? 'tesseract' : null, rawText: tres.text || '', ocrConfidence: tres.confidence };
-        }
-        return fromText(claudeText, 'claude', 0.7);
-      });
+      // Text layer has GD&T symbols but no plain digits → Claude GD&T path.
+      if (layerText && PSB.isGdtLikely(layerText)) return runGdt('pdfjs');
+      // Text layer empty or digits-free → Claude vision fallback when available.
+      if (getApiKey()) return viaClaude();
+      // No API key and no usable text layer content — surface whatever we have.
+      if (layerText) return fromText(layerText, 'pdfjs', 0.5);
+      return { parsed: parseOcrText(''), engine: null, rawText: '', ocrConfidence: 0 };
     });
-  }).catch(function(err) {
+  }
+
+  return promise.catch(function(err) {
     console.warn('[OCR] extraction failed:', err);
     return { parsed: parseOcrText(''), engine: null, rawText: '', ocrConfidence: 0 };
   }).then(done);
 }
-
-// ── Cleanup ──────────────────────────────────────────────
-window.addEventListener('beforeunload', function() {
-  if (_tesseractWorker && _tesseractWorker.terminate) {
-    try { _tesseractWorker.terminate(); } catch (e) { /* noop */ }
-  }
-});
 
 // ── Exports ──────────────────────────────────────────────
 PSB.ocrEngine = {
   extractDimension: extractDimension,
   extractTextFromPdfLayer: extractTextFromPdfLayer,
   renderAnchorCrop: renderAnchorCrop,
-  runTesseract: runTesseract,
   callClaudeOcr: callClaudeOcr,
   extractGdtFromCrop: extractGdtFromCrop,
   parseOcrText: parseOcrText,

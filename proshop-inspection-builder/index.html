@@ -367,10 +367,10 @@
       <div class="modal-body">
         <fieldset>
           <legend>Balloon OCR</legend>
-          <p class="hint">How dimension text inside a balloon box is read. Reads the pixels you draw around — the PDF text layer is not used.</p>
+          <p class="hint">How dimension text inside a balloon box is read. Reads the PDF text layer first (fully local); falls back to Claude vision API when no numeric text is found.</p>
           <select id="settings-ocr-mode">
-            <option value="tesseract">Tesseract + Claude fallback (cheap)</option>
-            <option value="claude">Always Claude vision (best, needs API key)</option>
+            <option value="pdfjs">PDF.js text layer + Claude fallback</option>
+            <option value="claude">Always Claude vision (needs API key)</option>
           </select>
         </fieldset>
         <fieldset>
@@ -582,8 +582,7 @@
     window.dispatchEvent(new Event('pdfjsReady'));
   </script>
 
-  <!-- Vendored: Tesseract.js (local OCR) + pdf-lib (Phase 4 export). Both fully offline. -->
-  <script src="lib/tesseract/tesseract.min.js"></script>
+  <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
   <script src="lib/pdf-lib.min.js"></script>
 
   <script src="lib/pdf-lib.min.js?v=35"></script>
