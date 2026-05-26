@@ -1879,6 +1879,35 @@ td.has-override {
   margin-top: 12px;
 }
 
+/* Title block default tolerance rows inside the settings modal */
+.settings-tblock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.settings-tblock-row label {
+  min-width: 140px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+.settings-tblock-input {
+  width: 90px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.settings-tblock-input:focus {
+  border-color: var(--accent-blue);
+  outline: none;
+}
+
 /* ── Utility ───────────────────────────────────────────── */
 .hidden {
   display: none !important;
@@ -2441,6 +2470,20 @@ tr.row-flash {
   border-radius: 3px;
   margin-bottom: 6px;
   font-size: 11px;
+}
+.balloon-popover-tblock-default {
+  background: #1a3a5c;
+  border: 1px solid #4a9eff;
+  color: #4a9eff;
+  padding: 4px 6px;
+  border-radius: 3px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+[data-theme="light"] .balloon-popover-tblock-default {
+  background: #e8f2ff;
+  border-color: #1a7fd6;
+  color: #1a5fa6;
 }
 .balloon-popover-grid {
   display: grid;

@@ -95,6 +95,12 @@ function defaultGlobals() {
     pdfRevisionsHistory: [],      // [{ rev, linkedAt }] for record keeping
     balloonRadius: 6,             // balloon circle radius in PDF points — global size for all balloons
     ocrMode: 'tesseract',         // balloon OCR engine: 'tesseract' (local Tesseract, Claude fallback) | 'claude' (always Claude vision)
+    titleBlockTolUnits: 'inch',   // unit system the title block tolerance values are entered in
+    titleBlockTol1d: '',          // default tolerance for .X dimensions  (1 decimal place)
+    titleBlockTol2d: '',          // default tolerance for .XX dimensions (2 decimal places)
+    titleBlockTol3d: '',          // default tolerance for .XXX dimensions (3 decimal places)
+    titleBlockTol4d: '',          // default tolerance for .XXXX dimensions (4 decimal places)
+    titleBlockTolGdt: '',         // GD&T profile tolerance as global default — overrides decimal-based if set
   };
 }
 

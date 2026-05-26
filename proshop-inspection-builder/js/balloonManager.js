@@ -495,6 +495,68 @@ function deleteDatumRef(id) {
   renderOverlay(PSB.getPdfViewport());
 }
 
+// ── Title block default tolerance injection ──────────────
+/**
+ * If the OCR result has no tolerance and the drawing spec has a recognisable
+ * decimal count, fill in the matching title-block default from globals.
+ * The result is returned with `titleBlockDefault` truthy so the popover can
+ * show a visual indicator that the tolerance was not read from the drawing.
+ */
+function applyTitleBlockDefault(ocrResult, globals) {
+  if (!globals || !ocrResult) return ocrResult;
+  var parsed = ocrResult.parsed;
+  if (!parsed || parsed.tolerance || parsed.isNote || parsed.isGDT) return ocrResult;
+
+  var spec = String(parsed.drawingSpec || '').trim();
+  if (!spec || !/\d/.test(spec)) return ocrResult;
+
+  var defaultTol = '';
+  var source = false;
+
+  if (globals.titleBlockTolGdt) {
+    // GD&T profile global override takes precedence over decimal-based entries.
+    defaultTol = globals.titleBlockTolGdt;
+    source = 'gdt-profile';
+  } else {
+    var decimals = PSB.detectPrecision ? PSB.detectPrecision(spec) : null;
+    if (decimals === null || decimals === 0) return ocrResult;
+    if      (decimals === 1 && globals.titleBlockTol1d) { defaultTol = globals.titleBlockTol1d; source = true; }
+    else if (decimals === 2 && globals.titleBlockTol2d) { defaultTol = globals.titleBlockTol2d; source = true; }
+    else if (decimals === 3 && globals.titleBlockTol3d) { defaultTol = globals.titleBlockTol3d; source = true; }
+    else if (decimals >= 4 && globals.titleBlockTol4d)  { defaultTol = globals.titleBlockTol4d; source = true; }
+  }
+
+  if (!defaultTol || !source) return ocrResult;
+
+  // Unit conversion: title block tolerances may be stored in a different unit
+  // than the drawing dimensions (importUnits). Convert if needed.
+  var tolUnits = globals.titleBlockTolUnits || 'inch';
+  var drawingUnits = globals.importUnits || 'inch';
+  var tolStr;
+  if (tolUnits === drawingUnits) {
+    // No conversion — use the entered string exactly to avoid floating-point noise.
+    tolStr = defaultTol;
+  } else if (PSB.convertUnits) {
+    var tolNum = parseFloat(defaultTol);
+    if (isNaN(tolNum)) return ocrResult;
+    tolNum = PSB.convertUnits(tolNum, tolUnits, drawingUnits);
+    var prec = (drawingUnits === 'mm') ? 3 : 4;
+    tolStr = tolNum.toFixed(prec).replace(/0+$/, '').replace(/\.$/, '') || tolNum.toString();
+  } else {
+    tolStr = defaultTol;
+  }
+
+  var newParsed = Object.assign({}, parsed, {
+    tolerance: tolStr,
+    tolMode: 'sym',
+  });
+
+  return Object.assign({}, ocrResult, {
+    parsed: newParsed,
+    titleBlockDefault: source,
+  });
+}
+
 // ── OCR + confirmation popover ───────────────────────────
 function runOcrAndConfirm(anchorBox) {
   var doc = PSB.getPdfDoc();
@@ -511,6 +573,8 @@ function runOcrAndConfirm(anchorBox) {
     });
   }).then(function(result) {
     hideSpinner();
+    var globals = ctx.getState && ctx.getState().globals;
+    result = applyTitleBlockDefault(result, globals);
     showPopover(anchorBox, pageNum, result);
   }).catch(function(err) {
     console.warn('[Balloon] OCR pipeline failed:', err);
@@ -587,6 +651,9 @@ function showPopover(anchorBox, pageNum, ocrResult) {
     (ocrFailed
       ? '<div class="balloon-popover-warn">OCR could not read this area — enter values manually</div>'
       : (lowConf ? '<div class="balloon-popover-warn">⚠ Low confidence — please verify</div>' : '')) +
+    (ocrResult.titleBlockDefault
+      ? '<div class="balloon-popover-tblock-default">ⓘ Tolerance from title block default</div>'
+      : '') +
     '<div class="balloon-popover-grid">' +
       '<div class="balloon-popover-field bp-col-2"><label>Drawing Spec</label>' +
         '<input type="text" class="bp-spec" value="' + escapeAttr(parsed.drawingSpec || '') + '" /></div>' +
