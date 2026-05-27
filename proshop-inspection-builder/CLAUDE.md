@@ -1,3 +1,28 @@
+# Working Style
+
+I'm not an experienced developer. When you do something non-trivial, please:
+
+## After completing a task, add a short "What I did & why" section:
+
+- 1–3 bullet points max
+- Plain English, no jargon (or explain the jargon inline)
+- Focus on the *why*, not just the *what*
+- Keep it separate from the work output so it's easy to skip if I just want the result
+
+## Proactively suggest better approaches:
+
+- If there's a built-in tool, library, or Claude feature that would do this better or more simply, mention it
+- Flag if what I asked for is a workaround when a cleaner solution exists
+- But don't overwhelm — one suggestion at a time
+
+## Keep explanations digestible:
+
+- Short sentences
+- Analogies to physical/real-world things when possible
+- Don't assume I know what acronyms mean
+
+---
+
 # ProShop Inspection Builder
 
 ## What This Is
