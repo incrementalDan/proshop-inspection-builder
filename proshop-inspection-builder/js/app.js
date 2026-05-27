@@ -338,6 +338,7 @@ document.addEventListener('DOMContentLoaded', function() {
     bindOpBar();
     bindExportModal();
     bindSettingsModal();
+    bindSetupPanel();
     bindFaiControls();
     bindPdfExportButton();
     bindBalloonSizeControl();
@@ -471,8 +472,13 @@ document.addEventListener('DOMContentLoaded', function() {
           PSB.closeModal('export-modal');
         } else if (!settingsModal.classList.contains('hidden')) {
           document.getElementById('settings-close').click();
-        } else if (!document.getElementById('sidebar').classList.contains('sidebar-closed')) {
-          PSB.closeSidebar();
+        } else {
+          var setupPanel = document.getElementById('setup-panel');
+          if (setupPanel && !setupPanel.classList.contains('panel-closed')) {
+            PSB.closeSetupPanel();
+          } else if (!document.getElementById('sidebar').classList.contains('sidebar-closed')) {
+            PSB.closeSidebar();
+          }
         }
       }
     });
@@ -723,6 +729,19 @@ function syncGlobalsToUI() {
   if (sizeSlider && state.globals.balloonRadius > 0) {
     sizeSlider.value = state.globals.balloonRadius;
   }
+  // Title Block Defaults — now always-visible in setup panel
+  var tbu = document.getElementById('settings-tblock-units');
+  var tb1 = document.getElementById('settings-tblock-1d');
+  var tb2 = document.getElementById('settings-tblock-2d');
+  var tb3 = document.getElementById('settings-tblock-3d');
+  var tb4 = document.getElementById('settings-tblock-4d');
+  var tbg = document.getElementById('settings-tblock-gdt');
+  if (tbu) tbu.value = state.globals.titleBlockTolUnits || 'inch';
+  if (tb1) tb1.value = state.globals.titleBlockTol1d  || '';
+  if (tb2) tb2.value = state.globals.titleBlockTol2d  || '';
+  if (tb3) tb3.value = state.globals.titleBlockTol3d  || '';
+  if (tb4) tb4.value = state.globals.titleBlockTol4d  || '';
+  if (tbg) tbg.value = state.globals.titleBlockTolGdt || '';
 }
 
 function syncUnitToggle(unit) {
@@ -1013,19 +1032,6 @@ function bindSettingsModal() {
     var savedOcrMode = state.globals.ocrMode || 'pdfjs';
     document.getElementById('settings-ocr-mode').value =
       (savedOcrMode === 'claude') ? 'claude' : 'pdfjs';
-    // Populate title block defaults
-    document.getElementById('settings-tblock-units').value =
-      state.globals.titleBlockTolUnits || 'inch';
-    document.getElementById('settings-tblock-1d').value =
-      state.globals.titleBlockTol1d || '';
-    document.getElementById('settings-tblock-2d').value =
-      state.globals.titleBlockTol2d || '';
-    document.getElementById('settings-tblock-3d').value =
-      state.globals.titleBlockTol3d || '';
-    document.getElementById('settings-tblock-4d').value =
-      state.globals.titleBlockTol4d || '';
-    document.getElementById('settings-tblock-gdt').value =
-      state.globals.titleBlockTolGdt || '';
 
     PSB.openModal('settings-modal');
   });
@@ -1041,19 +1047,68 @@ function bindSettingsModal() {
     // Save balloon OCR mode
     var ocrMode = document.getElementById('settings-ocr-mode').value;
     state.globals.ocrMode = (ocrMode === 'claude') ? 'claude' : 'pdfjs';
-    // Save title block defaults
-    state.globals.titleBlockTolUnits = document.getElementById('settings-tblock-units').value || 'inch';
-    state.globals.titleBlockTol1d  = document.getElementById('settings-tblock-1d').value.trim();
-    state.globals.titleBlockTol2d  = document.getElementById('settings-tblock-2d').value.trim();
-    state.globals.titleBlockTol3d  = document.getElementById('settings-tblock-3d').value.trim();
-    state.globals.titleBlockTol4d  = document.getElementById('settings-tblock-4d').value.trim();
-    state.globals.titleBlockTolGdt = document.getElementById('settings-tblock-gdt').value.trim();
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Updated settings' });
 
     PSB.closeModal('settings-modal');
     markDirty();
     scheduleAutoSave();
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETUP PANEL — toggle + title block live-save
+// ═══════════════════════════════════════════════════════════
+function bindSetupPanel() {
+  // Toggle button (always visible in op-bar)
+  var toggleBtn = document.getElementById('btn-setup-panel');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function() {
+      PSB.toggleSetupPanel();
+    });
+  }
+
+  // Close (X) button inside the panel
+  var closeBtn = document.getElementById('setup-panel-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() {
+      PSB.closeSetupPanel();
+    });
+  }
+
+  // Title Block Defaults — live-save on change (no modal open/close needed)
+  bindTitleBlockDefaults();
+}
+
+function bindTitleBlockDefaults() {
+  function saveTitleBlock() {
+    var units = document.getElementById('settings-tblock-units');
+    var t1d   = document.getElementById('settings-tblock-1d');
+    var t2d   = document.getElementById('settings-tblock-2d');
+    var t3d   = document.getElementById('settings-tblock-3d');
+    var t4d   = document.getElementById('settings-tblock-4d');
+    var tgdt  = document.getElementById('settings-tblock-gdt');
+    if (units) state.globals.titleBlockTolUnits = units.value || 'inch';
+    if (t1d)  state.globals.titleBlockTol1d  = t1d.value.trim();
+    if (t2d)  state.globals.titleBlockTol2d  = t2d.value.trim();
+    if (t3d)  state.globals.titleBlockTol3d  = t3d.value.trim();
+    if (t4d)  state.globals.titleBlockTol4d  = t4d.value.trim();
+    if (tgdt) state.globals.titleBlockTolGdt = tgdt.value.trim();
+    markDirty();
+    scheduleAutoSave();
+  }
+
+  var ids = [
+    'settings-tblock-units',
+    'settings-tblock-1d',
+    'settings-tblock-2d',
+    'settings-tblock-3d',
+    'settings-tblock-4d',
+    'settings-tblock-gdt',
+  ];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (el) el.addEventListener('change', saveTitleBlock);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

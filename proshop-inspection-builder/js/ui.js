@@ -89,6 +89,7 @@ function initUI(callbacks) {
 
   setupDragDrop();
   setupSidebarResizer();
+  setupSetupPanelResizer();
   setupThemeToggle();
   setupTableHeaderClicks();
 }
@@ -555,6 +556,9 @@ function selectRow(rowId) {
     }
   }
 
+  // Close setup panel so the dimension sidebar can take its place
+  closeSetupPanel();
+
   // Show sidebar
   var sidebar = document.getElementById('sidebar');
   var resizer = document.getElementById('sidebar-resizer');
@@ -563,6 +567,54 @@ function selectRow(rowId) {
 
   // Populate sidebar
   populateSidebar(rowId);
+}
+
+/**
+ * Open the Project Setup panel (closes dimension sidebar).
+ */
+function openSetupPanel() {
+  // Close dimension sidebar first
+  var sidebar = document.getElementById('sidebar');
+  var sidebarResizer = document.getElementById('sidebar-resizer');
+  if (sidebar && !sidebar.classList.contains('sidebar-closed')) {
+    sidebar.classList.add('sidebar-closed');
+    if (sidebarResizer) sidebarResizer.classList.add('sidebar-closed');
+    selectedRowId = null;
+    var allRows = document.querySelectorAll('#table-body tr');
+    for (var i = 0; i < allRows.length; i++) {
+      allRows[i].classList.remove('selected');
+    }
+  }
+  var panel = document.getElementById('setup-panel');
+  var panelResizer = document.getElementById('setup-panel-resizer');
+  if (panel) panel.classList.remove('panel-closed');
+  if (panelResizer) panelResizer.classList.remove('panel-closed');
+  var btn = document.getElementById('btn-setup-panel');
+  if (btn) btn.classList.add('active');
+}
+
+/**
+ * Close the Project Setup panel.
+ */
+function closeSetupPanel() {
+  var panel = document.getElementById('setup-panel');
+  var panelResizer = document.getElementById('setup-panel-resizer');
+  if (panel) panel.classList.add('panel-closed');
+  if (panelResizer) panelResizer.classList.add('panel-closed');
+  var btn = document.getElementById('btn-setup-panel');
+  if (btn) btn.classList.remove('active');
+}
+
+/**
+ * Toggle the Project Setup panel open/closed.
+ */
+function toggleSetupPanel() {
+  var panel = document.getElementById('setup-panel');
+  if (panel && panel.classList.contains('panel-closed')) {
+    openSetupPanel();
+  } else {
+    closeSetupPanel();
+  }
 }
 
 /**
@@ -944,6 +996,39 @@ function setupSidebarResizer() {
     var newWidth = window.innerWidth - e.clientX;
     var clamped = Math.max(280, Math.min(600, newWidth));
     sidebar.style.width = clamped + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (isResizing) {
+      isResizing = false;
+      resizer.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+}
+
+// ── Setup Panel Resizer ───────────────────────────────────
+
+function setupSetupPanelResizer() {
+  var resizer = document.getElementById('setup-panel-resizer');
+  var panel   = document.getElementById('setup-panel');
+  if (!resizer || !panel) return;
+  var isResizing = false;
+
+  resizer.addEventListener('mousedown', function(e) {
+    isResizing = true;
+    resizer.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!isResizing) return;
+    var newWidth = window.innerWidth - e.clientX;
+    var clamped = Math.max(280, Math.min(600, newWidth));
+    panel.style.width = clamped + 'px';
   });
 
   document.addEventListener('mouseup', function() {
@@ -1986,3 +2071,6 @@ PSB.closeModal = closeModal;
 PSB.showLoading = showLoading;
 PSB.hideLoading = hideLoading;
 PSB.esc = esc;
+PSB.openSetupPanel = openSetupPanel;
+PSB.closeSetupPanel = closeSetupPanel;
+PSB.toggleSetupPanel = toggleSetupPanel;
