@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=36">
+  <link rel="stylesheet" href="css/styles.css?v=37">
 </head>
 <body>
 
@@ -49,7 +49,7 @@
   </header>
 
   <!-- ═══════════════════════════════════════════════════ -->
-  <!-- OP BAR + Global Settings — inline row              -->
+  <!-- OP BAR — undo/redo + setup panel toggle            -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div id="op-bar">
     <div class="undo-redo-btns">
@@ -64,40 +64,9 @@
         <div id="redo-dropdown" class="undo-redo-dropdown hidden"></div>
       </div>
     </div>
-    <span class="op-bar-label">OPs:</span>
-    <div id="op-tags"></div>
-    <input type="text" id="op-add-input" placeholder="Add OP..." class="op-add-input">
-    <button id="btn-add-op" class="btn btn-small">+</button>
-
-    <div class="global-inputs">
-      <div class="control-group">
-        <label>Import Units</label>
-        <div id="unit-toggle" class="unit-toggle" tabindex="0" role="switch" aria-checked="true">
-          <span class="unit-toggle-option unit-toggle-mm">mm</span>
-          <span class="unit-toggle-option unit-toggle-in">in</span>
-          <span class="unit-toggle-thumb"></span>
-        </div>
-      </div>
-      <div class="control-group">
-        <label>Plating</label>
-        <input type="number" id="plating-thickness" class="no-spinners" step="0.0001" value="0" min="0" placeholder="0.0000">
-      </div>
-      <div class="control-group">
-        <label>Plat. Units</label>
-        <select id="plating-units">
-          <option value="mm">mm</option>
-          <option value="inch">inch</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label>In Prec.</label>
-        <input type="number" id="inch-precision" value="4" min="1" max="6" step="1">
-      </div>
-      <div class="control-group">
-        <label>MM Prec.</label>
-        <input type="number" id="mm-precision" value="3" min="1" max="6" step="1">
-      </div>
-    </div>
+    <button id="btn-setup-panel" class="btn btn-secondary btn-setup-toggle active" title="Toggle Project Setup panel">
+      ⚙ Setup
+    </button>
   </div>
 
   <!-- ═══════════════════════════════════════════════════ -->
@@ -353,29 +322,77 @@
         </div>
       </div>
     </aside>
-  </main>
 
-  <!-- ═══════════════════════════════════════════════════ -->
-  <!-- SETTINGS MODAL                                     -->
-  <!-- ═══════════════════════════════════════════════════ -->
-  <div id="settings-modal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Settings</h2>
-        <button id="settings-close" class="btn btn-icon">✕</button>
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- SETUP PANEL — project-wide settings, open by default -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div id="setup-panel-resizer"></div>
+    <aside id="setup-panel">
+      <div class="setup-panel-header">
+        <h2 class="setup-panel-title">Project Setup</h2>
+        <button id="setup-panel-close" class="btn btn-icon" title="Close">✕</button>
       </div>
-      <div class="modal-body">
-        <fieldset>
-          <legend>Balloon OCR</legend>
-          <p class="hint">How dimension text inside a balloon box is read. Reads the PDF text layer first (fully local); falls back to Claude vision API when no numeric text is found.</p>
-          <select id="settings-ocr-mode">
-            <option value="pdfjs">PDF.js text layer + Claude fallback</option>
-            <option value="claude">Always Claude vision (needs API key)</option>
-          </select>
+
+      <div class="setup-panel-body">
+
+        <!-- Operations -->
+        <fieldset class="setup-panel-section">
+          <legend>Operations</legend>
+          <div class="setup-ops-tags">
+            <span class="op-bar-label">OPs:</span>
+            <div id="op-tags"></div>
+          </div>
+          <div class="setup-ops-add">
+            <input type="text" id="op-add-input" placeholder="Add OP..." class="op-add-input" style="width:90px;">
+            <button id="btn-add-op" class="btn btn-small">+</button>
+          </div>
         </fieldset>
-        <fieldset>
+
+        <!-- Import Units -->
+        <fieldset class="setup-panel-section">
+          <legend>Import Units</legend>
+          <div class="control-group">
+            <div id="unit-toggle" class="unit-toggle" tabindex="0" role="switch" aria-checked="true">
+              <span class="unit-toggle-option unit-toggle-mm">mm</span>
+              <span class="unit-toggle-option unit-toggle-in">in</span>
+              <span class="unit-toggle-thumb"></span>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Plating -->
+        <fieldset class="setup-panel-section">
+          <legend>Plating</legend>
+          <div class="control-group">
+            <label>Thickness</label>
+            <input type="number" id="plating-thickness" class="no-spinners" step="0.0001" value="0" min="0" placeholder="0.0000">
+          </div>
+          <div class="control-group" style="margin-top:6px;">
+            <label>Units</label>
+            <select id="plating-units">
+              <option value="mm">mm</option>
+              <option value="inch">inch</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <!-- Precision -->
+        <fieldset class="setup-panel-section">
+          <legend>Precision</legend>
+          <div class="control-group">
+            <label>Inch Prec.</label>
+            <input type="number" id="inch-precision" value="4" min="1" max="6" step="1">
+          </div>
+          <div class="control-group" style="margin-top:6px;">
+            <label>MM Prec.</label>
+            <input type="number" id="mm-precision" value="3" min="1" max="6" step="1">
+          </div>
+        </fieldset>
+
+        <!-- Title Block Defaults -->
+        <fieldset class="setup-panel-section">
           <legend>Title Block Defaults</legend>
-          <p class="hint">Default symmetrical tolerances applied when a balloon box contains no tolerance callout. Matches engineering drawing title block conventions.</p>
+          <p class="hint" style="margin-bottom:8px;">Default symmetrical tolerances applied when a balloon box contains no tolerance callout.</p>
           <div class="settings-tblock-row">
             <label>Tolerance unit</label>
             <select id="settings-tblock-units">
@@ -402,8 +419,31 @@
           <div class="settings-tblock-row">
             <label>GD&amp;T Profile (overrides all)</label>
             <input type="text" id="settings-tblock-gdt" placeholder="e.g. 0.005" class="settings-tblock-input" />
-            <span class="hint" style="margin:0">Applies as default when no tolerance found, regardless of decimal count</span>
+            <span class="hint" style="margin:0;">Applies as default when no tolerance found</span>
           </div>
+        </fieldset>
+
+      </div>
+    </aside>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SETTINGS MODAL                                     -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button id="settings-close" class="btn btn-icon">✕</button>
+      </div>
+      <div class="modal-body">
+        <fieldset>
+          <legend>Balloon OCR</legend>
+          <p class="hint">How dimension text inside a balloon box is read. Reads the PDF text layer first (fully local); falls back to Claude vision API when no numeric text is found.</p>
+          <select id="settings-ocr-mode">
+            <option value="pdfjs">PDF.js text layer + Claude fallback</option>
+            <option value="claude">Always Claude vision (needs API key)</option>
+          </select>
         </fieldset>
         <fieldset>
           <legend>Equipment List</legend>
@@ -585,22 +625,22 @@
   <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
   <script src="lib/pdf-lib.min.js"></script>
 
-  <script src="lib/pdf-lib.min.js?v=36"></script>
-  <script src="js/mathEngine.js?v=36"></script>
-  <script src="js/parser.js?v=36"></script>
-  <script src="js/dataModel.js?v=36"></script>
-  <script src="js/exportEngine.js?v=36"></script>
-  <script src="js/storage.js?v=36"></script>
-  <script src="js/history.js?v=36"></script>
-  <script src="js/pdfViewer.js?v=36"></script>
-  <script src="js/cmmParser.js?v=36"></script>
-  <script src="js/gdtParser.js?v=36"></script>
-  <script src="js/ocrEngine.js?v=36"></script>
-  <script src="js/tolModeInput.js?v=36"></script>
-  <script src="js/balloonManager.js?v=36"></script>
-  <script src="js/pdfExport.js?v=36"></script>
-  <script src="js/ui.js?v=36"></script>
-  <script src="js/app.js?v=36"></script>
+  <script src="lib/pdf-lib.min.js?v=37"></script>
+  <script src="js/mathEngine.js?v=37"></script>
+  <script src="js/parser.js?v=37"></script>
+  <script src="js/dataModel.js?v=37"></script>
+  <script src="js/exportEngine.js?v=37"></script>
+  <script src="js/storage.js?v=37"></script>
+  <script src="js/history.js?v=37"></script>
+  <script src="js/pdfViewer.js?v=37"></script>
+  <script src="js/cmmParser.js?v=37"></script>
+  <script src="js/gdtParser.js?v=37"></script>
+  <script src="js/ocrEngine.js?v=37"></script>
+  <script src="js/tolModeInput.js?v=37"></script>
+  <script src="js/balloonManager.js?v=37"></script>
+  <script src="js/pdfExport.js?v=37"></script>
+  <script src="js/ui.js?v=37"></script>
+  <script src="js/app.js?v=37"></script>
 
 </body>
 </html>
