@@ -2395,6 +2395,18 @@ td.edit-flash {
 .balloon-group { transition: transform 60ms linear; }
 .balloon-group:active { cursor: grabbing !important; }
 
+/* Edit-mode ring — calm slow fade while the balloon's popover is open */
+.balloon-edit-ring {
+  opacity: 0.15;
+}
+.balloon-editing .balloon-edit-ring {
+  animation: balloon-edit-pulse 3s ease-in-out infinite;
+}
+@keyframes balloon-edit-pulse {
+  0%, 100% { opacity: 0.12; }
+  50%       { opacity: 0.85; }
+}
+
 /* Row flash on click of a balloon */
 tr.row-flash {
   animation: row-flash-anim 1.2s ease-out;
