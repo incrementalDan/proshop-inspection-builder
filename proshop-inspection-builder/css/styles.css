@@ -2533,6 +2533,62 @@ tr.row-flash {
   margin-top: 8px;
 }
 
+/* Tolerance type toggle (Default / Override / Profile) */
+.bp-tol-type-row {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.bp-tol-type-chip {
+  flex: 1;
+  padding: 2px 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.bp-tol-type-chip:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+.bp-tol-type-chip.active {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+  font-weight: 600;
+}
+/* Read-only tolerance display (Default / Profile modes) */
+.bp-tol-readonly {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.bp-tol-resolved {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.bp-tol-notset {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.bp-tol-notset-link {
+  color: var(--accent-blue);
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bp-tol-notset-link:hover {
+  text-decoration: underline;
+}
+
 /* OCR spinner overlay */
 .balloon-spinner {
   border: 1.5px dashed #e6c200;

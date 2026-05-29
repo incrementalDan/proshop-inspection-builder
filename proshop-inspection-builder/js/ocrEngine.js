@@ -262,6 +262,9 @@ var DIGIT_RE = /\d/;
  */
 function parseOcrText(rawText) {
   var text = (rawText || '').trim();
+  // Strip secondary-unit brackets like [25.4] — these appear when the user
+  // accidentally includes metric/imperial dual-unit callouts in the OCR crop.
+  text = text.replace(/\[.*?\]/g, '').trim();
   var out = {
     drawingSpec: '', nominal: '', tolerance: '', tolMode: 'sym',
     specUnit1: '', specUnit2: '', specUnit3: '',

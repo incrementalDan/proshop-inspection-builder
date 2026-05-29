@@ -720,6 +720,27 @@ function showPopover(anchorBox, pageNum, ocrResult, editRow) {
     ? ('Edit Balloon #' + editRow.user.balloon.dimTag)
     : 'New Balloon';
 
+  // ── Tolerance type: auto-detect for new balloons; restore saved value for edits ──
+  var globals = ctx.getState && ctx.getState().globals;
+  var currentTolType;
+  if (editRow && editRow.user.balloon && editRow.user.balloon.tolType) {
+    currentTolType = editRow.user.balloon.tolType;
+  } else if (globals && globals.titleBlockTolGdt) {
+    currentTolType = 'profile';
+  } else if (ocrResult.titleBlockDefault) {
+    currentTolType = 'default';
+  } else if (parsed.tolerance) {
+    currentTolType = 'override';
+  } else {
+    currentTolType = 'default';
+  }
+
+  var tolTypeChipsHtml = ['default', 'override', 'profile'].map(function(t) {
+    var labels = { default: 'Default', override: 'Override', profile: 'Profile' };
+    return '<button type="button" class="bp-tol-type-chip' + (t === currentTolType ? ' active' : '') +
+           '" data-ttype="' + t + '">' + labels[t] + '</button>';
+  }).join('');
+
   popoverEl = document.createElement('div');
   popoverEl.className = 'balloon-popover';
   popoverEl.innerHTML =
@@ -737,7 +758,10 @@ function showPopover(anchorBox, pageNum, ocrResult, editRow) {
       '<div class="balloon-popover-field bp-col-2"><label>Drawing Spec</label>' +
         '<input type="text" class="bp-spec" value="' + escapeAttr(parsed.drawingSpec || '') + '" /></div>' +
       '<div class="balloon-popover-field bp-col-2"><label>Tolerance</label>' +
-        '<div class="bp-tol-mount"></div></div>' +
+        '<div class="bp-tol-type-row">' + tolTypeChipsHtml + '</div>' +
+        '<div class="bp-tol-mount"></div>' +
+        '<div class="bp-tol-readonly"></div>' +
+      '</div>' +
       '<div class="balloon-popover-field"><label>Spec Unit 1</label>' +
         '<input type="text" class="bp-su1" value="' + escapeAttr(parsed.specUnit1 || '') + '" title="Ø, R, SR" /></div>' +
       '<div class="balloon-popover-field"><label>Spec Unit 2</label>' +
@@ -765,11 +789,12 @@ function showPopover(anchorBox, pageNum, ocrResult, editRow) {
   // Wire actions
   var inSpec = popoverEl.querySelector('.bp-spec');
   var tolMount = popoverEl.querySelector('.bp-tol-mount');
+  var tolReadonlyDiv = popoverEl.querySelector('.bp-tol-readonly');
   var inSu1  = popoverEl.querySelector('.bp-su1');
   var inSu2  = popoverEl.querySelector('.bp-su2');
   var inSu3  = popoverEl.querySelector('.bp-su3');
 
-  // Build the mode-aware tolerance controller. Seed plus/minus from parsed.tolerance string.
+  // Build the mode-aware tolerance controller (always constructed; visible only in 'override').
   var seed = parseToleranceSeed(parsed.tolerance);
   var initialMode = parsed.tolMode || seed.mode || 'sym';
   var nominalForBounds = parseFloat(parsed.drawingSpec);
@@ -780,23 +805,88 @@ function showPopover(anchorBox, pageNum, ocrResult, editRow) {
     nominal: isNaN(nominalForBounds) ? null : nominalForBounds,
     precision: 4,
   });
-  // Title-block default re-application. If OCR read a real (non-default)
-  // tolerance, the user owns it from the start and we never auto-fill. Once the
-  // user types anything into the tolerance inputs, they own it too. Until then,
-  // correcting the Drawing Spec re-derives the default for the new decimal count
-  // — this is the common case when OCR returns junk and the user fixes the spec.
   var tbBadge = popoverEl.querySelector('.balloon-popover-tblock-default');
   var tolUserOwned = !!(parsed.tolerance && !ocrResult.titleBlockDefault);
   tolMount.addEventListener('input', function() { tolUserOwned = true; });
 
+  // ── Tolerance type display ───────────────────────────────
+  // Shows/hides tolMount vs. the read-only resolved-value display depending on
+  // which type chip is active. Called on init and on chip click.
+  function updateTolTypeDisplay() {
+    popoverEl.querySelectorAll('.bp-tol-type-chip').forEach(function(ch) {
+      ch.classList.toggle('active', ch.getAttribute('data-ttype') === currentTolType);
+    });
+
+    if (currentTolType === 'override') {
+      tolMount.style.display = '';
+      tolReadonlyDiv.style.display = 'none';
+    } else {
+      tolMount.style.display = 'none';
+      tolReadonlyDiv.style.display = '';
+
+      var resolvedStr = null;
+      var freshGlobals = ctx.getState && ctx.getState().globals;
+      if (currentTolType === 'profile') {
+        resolvedStr = (freshGlobals && freshGlobals.titleBlockTolGdt) || null;
+      } else { // 'default'
+        var specVal = inSpec ? inSpec.value.trim() : (parsed.drawingSpec || '');
+        var hit = lookupTitleBlockTol(specVal, freshGlobals);
+        resolvedStr = hit ? hit.tol : null;
+      }
+
+      if (resolvedStr) {
+        tolReadonlyDiv.innerHTML = '<span class="bp-tol-resolved">± ' + escapeAttr(resolvedStr) + '</span>';
+      } else {
+        var settingLabel = currentTolType === 'profile' ? 'GD&T profile tolerance' : 'title block tolerances';
+        tolReadonlyDiv.innerHTML =
+          '<span class="bp-tol-notset">not set</span>' +
+          ' <a class="bp-tol-notset-link" href="#" title="Open setup panel to configure ' +
+            escapeAttr(settingLabel) + '">→ open settings</a>';
+        tolReadonlyDiv.querySelector('.bp-tol-notset-link').addEventListener('click', function(e) {
+          e.preventDefault();
+          PSB.openSetupPanel && PSB.openSetupPanel();
+        });
+      }
+    }
+  }
+
+  // Wire tol-type chip clicks.
+  popoverEl.querySelectorAll('.bp-tol-type-chip').forEach(function(chip) {
+    chip.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    chip.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var newType = chip.getAttribute('data-ttype');
+      if (newType === currentTolType) return;
+      // Pre-fill tolCtrl with the resolved default so the user starts from a sensible value.
+      if (newType === 'override') {
+        var freshG = ctx.getState && ctx.getState().globals;
+        var prefillHit = lookupTitleBlockTol(inSpec ? inSpec.value.trim() : '', freshG);
+        if (prefillHit) {
+          if (tolCtrl.getMode() !== 'sym') tolCtrl.setMode('sym');
+          tolCtrl.setValue(prefillHit.tol, prefillHit.tol);
+        }
+      }
+      currentTolType = newType;
+      updateTolTypeDisplay();
+    });
+  });
+
+  updateTolTypeDisplay();
+
   // Keep nominal in sync if user edits Drawing Spec before confirm, and
-  // re-derive the title-block default tolerance from the corrected spec.
+  // re-derive the displayed value for 'default' mode.
   inSpec && inSpec.addEventListener('input', function() {
     var n = parseFloat(inSpec.value);
     tolCtrl.setNominal(isNaN(n) ? null : n);
-    if (tolUserOwned) return;
-    var globals = ctx.getState && ctx.getState().globals;
-    var hit = lookupTitleBlockTol(inSpec.value, globals);
+    if (currentTolType === 'default') {
+      // Refresh the read-only display — it derives from spec decimal count.
+      updateTolTypeDisplay();
+      return;
+    }
+    if (currentTolType !== 'override' || tolUserOwned) return;
+    var freshGlobals = ctx.getState && ctx.getState().globals;
+    var hit = lookupTitleBlockTol(inSpec.value, freshGlobals);
     if (hit) {
       if (tolCtrl.getMode() !== 'sym') tolCtrl.setMode('sym');
       tolCtrl.setValue(hit.tol, hit.tol);
@@ -817,7 +907,8 @@ function showPopover(anchorBox, pageNum, ocrResult, editRow) {
   });
   popoverEl.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
-      if (e.target && e.target.classList && e.target.classList.contains('tol-mode-chip')) return;
+      var cls = e.target && e.target.classList;
+      if (cls && (cls.contains('tol-mode-chip') || cls.contains('bp-tol-type-chip'))) return;
       e.preventDefault();
       if (editRow) confirmEditPopover(anchorBox, pageNum, editRow);
       else confirmPopover(anchorBox, pageNum, ocrResult);
@@ -831,7 +922,10 @@ function showPopover(anchorBox, pageNum, ocrResult, editRow) {
   setTimeout(function() { inSpec && inSpec.focus(); inSpec && inSpec.select(); }, 0);
 
   // Stash inputs on the popover for confirm handlers to read.
-  popoverEl._inputs = { spec: inSpec, tolCtrl: tolCtrl, su1: inSu1, su2: inSu2, su3: inSu3 };
+  popoverEl._inputs = {
+    spec: inSpec, tolCtrl: tolCtrl, su1: inSu1, su2: inSu2, su3: inSu3,
+    getTolType: function() { return currentTolType; },
+  };
 }
 
 // Parse the tolerance string emitted by ocrEngine.parseOcrText into { plus, minus, mode }
@@ -869,10 +963,26 @@ function escapeAttr(s) {
 function confirmPopover(anchorBox, pageNum, ocrResult) {
   if (!popoverEl) return;
   var ins = popoverEl._inputs;
+  var tolType = ins.getTolType ? ins.getTolType() : 'override';
 
-  // Run tolerance validation BEFORE closing the popover. If invalid, keep it open.
-  var tolResult = ins.tolCtrl.commit();
-  if (!tolResult.ok) return;
+  // Compute tolResult based on type. Override uses the editable control;
+  // Default/Profile derive the value from title-block settings.
+  var tolResult;
+  if (tolType === 'override') {
+    tolResult = ins.tolCtrl.commit();
+    if (!tolResult.ok) return;
+  } else {
+    var resolveGlobals = ctx.getState && ctx.getState().globals;
+    var resolvedTolStr = '';
+    if (tolType === 'profile') {
+      resolvedTolStr = (resolveGlobals && resolveGlobals.titleBlockTolGdt) || '';
+    } else { // 'default'
+      var defHit = lookupTitleBlockTol(ins.spec ? ins.spec.value.trim() : '', resolveGlobals);
+      resolvedTolStr = defHit ? defHit.tol : '';
+    }
+    var defSeed = parseToleranceSeed(resolvedTolStr);
+    tolResult = { ok: true, tolPlus: defSeed.plus, tolMinus: defSeed.minus, tolMode: 'sym' };
+  }
 
   // Re-format the tolerance string for downstream parser (parseOcrText emits same shape).
   var tolStr;
@@ -946,6 +1056,7 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
   if (parsed.tolMode && row.user && row.user.overrides) {
     row.user.overrides.tolMode = parsed.tolMode;
   }
+  row.user.balloon.tolType = tolType;
   PSB.recompute(row, state.globals);
   state.rows.push(row);
   sortRowsByEffectiveDimTag(state);
@@ -970,9 +1081,24 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
 function confirmEditPopover(anchorBox, pageNum, editRow) {
   if (!popoverEl) return;
   var ins = popoverEl._inputs;
+  var tolType = ins.getTolType ? ins.getTolType() : 'override';
 
-  var tolResult = ins.tolCtrl.commit();
-  if (!tolResult.ok) return;
+  var tolResult;
+  if (tolType === 'override') {
+    tolResult = ins.tolCtrl.commit();
+    if (!tolResult.ok) return;
+  } else {
+    var editResolveGlobals = ctx.getState && ctx.getState().globals;
+    var editResolvedTolStr = '';
+    if (tolType === 'profile') {
+      editResolvedTolStr = (editResolveGlobals && editResolveGlobals.titleBlockTolGdt) || '';
+    } else { // 'default'
+      var editDefHit = lookupTitleBlockTol(ins.spec ? ins.spec.value.trim() : '', editResolveGlobals);
+      editResolvedTolStr = editDefHit ? editDefHit.tol : '';
+    }
+    var editDefSeed = parseToleranceSeed(editResolvedTolStr);
+    tolResult = { ok: true, tolPlus: editDefSeed.plus, tolMinus: editDefSeed.minus, tolMode: 'sym' };
+  }
 
   var tolStr;
   if (tolResult.tolPlus === tolResult.tolMinus) {
@@ -995,6 +1121,7 @@ function confirmEditPopover(anchorBox, pageNum, editRow) {
   if (ins.su3) editRow.raw.specUnit3 = ins.su3.value.trim();
   editRow.user.overrides = editRow.user.overrides || {};
   editRow.user.overrides.tolMode = tolResult.tolMode;
+  editRow.user.balloon.tolType = tolType;
 
   PSB.recompute(editRow, state.globals);
 
