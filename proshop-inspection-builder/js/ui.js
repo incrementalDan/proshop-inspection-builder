@@ -395,9 +395,9 @@ function buildFaiFamilyHTML(row) {
   // Parent CMM tol: use first measurement (assume same spec for all in group)
   var parentCmmTol = tolStr(measurements[0].plusTol, measurements[0].minusTol);
 
-  // Min/max range strings with dual unit
-  var measRangeStr = buildCmmRangeString(measMin, measMax, planUnits, isAngle);
-  var devRangeStr  = buildCmmRangeString(devMin, devMax, planUnits, isAngle);
+  // Stacked high/low cells with dual unit
+  var measRangeHtml = buildCmmRangeStack(measMin, measMax, planUnits, isAngle);
+  var devRangeHtml  = buildCmmRangeStack(devMin, devMax, planUnits, isAngle);
 
   // Collect distinct run IDs (in order of first appearance) for parent pills
   var seenRunIds = {};
@@ -408,7 +408,7 @@ function buildFaiFamilyHTML(row) {
   }
   var parentRunHtml = '';
   for (var ri2 = 0; ri2 < uniqueRunIds.length; ri2++) {
-    parentRunHtml += (ri2 > 0 ? ' ' : '') + getRunPill(uniqueRunIds[ri2], faiRuns);
+    parentRunHtml += '<div>' + getRunPill(uniqueRunIds[ri2], faiRuns) + '</div>';
   }
 
   var parentDevTint = aggStatus ? ' dev-tint-' + aggStatus : '';
@@ -416,9 +416,9 @@ function buildFaiFamilyHTML(row) {
     printCells.replace('{STATUS}', statusBadge(aggStatus)) +
     '<td class="col-cmm-tol">' + esc(parentCmmTol) + '</td>' +
     '<td class="col-cmm-nominal">—</td>' +
-    '<td class="col-measured">' + formatDualDisplay(measRangeStr) + '</td>' +
-    '<td class="col-deviation' + parentDevTint + '">' + formatDualDisplay(devRangeStr) + '</td>' +
-    '<td class="col-run">' + parentRunHtml + '</td>' +
+    '<td class="col-measured">' + measRangeHtml + '</td>' +
+    '<td class="col-deviation' + parentDevTint + '">' + devRangeHtml + '</td>' +
+    '<td class="col-run"><div class="cmm-range-stack">' + parentRunHtml + '</div></td>' +
     '</tr>';
 
   // Child rows
@@ -1661,18 +1661,16 @@ function buildCmmDualString(value, planUnits, isAngle) {
 }
 
 /**
- * Build a min/max range display string for multiple CMM measurements.
- * Format: "min / max [secondary_min / secondary_max]"
+ * Build a stacked high/low display for multiple CMM measurements.
+ * High on the top line, low on the bottom; each line keeps its dual-unit bracket.
+ * Returns HTML (already escaped).
  */
-function buildCmmRangeString(minVal, maxVal, planUnits, isAngle) {
+function buildCmmRangeStack(minVal, maxVal, planUnits, isAngle) {
   if (minVal == null || maxVal == null) return '—';
-  var pMin = String(minVal);
-  var pMax = String(maxVal);
-  if (isAngle) return pMin + ' / ' + pMax + ' [Angle]';
-  var other = planUnits === 'mm' ? 'inch' : 'mm';
-  var sMin = String(parseFloat(PSB.convertUnits(minVal, planUnits, other).toFixed(5)));
-  var sMax = String(parseFloat(PSB.convertUnits(maxVal, planUnits, other).toFixed(5)));
-  return pMin + ' / ' + pMax + ' [' + sMin + ' / ' + sMax + ']';
+  return '<div class="cmm-range-stack">' +
+    '<div class="cmm-range-hi">' + formatDualDisplay(buildCmmDualString(maxVal, planUnits, isAngle)) + '</div>' +
+    '<div class="cmm-range-lo">' + formatDualDisplay(buildCmmDualString(minVal, planUnits, isAngle)) + '</div>' +
+    '</div>';
 }
 
 /**
