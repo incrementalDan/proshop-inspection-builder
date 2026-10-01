@@ -837,7 +837,9 @@ input.no-spinners {
 
 #data-table {
   width: 100%;
-  border-collapse: collapse;
+  /* separate (not collapse) so borders move with sticky frozen cells */
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: auto;
 }
 
@@ -880,6 +882,56 @@ input.no-spinners {
 .fai-parent-row > td {
   font-weight: 600;
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* ── FAI frozen columns: Status / Dim Tag / Drawing Spec ── */
+#data-table.fai-view .col-fai-status,
+#data-table.fai-view .col-dimtag,
+#data-table.fai-view .col-drawing-spec,
+#data-table.fai-view .fai-frozen-group {
+  position: sticky;
+  z-index: 2;
+}
+
+#data-table.fai-view .col-fai-status,
+#data-table.fai-view .fai-frozen-group { left: 0; }
+#data-table.fai-view .col-dimtag { left: var(--fai-frozen-left-2, 0px); }
+#data-table.fai-view .col-drawing-spec {
+  left: var(--fai-frozen-left-3, 0px);
+  box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.35);
+}
+/* Long notes wrap instead of spilling over the scrolled columns */
+#data-table.fai-view tbody td.col-drawing-spec {
+  white-space: normal;
+}
+#data-table.fai-view .fai-frozen-group {
+  box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.35);
+}
+
+/* Frozen header cells sit above frozen body cells */
+#data-table.fai-view thead th.col-fai-status,
+#data-table.fai-view thead th.col-dimtag,
+#data-table.fai-view thead th.col-drawing-spec,
+#data-table.fai-view thead th.fai-frozen-group {
+  z-index: 3;
+}
+
+/* Frozen body cells need a solid background so scrolled cells slide under */
+#data-table.fai-view tbody td.col-fai-status,
+#data-table.fai-view tbody td.col-dimtag,
+#data-table.fai-view tbody td.col-drawing-spec {
+  background-color: inherit;
+}
+#data-table.fai-view tbody .fai-parent-row > td.col-fai-status,
+#data-table.fai-view tbody .fai-parent-row > td.col-dimtag,
+#data-table.fai-view tbody .fai-parent-row > td.col-drawing-spec {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04));
+}
+/* Child rows dim via opacity, which would let scrolled cells show through */
+#data-table.fai-view tbody .fai-child-row > td.col-fai-status,
+#data-table.fai-view tbody .fai-child-row > td.col-dimtag,
+#data-table.fai-view tbody .fai-child-row > td.col-drawing-spec {
+  opacity: 1;
 }
 
 /* Stacked high/low values in FAI parent rows */
