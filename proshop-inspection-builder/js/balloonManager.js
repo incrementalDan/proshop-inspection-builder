@@ -37,6 +37,7 @@ var popoverEl = null;            // confirmation popover DOM
 var hoveredRowId = null;
 var draggingState = null;        // { rowId, kind: 'balloon'|'leader', startX, startY, ... }
 var selectedRowId = null;        // for keyboard nudging
+var activeEditRowId = null;      // rowId whose edit popover is currently open
 
 // Datum-Mode state — drawing a circle around a datum symbol on the print.
 var datumDraftCircle = null;     // dashed circle SVG element shown while dragging
@@ -81,6 +82,7 @@ function initBalloonManager(opts) {
     if (!active) {
       clearPendingInsert();
       closePopover();
+      activeEditRowId = null;
     }
     renderOverlay(PSB.getPdfViewport());
   });
@@ -152,6 +154,49 @@ function pdfRectToScreen(rect, viewport) {
   return { x: x, y: y, w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
 }
 
+/**
+ * Hit-test screen point (sx, sy) against all balloons on the current page.
+ * Checks both the balloon circle (+ paddingPx) and the anchor box (+ paddingPx).
+ * Returns the nearest matching row, or null.
+ */
+function hitTestBalloon(sx, sy, viewport, paddingPx) {
+  var state = ctx.getState();
+  var pageNum = PSB.getPdfCurrentPage();
+  var scale = viewport.scale || PSB.getPdfZoom() || 1.0;
+  var radius = getBalloonRadius() * scale;
+  var bestRow = null;
+  var bestDist = Infinity;
+
+  state.rows.forEach(function(row) {
+    var b = row.user && row.user.balloon;
+    if (!b || b.page !== pageNum) return;
+
+    // Check balloon circle
+    var balloonCenterPdf = {
+      x: b.anchorBox.x + b.anchorBox.w / 2 + b.balloonOffset.dx,
+      y: b.anchorBox.y + b.anchorBox.h / 2 + b.balloonOffset.dy,
+    };
+    var bs = pdfToScreen(balloonCenterPdf.x, balloonCenterPdf.y, viewport);
+    var dist = Math.hypot(sx - bs.x, sy - bs.y);
+    if (dist < radius + paddingPx) {
+      if (dist < bestDist) { bestDist = dist; bestRow = row; }
+      return;
+    }
+
+    // Check anchor box
+    var s = pdfRectToScreen(b.anchorBox, viewport);
+    if (sx >= s.x - paddingPx && sx <= s.x + s.w + paddingPx &&
+        sy >= s.y - paddingPx && sy <= s.y + s.h + paddingPx) {
+      var cx = s.x + s.w / 2;
+      var cy = s.y + s.h / 2;
+      var d = Math.hypot(sx - cx, sy - cy);
+      if (d < bestDist) { bestDist = d; bestRow = row; }
+    }
+  });
+
+  return bestRow;
+}
+
 // ── Draw-box (balloon mode) ──────────────────────────────
 function attachDrawBoxHandlers() {
   var wrap = PSB.getPdfCanvasWrap();
@@ -163,12 +208,28 @@ function attachDrawBoxHandlers() {
     if (!PSB.isBalloonMode() || !PSB.hasPdf()) return;
     if (e.button !== 0) return;
 
+    // Let clicks inside the open popover pass through to the popover.
+    if (popoverEl && popoverEl.contains(e.target)) return;
+
     var viewport = PSB.getPdfViewport();
     if (!viewport) return;
     var canvas = PSB.getPdfCanvas();
     var rect = canvas.getBoundingClientRect();
     var sx = e.clientX - rect.left;
     var sy = e.clientY - rect.top;
+
+    // Hit test: click on an existing balloon/box → drag it, don't start a new box.
+    var hitRow = hitTestBalloon(sx, sy, viewport, 10);
+    if (hitRow) {
+      e.preventDefault();
+      e.stopPropagation();
+      startBalloonDrag(hitRow, sx, sy, viewport);
+      return;
+    }
+
+    // Clicking outside all balloons while a popover is open → close it.
+    if (popoverEl) closePopoverAndClearEdit();
+
     dragStart = { sx: sx, sy: sy, ptStart: screenToPdf(sx, sy, viewport) };
     e.preventDefault();
     e.stopPropagation();
@@ -638,12 +699,13 @@ function hideSpinner() {
   spinnerEl = null;
 }
 
-function showPopover(anchorBox, pageNum, ocrResult) {
+// editRow: optional — when set, the popover edits an existing balloon row instead of creating a new one.
+function showPopover(anchorBox, pageNum, ocrResult, editRow) {
   if (popoverEl) closePopover();
 
   // GD&T branch: a different popover layout entirely (characteristic dropdown,
   // material-condition selector, datums editor, live frame preview).
-  if (ocrResult && (ocrResult.gdt || ocrResult.gdtError)) {
+  if (!editRow && ocrResult && (ocrResult.gdt || ocrResult.gdtError)) {
     showGdtPopover(anchorBox, pageNum, ocrResult);
     return;
   }
@@ -652,16 +714,40 @@ function showPopover(anchorBox, pageNum, ocrResult) {
   if (!viewport) return;
   var sBox = pdfRectToScreen(anchorBox, viewport);
   var parsed = ocrResult.parsed || {};
-  var lowConf = parsed.confidence === 'low' || ocrResult.ocrConfidence < 0.6;
-  var ocrFailed = !ocrResult.engine;
+  var lowConf = !editRow && (parsed.confidence === 'low' || ocrResult.ocrConfidence < 0.6);
+  var ocrFailed = !editRow && !ocrResult.engine;
+  var headerText = editRow
+    ? ('Edit Balloon #' + editRow.user.balloon.dimTag)
+    : 'New Balloon';
+
+  // ── Tolerance type: auto-detect for new balloons; restore saved value for edits ──
+  var globals = ctx.getState && ctx.getState().globals;
+  var currentTolType;
+  if (editRow && editRow.user.balloon && editRow.user.balloon.tolType) {
+    currentTolType = editRow.user.balloon.tolType;
+  } else if (globals && globals.titleBlockTolGdt) {
+    currentTolType = 'profile';
+  } else if (ocrResult.titleBlockDefault) {
+    currentTolType = 'default';
+  } else if (parsed.tolerance) {
+    currentTolType = 'override';
+  } else {
+    currentTolType = 'default';
+  }
+
+  var tolTypeChipsHtml = ['default', 'override', 'profile'].map(function(t) {
+    var labels = { default: 'Default', override: 'Override', profile: 'Profile' };
+    return '<button type="button" class="bp-tol-type-chip' + (t === currentTolType ? ' active' : '') +
+           '" data-ttype="' + t + '">' + labels[t] + '</button>';
+  }).join('');
 
   popoverEl = document.createElement('div');
   popoverEl.className = 'balloon-popover';
   popoverEl.innerHTML =
     '<div class="balloon-popover-arrow"></div>' +
     '<div class="balloon-popover-header">' +
-      'New Balloon' +
-      (ocrResult.engine ? ' <span class="balloon-popover-engine">via ' + ocrResult.engine + '</span>' : '') +
+      headerText +
+      (!editRow && ocrResult.engine ? ' <span class="balloon-popover-engine">via ' + ocrResult.engine + '</span>' : '') +
     '</div>' +
     (ocrFailed
       ? '<div class="balloon-popover-warn">OCR could not read this area — enter values manually</div>'
@@ -672,7 +758,10 @@ function showPopover(anchorBox, pageNum, ocrResult) {
       '<div class="balloon-popover-field bp-col-2"><label>Drawing Spec</label>' +
         '<input type="text" class="bp-spec" value="' + escapeAttr(parsed.drawingSpec || '') + '" /></div>' +
       '<div class="balloon-popover-field bp-col-2"><label>Tolerance</label>' +
-        '<div class="bp-tol-mount"></div></div>' +
+        '<div class="bp-tol-type-row">' + tolTypeChipsHtml + '</div>' +
+        '<div class="bp-tol-mount"></div>' +
+        '<div class="bp-tol-readonly"></div>' +
+      '</div>' +
       '<div class="balloon-popover-field"><label>Spec Unit 1</label>' +
         '<input type="text" class="bp-su1" value="' + escapeAttr(parsed.specUnit1 || '') + '" title="Ø, R, SR" /></div>' +
       '<div class="balloon-popover-field"><label>Spec Unit 2</label>' +
@@ -700,11 +789,12 @@ function showPopover(anchorBox, pageNum, ocrResult) {
   // Wire actions
   var inSpec = popoverEl.querySelector('.bp-spec');
   var tolMount = popoverEl.querySelector('.bp-tol-mount');
+  var tolReadonlyDiv = popoverEl.querySelector('.bp-tol-readonly');
   var inSu1  = popoverEl.querySelector('.bp-su1');
   var inSu2  = popoverEl.querySelector('.bp-su2');
   var inSu3  = popoverEl.querySelector('.bp-su3');
 
-  // Build the mode-aware tolerance controller. Seed plus/minus from parsed.tolerance string.
+  // Build the mode-aware tolerance controller (always constructed; visible only in 'override').
   var seed = parseToleranceSeed(parsed.tolerance);
   var initialMode = parsed.tolMode || seed.mode || 'sym';
   var nominalForBounds = parseFloat(parsed.drawingSpec);
@@ -715,23 +805,88 @@ function showPopover(anchorBox, pageNum, ocrResult) {
     nominal: isNaN(nominalForBounds) ? null : nominalForBounds,
     precision: 4,
   });
-  // Title-block default re-application. If OCR read a real (non-default)
-  // tolerance, the user owns it from the start and we never auto-fill. Once the
-  // user types anything into the tolerance inputs, they own it too. Until then,
-  // correcting the Drawing Spec re-derives the default for the new decimal count
-  // — this is the common case when OCR returns junk and the user fixes the spec.
   var tbBadge = popoverEl.querySelector('.balloon-popover-tblock-default');
   var tolUserOwned = !!(parsed.tolerance && !ocrResult.titleBlockDefault);
   tolMount.addEventListener('input', function() { tolUserOwned = true; });
 
+  // ── Tolerance type display ───────────────────────────────
+  // Shows/hides tolMount vs. the read-only resolved-value display depending on
+  // which type chip is active. Called on init and on chip click.
+  function updateTolTypeDisplay() {
+    popoverEl.querySelectorAll('.bp-tol-type-chip').forEach(function(ch) {
+      ch.classList.toggle('active', ch.getAttribute('data-ttype') === currentTolType);
+    });
+
+    if (currentTolType === 'override') {
+      tolMount.style.display = '';
+      tolReadonlyDiv.style.display = 'none';
+    } else {
+      tolMount.style.display = 'none';
+      tolReadonlyDiv.style.display = '';
+
+      var resolvedStr = null;
+      var freshGlobals = ctx.getState && ctx.getState().globals;
+      if (currentTolType === 'profile') {
+        resolvedStr = (freshGlobals && freshGlobals.titleBlockTolGdt) || null;
+      } else { // 'default'
+        var specVal = inSpec ? inSpec.value.trim() : (parsed.drawingSpec || '');
+        var hit = lookupTitleBlockTol(specVal, freshGlobals);
+        resolvedStr = hit ? hit.tol : null;
+      }
+
+      if (resolvedStr) {
+        tolReadonlyDiv.innerHTML = '<span class="bp-tol-resolved">± ' + escapeAttr(resolvedStr) + '</span>';
+      } else {
+        var settingLabel = currentTolType === 'profile' ? 'GD&T profile tolerance' : 'title block tolerances';
+        tolReadonlyDiv.innerHTML =
+          '<span class="bp-tol-notset">not set</span>' +
+          ' <a class="bp-tol-notset-link" href="#" title="Open setup panel to configure ' +
+            escapeAttr(settingLabel) + '">→ open settings</a>';
+        tolReadonlyDiv.querySelector('.bp-tol-notset-link').addEventListener('click', function(e) {
+          e.preventDefault();
+          PSB.openSetupPanel && PSB.openSetupPanel();
+        });
+      }
+    }
+  }
+
+  // Wire tol-type chip clicks.
+  popoverEl.querySelectorAll('.bp-tol-type-chip').forEach(function(chip) {
+    chip.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    chip.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var newType = chip.getAttribute('data-ttype');
+      if (newType === currentTolType) return;
+      // Pre-fill tolCtrl with the resolved default so the user starts from a sensible value.
+      if (newType === 'override') {
+        var freshG = ctx.getState && ctx.getState().globals;
+        var prefillHit = lookupTitleBlockTol(inSpec ? inSpec.value.trim() : '', freshG);
+        if (prefillHit) {
+          if (tolCtrl.getMode() !== 'sym') tolCtrl.setMode('sym');
+          tolCtrl.setValue(prefillHit.tol, prefillHit.tol);
+        }
+      }
+      currentTolType = newType;
+      updateTolTypeDisplay();
+    });
+  });
+
+  updateTolTypeDisplay();
+
   // Keep nominal in sync if user edits Drawing Spec before confirm, and
-  // re-derive the title-block default tolerance from the corrected spec.
+  // re-derive the displayed value for 'default' mode.
   inSpec && inSpec.addEventListener('input', function() {
     var n = parseFloat(inSpec.value);
     tolCtrl.setNominal(isNaN(n) ? null : n);
-    if (tolUserOwned) return;
-    var globals = ctx.getState && ctx.getState().globals;
-    var hit = lookupTitleBlockTol(inSpec.value, globals);
+    if (currentTolType === 'default') {
+      // Refresh the read-only display — it derives from spec decimal count.
+      updateTolTypeDisplay();
+      return;
+    }
+    if (currentTolType !== 'override' || tolUserOwned) return;
+    var freshGlobals = ctx.getState && ctx.getState().globals;
+    var hit = lookupTitleBlockTol(inSpec.value, freshGlobals);
     if (hit) {
       if (tolCtrl.getMode() !== 'sym') tolCtrl.setMode('sym');
       tolCtrl.setValue(hit.tol, hit.tol);
@@ -742,23 +897,35 @@ function showPopover(anchorBox, pageNum, ocrResult) {
     }
   });
 
-  popoverEl.querySelector('.bp-cancel').addEventListener('click', closePopover);
+  popoverEl.querySelector('.bp-cancel').addEventListener('click', function() {
+    if (editRow) closePopoverAndClearEdit();
+    else closePopover();
+  });
   popoverEl.querySelector('.bp-confirm').addEventListener('click', function() {
-    confirmPopover(anchorBox, pageNum, ocrResult);
+    if (editRow) confirmEditPopover(anchorBox, pageNum, editRow);
+    else confirmPopover(anchorBox, pageNum, ocrResult);
   });
   popoverEl.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
-      // Don't fire confirm if focus is inside the mode-toggle button row.
-      if (e.target && e.target.classList && e.target.classList.contains('tol-mode-chip')) return;
+      var cls = e.target && e.target.classList;
+      if (cls && (cls.contains('tol-mode-chip') || cls.contains('bp-tol-type-chip'))) return;
       e.preventDefault();
-      confirmPopover(anchorBox, pageNum, ocrResult);
+      if (editRow) confirmEditPopover(anchorBox, pageNum, editRow);
+      else confirmPopover(anchorBox, pageNum, ocrResult);
     }
-    if (e.key === 'Escape') { e.preventDefault(); closePopover(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (editRow) closePopoverAndClearEdit();
+      else closePopover();
+    }
   });
   setTimeout(function() { inSpec && inSpec.focus(); inSpec && inSpec.select(); }, 0);
 
-  // Stash inputs on the popover for confirmPopover to read.
-  popoverEl._inputs = { spec: inSpec, tolCtrl: tolCtrl, su1: inSu1, su2: inSu2, su3: inSu3 };
+  // Stash inputs on the popover for confirm handlers to read.
+  popoverEl._inputs = {
+    spec: inSpec, tolCtrl: tolCtrl, su1: inSu1, su2: inSu2, su3: inSu3,
+    getTolType: function() { return currentTolType; },
+  };
 }
 
 // Parse the tolerance string emitted by ocrEngine.parseOcrText into { plus, minus, mode }
@@ -796,10 +963,26 @@ function escapeAttr(s) {
 function confirmPopover(anchorBox, pageNum, ocrResult) {
   if (!popoverEl) return;
   var ins = popoverEl._inputs;
+  var tolType = ins.getTolType ? ins.getTolType() : 'override';
 
-  // Run tolerance validation BEFORE closing the popover. If invalid, keep it open.
-  var tolResult = ins.tolCtrl.commit();
-  if (!tolResult.ok) return;
+  // Compute tolResult based on type. Override uses the editable control;
+  // Default/Profile derive the value from title-block settings.
+  var tolResult;
+  if (tolType === 'override') {
+    tolResult = ins.tolCtrl.commit();
+    if (!tolResult.ok) return;
+  } else {
+    var resolveGlobals = ctx.getState && ctx.getState().globals;
+    var resolvedTolStr = '';
+    if (tolType === 'profile') {
+      resolvedTolStr = (resolveGlobals && resolveGlobals.titleBlockTolGdt) || '';
+    } else { // 'default'
+      var defHit = lookupTitleBlockTol(ins.spec ? ins.spec.value.trim() : '', resolveGlobals);
+      resolvedTolStr = defHit ? defHit.tol : '';
+    }
+    var defSeed = parseToleranceSeed(resolvedTolStr);
+    tolResult = { ok: true, tolPlus: defSeed.plus, tolMinus: defSeed.minus, tolMode: 'sym' };
+  }
 
   // Re-format the tolerance string for downstream parser (parseOcrText emits same shape).
   var tolStr;
@@ -873,6 +1056,7 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
   if (parsed.tolMode && row.user && row.user.overrides) {
     row.user.overrides.tolMode = parsed.tolMode;
   }
+  row.user.balloon.tolType = tolType;
   PSB.recompute(row, state.globals);
   state.rows.push(row);
   sortRowsByEffectiveDimTag(state);
@@ -886,6 +1070,107 @@ function confirmPopover(anchorBox, pageNum, ocrResult) {
 
   ctx.onChange && ctx.onChange({ kind: 'add', rowId: row.id });
   renderOverlay(PSB.getPdfViewport());
+}
+
+// ── Edit existing balloon popover ────────────────────────
+
+/**
+ * Save edits from the open popover back to an existing balloon row.
+ * Updates raw (balloon rows are mutable), recomputes, logs undo.
+ */
+function confirmEditPopover(anchorBox, pageNum, editRow) {
+  if (!popoverEl) return;
+  var ins = popoverEl._inputs;
+  var tolType = ins.getTolType ? ins.getTolType() : 'override';
+
+  var tolResult;
+  if (tolType === 'override') {
+    tolResult = ins.tolCtrl.commit();
+    if (!tolResult.ok) return;
+  } else {
+    var editResolveGlobals = ctx.getState && ctx.getState().globals;
+    var editResolvedTolStr = '';
+    if (tolType === 'profile') {
+      editResolvedTolStr = (editResolveGlobals && editResolveGlobals.titleBlockTolGdt) || '';
+    } else { // 'default'
+      var editDefHit = lookupTitleBlockTol(ins.spec ? ins.spec.value.trim() : '', editResolveGlobals);
+      editResolvedTolStr = editDefHit ? editDefHit.tol : '';
+    }
+    var editDefSeed = parseToleranceSeed(editResolvedTolStr);
+    tolResult = { ok: true, tolPlus: editDefSeed.plus, tolMinus: editDefSeed.minus, tolMode: 'sym' };
+  }
+
+  var tolStr;
+  if (tolResult.tolPlus === tolResult.tolMinus) {
+    tolStr = tolResult.tolPlus > 0 ? String(tolResult.tolPlus) : '';
+  } else {
+    tolStr = '+' + tolResult.tolPlus + '-' + tolResult.tolMinus;
+  }
+
+  var state = ctx.getState();
+  PSB.pushUndo(state, 'Edit balloon #' + editRow.user.balloon.dimTag);
+
+  var newSpec = ins.spec.value.trim();
+  editRow.raw.drawingSpec = newSpec;
+  editRow.raw.nominal     = newSpec;
+  editRow.raw.nominalText = newSpec;
+  editRow.raw.tolerance     = tolStr;
+  editRow.raw.toleranceText = tolStr;
+  if (ins.su1) editRow.raw.specUnit1 = ins.su1.value.trim();
+  if (ins.su2) editRow.raw.specUnit2 = ins.su2.value.trim();
+  if (ins.su3) editRow.raw.specUnit3 = ins.su3.value.trim();
+  editRow.user.overrides = editRow.user.overrides || {};
+  editRow.user.overrides.tolMode = tolResult.tolMode;
+  editRow.user.balloon.tolType = tolType;
+
+  PSB.recompute(editRow, state.globals);
+
+  PSB.logChange(state.auditLog, {
+    type: 'edit', rowId: editRow.id,
+    description: 'Edited balloon #' + editRow.user.balloon.dimTag,
+    details: [{ field: 'balloon.spec', from: null, to: newSpec }],
+  });
+
+  closePopoverAndClearEdit();
+  ctx.onChange && ctx.onChange({ kind: 'edit', rowId: editRow.id });
+}
+
+/**
+ * Open the edit popover for an existing balloon row.
+ * Called on double-click (balloon circle or anchor-box hitzone).
+ * Activates balloon mode so handles are visible while editing.
+ */
+function openEditPopover(row) {
+  if (!row || !row.user || !row.user.balloon) return;
+
+  if (row.user.gdt) {
+    PSB.showToast && PSB.showToast('GD&T balloon editing: use the sidebar for now', 'info');
+    return;
+  }
+
+  if (!PSB.isBalloonMode()) PSB.setBalloonMode(true);
+
+  activeEditRowId = row.id;
+  selectedRowId   = row.id;
+  renderOverlay(PSB.getPdfViewport()); // apply edit ring before popover appears
+
+  var b = row.user.balloon;
+  var ocrResult = {
+    parsed: {
+      drawingSpec: row.raw.drawingSpec || '',
+      tolerance:   row.raw.tolerance   || '',
+      tolMode: (row.user.overrides && row.user.overrides.tolMode) || 'sym',
+      specUnit1: row.raw.specUnit1 || '',
+      specUnit2: row.raw.specUnit2 || '',
+      specUnit3: row.raw.specUnit3 || '',
+      confidence: 'high',
+    },
+    engine: null,
+    ocrConfidence: 1.0,
+    titleBlockDefault: false,
+  };
+
+  showPopover(b.anchorBox, b.page, ocrResult, row);
 }
 
 // ── GD&T popover ──────────────────────────────────────────
@@ -1317,9 +1602,29 @@ function renderOverlay(viewport) {
     var b = row.user.balloon;
     if (!b || b.page !== pageNum) return;
 
-    // Anchor box (dashed red, only in balloon mode)
+    // Anchor box area — always render a transparent hitzone for double-click
+    // (works in any mode); also render the visible dashed box in balloon mode.
+    var s = pdfRectToScreen(b.anchorBox, viewport);
+    var pad = 8;
+    var hitZone = document.createElementNS(SVG_NS, 'rect');
+    hitZone.setAttribute('class', 'balloon-anchor-hitzone');
+    hitZone.setAttribute('x', s.x - pad);
+    hitZone.setAttribute('y', s.y - pad);
+    hitZone.setAttribute('width', s.w + pad * 2);
+    hitZone.setAttribute('height', s.h + pad * 2);
+    hitZone.setAttribute('fill', 'transparent');
+    hitZone.style.pointerEvents = 'all';
+    hitZone.style.cursor = balloonMode ? 'crosshair' : 'default';
+    (function(capturedRow) {
+      hitZone.addEventListener('dblclick', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        openEditPopover(capturedRow);
+      });
+    })(row);
+    svgRoot.appendChild(hitZone);
+
     if (balloonMode) {
-      var s = pdfRectToScreen(b.anchorBox, viewport);
       var box = document.createElementNS(SVG_NS, 'rect');
       box.setAttribute('class', 'balloon-anchor-box');
       box.setAttribute('x', s.x);
@@ -1415,11 +1720,26 @@ function renderOverlay(viewport) {
     group.insertBefore(hoverRing, circle);
     if (row.id === hoveredRowId) group.classList.add('hovered');
 
+    // Calm pulsing ring while this balloon's edit popover is open.
+    if (row.id === activeEditRowId) {
+      group.classList.add('balloon-editing');
+      var editRing = document.createElementNS(SVG_NS, 'circle');
+      editRing.setAttribute('class', 'balloon-edit-ring');
+      editRing.setAttribute('cx', 0);
+      editRing.setAttribute('cy', 0);
+      editRing.setAttribute('r', radius + 7);
+      editRing.setAttribute('fill', 'none');
+      editRing.setAttribute('stroke', '#4a9eff');
+      editRing.setAttribute('stroke-width', '2.5');
+      group.insertBefore(editRing, hoverRing);
+    }
+
     bindBalloonInteractions(group, row);
     svgRoot.appendChild(group);
 
-    // Leader connection-point handle (small square at connScreen) — only in balloon mode
-    if (balloonMode) {
+    // Leader connection-point handle (small square at connScreen) — in balloon mode
+    // or while this balloon's edit popover is open.
+    if (balloonMode || row.id === activeEditRowId) {
       var handle = document.createElementNS(SVG_NS, 'rect');
       handle.setAttribute('class', 'balloon-leader-handle');
       handle.setAttribute('x', connScreen.x - 4);
@@ -1468,6 +1788,58 @@ function pdfPointToLeader(box, pt) {
 }
 function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
+/**
+ * Begin dragging a balloon's circle to a new offset position.
+ * Works in both balloon mode and normal mode — called from the draw-box
+ * hit-test path (balloon mode) and from the balloon group's mousedown (either mode).
+ */
+function startBalloonDrag(row, sx, sy, viewport) {
+  var canvas = PSB.getPdfCanvas();
+  if (!canvas) return;
+  var rect = canvas.getBoundingClientRect();
+  var ptStart = screenToPdf(sx, sy, viewport);
+  var origOffset = Object.assign({}, row.user.balloon.balloonOffset);
+  var undoPushed = false;
+
+  function onMove(ev) {
+    var pt = screenToPdf(ev.clientX - rect.left, ev.clientY - rect.top, viewport);
+    row.user.balloon.balloonOffset = {
+      dx: origOffset.dx + (pt.x - ptStart.x),
+      dy: origOffset.dy + (pt.y - ptStart.y),
+    };
+    renderOverlay(viewport);
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (!isOffsetSame(origOffset, row.user.balloon.balloonOffset)) {
+      if (!undoPushed) {
+        PSB.pushUndo(ctx.getState(), 'Move balloon #' + row.user.balloon.dimTag);
+        undoPushed = true;
+      }
+      PSB.logChange(ctx.getState().auditLog, {
+        type: 'edit', rowId: row.id,
+        description: 'Moved balloon #' + row.user.balloon.dimTag,
+        details: [{ field: 'balloon.balloonOffset', from: origOffset, to: row.user.balloon.balloonOffset }],
+      });
+      ctx.onChange && ctx.onChange({ kind: 'move', rowId: row.id });
+    }
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+/**
+ * Close the popover AND clear edit-mode state (active ring disappears).
+ * Use this instead of closePopover() whenever the user explicitly closes
+ * an edit session (cancel, confirm, click-outside, Escape).
+ */
+function closePopoverAndClearEdit() {
+  closePopover();
+  activeEditRowId = null;
+  renderOverlay(PSB.getPdfViewport());
+}
+
 // ── Balloon drag / right-click / hover ──────────────────
 function bindBalloonInteractions(group, row) {
   // Hover-link to datum circles for GD&T rows (one-way: balloon → datum).
@@ -1475,7 +1847,6 @@ function bindBalloonInteractions(group, row) {
   group.addEventListener('mouseleave', function() { setHoveredRow(null); });
 
   group.addEventListener('mousedown', function(e) {
-    if (PSB.isBalloonMode()) return; // balloon mode reserves the canvas for drawing
     if (e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
@@ -1483,44 +1854,12 @@ function bindBalloonInteractions(group, row) {
     if (!viewport) return;
     var canvas = PSB.getPdfCanvas();
     var rect = canvas.getBoundingClientRect();
-    var ptStart = screenToPdf(e.clientX - rect.left, e.clientY - rect.top, viewport);
-    var origOffset = Object.assign({}, row.user.balloon.balloonOffset);
-    var anchorCenter = {
-      x: row.user.balloon.anchorBox.x + row.user.balloon.anchorBox.w / 2,
-      y: row.user.balloon.anchorBox.y + row.user.balloon.anchorBox.h / 2,
-    };
-
-    var undoPushed = false;
-    function onMove(ev) {
-      var pt = screenToPdf(ev.clientX - rect.left, ev.clientY - rect.top, viewport);
-      var dx = pt.x - ptStart.x;
-      var dy = pt.y - ptStart.y;
-      row.user.balloon.balloonOffset = { dx: origOffset.dx + dx, dy: origOffset.dy + dy };
-      // Suppress anchorCenter unused warning
-      void anchorCenter;
-      renderOverlay(viewport);
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      if (!isOffsetSame(origOffset, row.user.balloon.balloonOffset)) {
-        if (!undoPushed) { PSB.pushUndo(ctx.getState(), 'Move balloon #' + row.user.balloon.dimTag); undoPushed = true; }
-        PSB.logChange(ctx.getState().auditLog, {
-          type: 'edit', rowId: row.id,
-          description: 'Moved balloon #' + row.user.balloon.dimTag,
-          details: [{ field: 'balloon.balloonOffset', from: origOffset, to: row.user.balloon.balloonOffset }],
-        });
-        ctx.onChange && ctx.onChange({ kind: 'move', rowId: row.id });
-      }
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    startBalloonDrag(row, e.clientX - rect.left, e.clientY - rect.top, viewport);
   });
 
   group.addEventListener('click', function(e) {
-    if (PSB.isBalloonMode()) return;
+    if (PSB.isBalloonMode()) return; // in balloon mode clicks are part of drag; skip table scroll
     selectedRowId = row.id;
-    // Scroll & highlight the table row
     var rowEl = document.querySelector('tr[data-row-id="' + row.id + '"]');
     if (rowEl) {
       rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1528,6 +1867,12 @@ function bindBalloonInteractions(group, row) {
       setTimeout(function() { rowEl.classList.remove('row-flash'); }, 1200);
     }
     e.stopPropagation();
+  });
+
+  group.addEventListener('dblclick', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    openEditPopover(row);
   });
 
   group.addEventListener('contextmenu', function(e) {

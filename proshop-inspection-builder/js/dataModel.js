@@ -192,6 +192,7 @@ function createBalloonRow(dimTag, parsedData, balloonData) {
     ocrConfidence: balloonData.ocrConfidence || null,
     ocrEngine: balloonData.ocrEngine || null,
     misalignedRev: null,
+    tolType: null,  // 'default' | 'override' | 'profile' — set by popover on confirm
   };
 
   var featureType = PSB.detectFeatureType(parsedData.drawingSpec || '');
