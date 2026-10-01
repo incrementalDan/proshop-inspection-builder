@@ -2061,8 +2061,8 @@ td.edit-flash {
 .col-op2000-tol { width: 90px; }
 .col-out-tol { width: 90px; }
 .col-cmm-tol { width: 90px; }
-.col-measured { min-width: 90px; max-width: 140px; }
-.col-deviation { min-width: 80px; max-width: 130px; }
+.col-measured { min-width: 90px; }
+.col-deviation { min-width: 80px; }
 .col-run { width: 90px; }
 
 /* FAI editable notes cell */

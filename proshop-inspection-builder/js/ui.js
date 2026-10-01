@@ -1648,7 +1648,7 @@ function addLeadingZero(str) {
 
 /**
  * Build a dual-unit display string for a CMM numeric value.
- * Same "[secondary]" format as plan values; no decimal precision rules applied.
+ * Primary keeps all CMM decimals; secondary is padded to 4 (mm) / 5 (inch) decimals.
  */
 function buildCmmDualString(value, planUnits, isAngle) {
   if (value == null || isNaN(value)) return '—';
@@ -1656,7 +1656,8 @@ function buildCmmDualString(value, planUnits, isAngle) {
   if (isAngle) return primary + ' [Angle]';
   var otherUnit = planUnits === 'mm' ? 'inch' : 'mm';
   var converted = PSB.convertUnits(value, planUnits, otherUnit);
-  var secondary = String(parseFloat(converted.toFixed(5)));
+  // Secondary is fixed-width: 4 decimals for mm, 5 for inch
+  var secondary = converted.toFixed(otherUnit === 'mm' ? 4 : 5);
   return primary + ' [' + secondary + ']';
 }
 
