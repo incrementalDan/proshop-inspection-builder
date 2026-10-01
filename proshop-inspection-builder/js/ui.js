@@ -235,10 +235,35 @@ function renderTable(stateOrRows, viewConfig) {
     tbody.appendChild(addTr);
   }
 
+  // FAI view: freeze Status / Dim Tag / Drawing Spec on horizontal scroll
+  table.classList.toggle('fai-view', isFaiView);
+  if (isFaiView) updateFaiFrozenOffsets();
+
   // Resolve tab-navigation target after full table is built
   if (navigateTarget) {
     resolveNavigateTarget(tbody, displayRows);
     navigateTarget = null;
+  }
+}
+
+/**
+ * Set the sticky left offsets for the frozen FAI columns.
+ * Column widths depend on content, so they are measured after render.
+ */
+var faiFrozenObserver = null;
+function updateFaiFrozenOffsets() {
+  var table = document.getElementById('data-table');
+  if (!table || !table.classList.contains('fai-view')) return;
+  var statusTh = table.querySelector('thead th.col-fai-status');
+  var dimTagTh = table.querySelector('thead th.col-dimtag');
+  if (!statusTh || !dimTagTh) return;
+  var w1 = statusTh.getBoundingClientRect().width;
+  var w2 = dimTagTh.getBoundingClientRect().width;
+  table.style.setProperty('--fai-frozen-left-2', w1 + 'px');
+  table.style.setProperty('--fai-frozen-left-3', (w1 + w2) + 'px');
+  if (!faiFrozenObserver && window.ResizeObserver) {
+    faiFrozenObserver = new ResizeObserver(function() { updateFaiFrozenOffsets(); });
+    faiFrozenObserver.observe(table);
   }
 }
 
@@ -252,7 +277,8 @@ function updateTableHeaders(isFaiView) {
   if (isFaiView) {
     thead.innerHTML =
       '<tr>' +
-        '<th class="th-group-print" colspan="9">Print Data</th>' +
+        '<th class="th-group-print fai-frozen-group" colspan="3">Print Data</th>' +
+        '<th class="th-group-print" colspan="6"></th>' +
         '<th class="th-group-cmm" colspan="5">CMM Data</th>' +
       '</tr>' +
       '<tr>' +
@@ -1648,7 +1674,7 @@ function addLeadingZero(str) {
 
 /**
  * Build a dual-unit display string for a CMM numeric value.
- * Same "[secondary]" format as plan values; no decimal precision rules applied.
+ * Primary keeps all CMM decimals; secondary is padded to 4 (mm) / 5 (inch) decimals.
  */
 function buildCmmDualString(value, planUnits, isAngle) {
   if (value == null || isNaN(value)) return '—';
@@ -1656,7 +1682,8 @@ function buildCmmDualString(value, planUnits, isAngle) {
   if (isAngle) return primary + ' [Angle]';
   var otherUnit = planUnits === 'mm' ? 'inch' : 'mm';
   var converted = PSB.convertUnits(value, planUnits, otherUnit);
-  var secondary = String(parseFloat(converted.toFixed(5)));
+  // Secondary is fixed-width: 4 decimals for mm, 5 for inch
+  var secondary = converted.toFixed(otherUnit === 'mm' ? 4 : 5);
   return primary + ' [' + secondary + ']';
 }
 

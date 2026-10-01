@@ -49,24 +49,24 @@ TEST.MATH_TEST_CASES = {
   // Plating tests
   plating: [
     {
-      desc: '+1x Internal — subtract plating',
+      desc: '+1x Internal — add plating',
       input: { nominal: 1.000, plating: 0.001, mode: '+1xI' },
-      expected: 0.999,
-    },
-    {
-      desc: '+2x Internal — subtract 2x plating',
-      input: { nominal: 1.000, plating: 0.001, mode: '+2xI' },
-      expected: 0.998,
-    },
-    {
-      desc: '-1x External — add plating',
-      input: { nominal: 1.000, plating: 0.001, mode: '-1xE' },
       expected: 1.001,
     },
     {
-      desc: '-2x External — add 2x plating',
-      input: { nominal: 1.000, plating: 0.001, mode: '-2xE' },
+      desc: '+2x Internal — add 2x plating',
+      input: { nominal: 1.000, plating: 0.001, mode: '+2xI' },
       expected: 1.002,
+    },
+    {
+      desc: '-1x External — subtract plating',
+      input: { nominal: 1.000, plating: 0.001, mode: '-1xE' },
+      expected: 0.999,
+    },
+    {
+      desc: '-2x External — subtract 2x plating',
+      input: { nominal: 1.000, plating: 0.001, mode: '-2xE' },
+      expected: 0.998,
     },
   ],
 
