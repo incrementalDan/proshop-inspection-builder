@@ -170,6 +170,7 @@ function renderTable(stateOrRows, viewConfig) {
     bindBalloonHoverSync(tr, row.id);
 
     if (row.computed.isNote) tr.classList.add('is-note');
+    if (row.user.notOnPrint) tr.classList.add('not-on-print');
     if (row.id === selectedRowId) tr.classList.add('selected');
 
     tr.innerHTML = buildRowHTML(row);
@@ -361,7 +362,7 @@ function buildFaiFamilyHTML(row) {
   var specHtml = formatDualDisplay(c.op2000DualSpec || c.outDrawingSpec || '');
   var printCells =
     '<td class="col-fai-status">{STATUS}</td>' +
-    '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
+    '<td class="col-dimtag">' + esc(c.dimTag) + refBadgeHTML(row) + '</td>' +
     '<td class="col-drawing-spec">' + specHtml + '</td>' +
     '<td class="col-su1">' + esc(c.specUnit1 || '') + '</td>' +
     '<td class="col-su2">' + esc(c.specUnit2 || '') + '</td>' +
@@ -524,6 +525,15 @@ function setupFaiNotesEditing(tr, row) {
 }
 
 /**
+ * Small "REF" badge for dims that are not on the print.
+ */
+function refBadgeHTML(row) {
+  return row.user.notOnPrint
+    ? ' <span class="ref-only-badge" title="Not on print — REF only, skipped in OP2000 export">REF</span>'
+    : '';
+}
+
+/**
  * Build the HTML for a single table row.
  */
 function buildRowHTML(row) {
@@ -548,7 +558,7 @@ function buildRowHTML(row) {
 
   return '' +
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span><button class="delete-row-btn" title="Delete row">&times;</button></td>' +
-    '<td class="col-dimtag">' + esc(c.dimTag) + '</td>' +
+    '<td class="col-dimtag">' + esc(c.dimTag) + refBadgeHTML(row) + '</td>' +
     '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
     '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) +
       (row.user.gdt
@@ -660,7 +670,7 @@ function populateSidebar(rowId) {
 
   // Header — split label and number for styling
   document.getElementById('sidebar-dimtag').innerHTML =
-    '<span class="dimtag-label">DIM TAG# </span><span class="dimtag-number">' + esc(c.dimTag || '—') + '</span>';
+    '<span class="dimtag-label">DIM TAG# </span><span class="dimtag-number">' + esc(c.dimTag || '—') + '</span>' + refBadgeHTML(row);
   document.getElementById('sidebar-output-tag').textContent = c.outputTag || '';
 
   // GD&T info panel — only for GD&T rows. Inserted/removed between the header
@@ -760,6 +770,7 @@ function populateSidebar(rowId) {
   // Checkboxes
   setChecked('sidebar-ipc', u.ipc);
   setChecked('sidebar-is-note', u.isNote);
+  setChecked('sidebar-not-on-print', u.notOnPrint);
   setChecked('sidebar-auto-nominal', u.autoNominal);
   setChecked('sidebar-pin-gage-enabled', u.pinGageEnabled);
 
@@ -801,6 +812,10 @@ function wireUpSidebarHandlers(rowId) {
 
   bind('sidebar-is-note', 'change', function(e) {
     onRowUserChange(rowId, { isNote: e.target.checked });
+  });
+
+  bind('sidebar-not-on-print', 'change', function(e) {
+    onRowUserChange(rowId, { notOnPrint: e.target.checked });
   });
 
   bind('sidebar-auto-nominal', 'change', function(e) {

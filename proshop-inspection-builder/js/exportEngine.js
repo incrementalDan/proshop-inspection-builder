@@ -4,7 +4,7 @@
  * Generates CSV matching ProShop import format.
  * Reads exclusively from row.computed (via getExportData).
  *
- * OP2000 rows: raw values only, no math
+ * OP2000 rows: raw values only, no math. Not-on-print (REF-only) rows are never exported to OP2000.
  * Other OPs: computed values with unit conversion
  */
 
@@ -50,6 +50,10 @@ function generateCSV(rows, selectedOps, globals) {
       var row = rows[ri];
       // OP2000 exports all rows; other OPs require per-row enablement
       if (opNum !== 2000 && row.user.includeOps[opNum] !== true) {
+        continue;
+      }
+      // Not-on-print dims are REF only — they never go to OP2000
+      if (opNum === 2000 && row.user.notOnPrint) {
         continue;
       }
 

@@ -1302,6 +1302,8 @@ function handleAddRow() {
   }
   var newTag = maxDimTag + 1;
   var newRow = PSB.createRow({ dimTag: String(newTag) });
+  // Manually added rows are usually dims missing from the print
+  newRow.user.notOnPrint = true;
   PSB.recompute(newRow, state.globals);
   state.rows.push(newRow);
   PSB.logChange(state.auditLog, { type: 'add', rowId: newRow.id, description: 'Added row ' + newTag });

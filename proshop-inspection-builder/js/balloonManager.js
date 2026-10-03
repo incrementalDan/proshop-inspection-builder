@@ -30,6 +30,7 @@ var MIN_BOX_PX = { w: 10, h: 5 };
 // ── Module state ─────────────────────────────────────────
 var ctx = null;                  // { getState, onChange, renderTable }
 var svgRoot = null;              // <svg> overlay positioned above the PDF canvas
+var REF_ONLY_BALLOON_COLOR = '#c2185b';  // matches --ref-only (light) — not-on-print balloons
 var pendingInsertAt = null;      // dimTag at which the next created balloon should land
 var draftBox = null;             // current drag rectangle (PDF coords)
 var draftRectEl = null;          // dashed yellow rectangle SVG element
@@ -1681,12 +1682,14 @@ function renderOverlay(viewport) {
     circle.setAttribute('r', radius);
     circle.setAttribute('cx', 0);
     circle.setAttribute('cy', 0);
+    // Not-on-print (REF only) balloons use their own colour so they stand out
+    var balloonColor = row.user.notOnPrint ? REF_ONLY_BALLOON_COLOR : '#cc0000';
     if (b.source === 'detected') {
       circle.setAttribute('fill', '#ffffff');
-      circle.setAttribute('stroke', '#cc0000');
+      circle.setAttribute('stroke', balloonColor);
       circle.setAttribute('stroke-width', '1.5');
     } else {
-      circle.setAttribute('fill', '#cc0000');
+      circle.setAttribute('fill', balloonColor);
     }
     group.appendChild(circle);
 
@@ -1695,7 +1698,7 @@ function renderOverlay(viewport) {
     label.setAttribute('dominant-baseline', 'central');
     label.setAttribute('font-size', radius * 1.0);
     label.setAttribute('font-weight', 'bold');
-    label.setAttribute('fill', b.source === 'detected' ? '#cc0000' : '#ffffff');
+    label.setAttribute('fill', b.source === 'detected' ? balloonColor : '#ffffff');
     label.style.userSelect = 'none';
     label.textContent = String(b.dimTag);
     group.appendChild(label);

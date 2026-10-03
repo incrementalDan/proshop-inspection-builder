@@ -219,6 +219,7 @@ The pipeline stores intermediate OP2000 values in `computed` (e.g., `computed.op
 - NO Type 4 auto-nominal centering
 - Output reflects the corrected print values — parsing fixes column placement, overrides fix misreads
 - OP2000 computed values serve as the base for all other OP calculations
+- **Not-on-print (REF only) rows** (`user.notOnPrint = true`) are NEVER exported to OP2000. They export to other OPs as normal (no note). The "+" add-row button sets this on by default. Shown with the `--ref-only` colour + "REF" badge.
 
 ### Nominal Centering
 - Symmetric: `Ø0.100 ±0.005` → nominal stays 0.100

@@ -112,6 +112,7 @@ function defaultUserState() {
     includeOps: {},          // { [opNumber]: true/false }
     ipc: false,
     isNote: false,
+    notOnPrint: false,       // REF-only dim added by user (not on the print) — never exported to OP2000
     autoNominal: true,
     platingMode: 'none',     // 'none', '+1xI', '+2xI', '-1xE', '-2xE'
     inspectionFrequency: '',
