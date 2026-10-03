@@ -30,7 +30,7 @@ var MIN_BOX_PX = { w: 10, h: 5 };
 // ── Module state ─────────────────────────────────────────
 var ctx = null;                  // { getState, onChange, renderTable }
 var svgRoot = null;              // <svg> overlay positioned above the PDF canvas
-var REF_ONLY_BALLOON_COLOR = '#c2185b';  // matches --ref-only (light) — not-on-print balloons
+var REF_ONLY_BALLOON_COLOR = '#8a6577';  // matches --ref-only (light) — not-on-print balloons
 var pendingInsertAt = null;      // dimTag at which the next created balloon should land
 var draftBox = null;             // current drag rectangle (PDF coords)
 var draftRectEl = null;          // dashed yellow rectangle SVG element

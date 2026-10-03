@@ -634,6 +634,13 @@ function recompute(row, globals) {
     exportNominal: (function() {
       var eu = globals.exportUnits || 'inch';
       var ePrec = eu === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+      // Independent OUT spec override wins (same priority as outDrawingSpec) —
+      // needed for rows with no OP2000 value, e.g. not-on-print dims
+      if (user.overrides.outputSpec !== null) {
+        var ovExpNum = parseFloat(user.overrides.outputSpec);
+        if (isNaN(ovExpNum)) return user.overrides.outputSpec;
+        return PSB.formatPrecision(isAngle ? ovExpNum : PSB.convertUnits(ovExpNum, importUnits, eu), ePrec);
+      }
       var eNom = PSB.convertUnits(primaryNom, importUnits, eu);
       return PSB.formatPrecision(eNom, ePrec);
     })(),
