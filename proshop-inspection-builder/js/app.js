@@ -1249,6 +1249,12 @@ function handleRowUserChange(rowId, changes) {
     row.user.inspectionEquipment = 'GO / NO-GO';
   }
 
+  // Pin/Gage on → Nom Dim exports the pin/gage value, so clear any typed OUT Nominal
+  if (changes.pinGageEnabled && row.user.overrides.outNominal !== null) {
+    row.user.overrides = Object.assign({}, row.user.overrides, { outNominal: null });
+    PSB.showToast('Pin/Gage on — typed OUT Nominal cleared', 'info');
+  }
+
   // Auto-disable autoNominal when tolerance becomes asymmetric
   if (row.user.autoNominal && changes.overrides) {
     var ov = row.user.overrides;
@@ -1302,6 +1308,8 @@ function handleAddRow() {
   }
   var newTag = maxDimTag + 1;
   var newRow = PSB.createRow({ dimTag: String(newTag) });
+  // Manually added rows are usually dims missing from the print
+  newRow.user.notOnPrint = true;
   PSB.recompute(newRow, state.globals);
   state.rows.push(newRow);
   PSB.logChange(state.auditLog, { type: 'add', rowId: newRow.id, description: 'Added row ' + newTag });

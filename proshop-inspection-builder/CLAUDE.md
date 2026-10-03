@@ -148,6 +148,16 @@ Key differences in output:
 - Op # is populated (user selects which ops)
 - Dim Tag gets a prefix - formatted = frequency letter code+"REF-"+ Dim tag #(follow the = Inspection Frequency → Output Tag Naming Logic below)
 - Nom Dim includes plating annotation like `(+2xI)` or `(-2xE)`
+
+### "Nom Dim" is a FREE FIELD (not a nominal)
+Do NOT treat ProShop's "Nom Dim" column as a true nominal value. The name is misleading — ProShop does not use it as a nominal. This app uses it as a free display field:
+- **OP2000**: always the same as Drawing Spec (100% of the time).
+- **Other OPs**, Nom Dim is one of:
+  - The same as Drawing Spec (plated value + plating annotation, e.g. `.1388 (+2xI)`) — shows plating math was done
+  - Pin/Gage spec, e.g. `P(Ø.1378+ | Ø.1398-)` or `G(.1370 | .1406)`
+  - A user-typed value (`overrides.outNominal`, shown as "OUT Nominal" / "Output Nominal" in the UI)
+- Never run math on Nom Dim or use it as an input to other calculations. The real numeric value lives in Drawing Spec + Tol.
+- **Pin/Gage on → Nom Dim = pin/gage value.** OUT Nominal is locked in the sidebar (🔒, no edit), shows the pin/gage value, and any typed OUT Nominal is cleared when Pin/Gage is turned on (undo restores it). No silent conflicts.
 - Values may be unit-converted (mm→inch or vice versa)
 - IPC, Frequency, Equipment are populated from user selections
 
@@ -219,6 +229,7 @@ The pipeline stores intermediate OP2000 values in `computed` (e.g., `computed.op
 - NO Type 4 auto-nominal centering
 - Output reflects the corrected print values — parsing fixes column placement, overrides fix misreads
 - OP2000 computed values serve as the base for all other OP calculations
+- **Not-on-print (REF only) rows** (`user.notOnPrint = true`) are NEVER exported to OP2000. They export to other OPs as normal (no note). The "+" add-row button sets this on by default. Shown with the `--ref-only` colour + "REF" badge.
 
 ### Nominal Centering
 - Symmetric: `Ø0.100 ±0.005` → nominal stays 0.100
@@ -231,6 +242,11 @@ Drawing spec = final post-plating dimension. We compute the pre-plating machinin
 - `-1x External`: SUBTRACT 1× plating from nominal (1 side — part grows after plating, so machine smaller)
 - `-2x External`: SUBTRACT 2× plating from nominal (2 sides, e.g. OD — part grows, machine smaller)
 - **NEVER apply plating to tolerance — only to nominal**
+- **Typed OUT spec override + plating**: plating math IS applied to the typed value, exactly like a calculated nominal (e.g. typed 10.5 mm, +2xI → `.4334 (+2xI)`).
+- **Pin/Gage export**: auto pin/gage is recomputed in export units for the CSV (screen stays in import units). A hand-typed pin value exports exactly as typed.
+- **Angles** (°/angle) are never unit-converted, on screen or in export.
+- **Note tolerances**: only a typed tolerance or one from the print. Title-block default / profile tolerances are never applied to notes.
+- **Typed OUT values win**: a typed OUT spec drives the export, OUT Nominal display and Pin/Gage. A typed OUT Nominal exports exactly as typed (free field — no conversion, no plating) and never feeds any math. `test/export.test.js` guards this.
 
 ### Pin / Gage (equipment-dependent)
 The Pin/Gage column format depends on the selected Inspection Equipment:

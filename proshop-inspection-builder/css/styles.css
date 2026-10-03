@@ -45,6 +45,8 @@
   --row-odd: #2e2e3a;
   --row-selected: #3a4256;
   --row-note: #33303c;
+  --ref-only: #a98a9a;          /* not-on-print (REF only) dims — muted mauve */
+  --row-ref-only: #312d36;
 
   --status-none: transparent;
   --status-edited: #ffc107;
@@ -91,6 +93,8 @@
   --row-odd: #ffffff;
   --row-selected: #dce8fa;
   --row-note: #f5f0fa;
+  --ref-only: #8a6577;
+  --row-ref-only: #f6f1f4;
 
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
@@ -1066,6 +1070,45 @@ input.no-spinners {
   text-overflow: ellipsis;
 }
 
+/* Not-on-print (REF only) rows */
+#data-table tbody tr.not-on-print {
+  background: var(--row-ref-only);
+  box-shadow: inset 3px 0 0 var(--ref-only);
+}
+
+#data-table tbody tr.not-on-print td.col-dimtag {
+  color: var(--ref-only);
+}
+
+#data-table tbody tr.not-on-print.selected {
+  box-shadow: inset 3px 0 0 var(--ref-only);
+}
+
+.ref-only-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--ref-only);
+  color: var(--ref-only);
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.5px;
+  line-height: 14px;
+  vertical-align: middle;
+}
+
+.sidebar-dimtag .ref-only-badge {
+  font-size: 12px;
+  line-height: 18px;
+  margin-left: 8px;
+}
+
+.toggle-ref-only input:checked + .toggle-track {
+  background: var(--ref-only);
+}
+
 /* Status indicator dot */
 .status-dot {
   display: inline-block;
@@ -1554,6 +1597,11 @@ td.has-override {
 
 .pingage-value.active {
   color: var(--text-primary);
+}
+
+.sidebar-editable.sidebar-locked {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .sidebar-editable {
