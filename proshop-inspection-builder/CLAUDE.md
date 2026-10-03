@@ -148,6 +148,15 @@ Key differences in output:
 - Op # is populated (user selects which ops)
 - Dim Tag gets a prefix - formatted = frequency letter code+"REF-"+ Dim tag #(follow the = Inspection Frequency → Output Tag Naming Logic below)
 - Nom Dim includes plating annotation like `(+2xI)` or `(-2xE)`
+
+### "Nom Dim" is a FREE FIELD (not a nominal)
+Do NOT treat ProShop's "Nom Dim" column as a true nominal value. The name is misleading — ProShop does not use it as a nominal. This app uses it as a free display field:
+- **OP2000**: always the same as Drawing Spec (100% of the time).
+- **Other OPs**, Nom Dim is one of:
+  - The same as Drawing Spec (plated value + plating annotation, e.g. `.1388 (+2xI)`) — shows plating math was done
+  - Pin/Gage spec, e.g. `P(Ø.1378+ | Ø.1398-)` or `G(.1370 | .1406)`
+  - A user-typed value (`overrides.outNominal`, shown as "OUT Nominal" / "Output Nominal" in the UI)
+- Never run math on Nom Dim or use it as an input to other calculations. The real numeric value lives in Drawing Spec + Tol.
 - Values may be unit-converted (mm→inch or vice versa)
 - IPC, Frequency, Equipment are populated from user selections
 
