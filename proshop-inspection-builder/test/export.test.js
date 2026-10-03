@@ -61,12 +61,23 @@ TEST.runExportTests = function(log) {
   assertEq('Pin/Gage uses typed OUT spec', r.computed.pinGage, 'P(Ø5.990+ | Ø6.010-)');
   assertEq('OUT Nominal display follows typed OUT spec', r.computed.outNominal, '6.000 [.2362]');
 
-  // Plating on typed OUT spec: math not applied, shown as "=value+2xI"
+  // Plating on typed OUT spec: math applied same as calculated rows (10.5 + 2×0.254 mm)
   g = globals({ platingThickness: 0.01 }); r = row('10', '0.1');
   r.user.platingMode = '+2xI'; r.user.overrides.outputSpec = '10.5';
   e = exp(r, g);
-  assertEq('Typed OUT spec + plating: spec unchanged', e['Drawing Spec'], '.4134');
-  assertEq('Typed OUT spec + plating: Nom Dim "=value+2xI"', e['Nom Dim'], '=.4134+2xI');
+  assertEq('Typed OUT spec + plating: spec plated', e['Drawing Spec'], '.4334');
+  assertEq('Typed OUT spec + plating: Nom Dim plated + annotation', e['Nom Dim'], '.4334 (+2xI)');
+  assertEq('Typed OUT spec + plating: OUT Nominal display plated', r.computed.outNominal, '11.008 (+2xI) [.4334]');
+
+  // Pin/Gage exported in export units (screen stays in import units)
+  g = globals(); r = row('5', '0.01');
+  r.user.pinGageEnabled = true;
+  e = exp(r, g);
+  assertEq('Pin/Gage screen in import units', r.computed.pinGage, 'P(Ø4.990+ | Ø5.010-)');
+  assertEq('Pin/Gage export in export units', e['Nom Dim'], 'P(Ø.1965+ | Ø.1972-)');
+  r.user.overrides.pinGageValue = 'P(Ø.19+ | Ø.20-)';
+  e = exp(r, g);
+  assertEq('Typed Pin/Gage exported as typed', e['Nom Dim'], 'P(Ø.19+ | Ø.20-)');
 
   // Plating on calculated value keeps "(+2xI)" annotation (0.01" plating → 10 + 2×0.254 mm)
   g = globals({ platingThickness: 0.01 }); r = row('10', '0.1');

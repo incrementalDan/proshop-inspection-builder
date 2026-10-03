@@ -422,8 +422,9 @@ function recompute(row, globals) {
 
   // ── Plating ──────────────────────────────────────────────
   var platingAnnotation = '';
+  var platingValue = 0;  // in import units; 0 = no plating
   if (user.platingMode !== 'none' && globals.platingThickness > 0) {
-    var platingValue = globals.platingThickness;
+    platingValue = globals.platingThickness;
 
     // Convert plating to same units as import if needed
     if (globals.platingUnits !== globals.importUnits) {
@@ -520,16 +521,18 @@ function recompute(row, globals) {
   // Strict numeric test so text like "9.95 MAX" is kept as text.
   var NUM_RE = /^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/;
   var ovOutSpecNum = user.overrides.outputSpec !== null ? parseFloat(user.overrides.outputSpec) : NaN;
+  // Typed OUT spec goes through plating exactly like a calculated nominal
+  if (!isNaN(ovOutSpecNum) && platingValue) {
+    ovOutSpecNum = PSB.applyPlating(ovOutSpecNum, platingValue, user.platingMode);
+  }
   var ovOutNomNum = (user.overrides.outNominal !== null && NUM_RE.test(user.overrides.outNominal))
     ? parseFloat(user.overrides.outNominal) : NaN;
-  // Plating code like "+2xI" (annotation without parentheses)
-  var platingCode = platingAnnotation ? platingAnnotation.replace(/[()]/g, '') : '';
 
   // ── Build output display values (other OPs) ──────────────
   // Priority: 1) Independent OUT override, 2) Derived from pipeline (OP2000 base + modifiers)
   var outDrawingSpec;
   if (user.overrides.outputSpec !== null) {
-    var ovsNum = parseFloat(user.overrides.outputSpec);
+    var ovsNum = ovOutSpecNum;  // plated
     if (!isNaN(ovsNum)) {
       if (isAngle) {
         outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [Angle]';
@@ -597,12 +600,10 @@ function recompute(row, globals) {
 
   var outNominal = dualNomStr;
   if (!isNaN(ovOutSpecNum)) {
-    // Typed OUT spec: plating math NOT applied — show it as "=value+2xI"
+    // Typed OUT spec (already plated above) — same format as a calculated nominal
     var tsStr = PSB.formatPrecision(ovOutSpecNum, primaryPrec);
     var tsSec = isAngle ? 'Angle' : PSB.formatPrecision(PSB.convertUnits(ovOutSpecNum, importUnits, secondaryUnits), secondaryPrec);
-    outNominal = platingCode
-      ? '=' + tsStr + platingCode + ' [=' + tsSec + platingCode + ']'
-      : tsStr + ' [' + tsSec + ']';
+    outNominal = tsStr + (platingAnnotation ? ' ' + platingAnnotation : '') + ' [' + tsSec + ']';
   } else if (platingAnnotation) {
     // Insert annotation before bracket notation so formatDualDisplay() colors correctly
     // e.g. "33.000 (+2xI) [1.2992]" instead of "33.000 [1.2992] (+2xI)"
@@ -696,11 +697,19 @@ function recompute(row, globals) {
       if (user.overrides.outNominal !== null) {
         return isNaN(ovOutNomNum) ? user.overrides.outNominal : toExport(ovOutNomNum);
       }
-      if (!isNaN(ovOutSpecNum)) {
-        // Plating math not applied to a typed value — show it as "=value+2xI"
-        return platingCode ? '=' + exportNominal + platingCode : exportNominal;
-      }
       return platingAnnotation ? exportNominal + ' ' + platingAnnotation : exportNominal;
+    })(),
+    // Pin/Gage in export units (a hand-typed pin value is exported exactly as typed)
+    exportPinGage: (function() {
+      if (!user.pinGageEnabled) return '';
+      if (user.overrides.pinGageValue !== null) return user.overrides.pinGageValue;
+      var eNomPg = isAngle ? pgNom : PSB.convertUnits(pgNom, importUnits, eu);
+      var eTp = isAngle ? finalTolPlus : PSB.convertUnits(finalTolPlus, importUnits, eu);
+      var eTm = isAngle ? finalTolMinus : PSB.convertUnits(finalTolMinus, importUnits, eu);
+      if (user.inspectionEquipment === 'Gage Block' || Math.abs(finalTolPlus - finalTolMinus) >= 1e-10) {
+        return PSB.computeGageBlock(eNomPg, eTp, eTm, ePrec).formatted;
+      }
+      return PSB.computePinGage(eNomPg, eTp, ePrec).formatted;
     })(),
     exportTolerance: (function() {
       var eTolPlus = isAngle ? finalTolPlus : PSB.convertUnits(finalTolPlus, importUnits, eu);
@@ -786,8 +795,8 @@ function getExportData(row, opNumber, globals) {
 
   // Non-OP2000: export uses secondary (converted) unit values, no brackets
   var exportNom = computed.exportNomDim || '';
-  if (computed.pinGage) {
-    exportNom = computed.pinGage;
+  if (computed.exportPinGage) {
+    exportNom = computed.exportPinGage;
   }
   return {
     'Internal Part #': '',
