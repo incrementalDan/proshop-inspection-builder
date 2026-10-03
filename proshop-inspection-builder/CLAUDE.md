@@ -232,6 +232,10 @@ Drawing spec = final post-plating dimension. We compute the pre-plating machinin
 - `-1x External`: SUBTRACT 1× plating from nominal (1 side — part grows after plating, so machine smaller)
 - `-2x External`: SUBTRACT 2× plating from nominal (2 sides, e.g. OD — part grows, machine smaller)
 - **NEVER apply plating to tolerance — only to nominal**
+- **Typed OUT spec override + plating**: plating math is NOT applied to the typed value. Export Nom Dim shows it as math, e.g. `=.4134+2xI`. Calculated rows keep `.4137 (+2xI)`.
+- **Angles** (°/angle) are never unit-converted, on screen or in export.
+- **Note tolerances**: only a typed tolerance or one from the print. Title-block default / profile tolerances are never applied to notes.
+- **Typed OUT values win everywhere**: OUT Nominal / OUT spec overrides drive the export, OUT Nominal display and Pin/Gage. `test/export.test.js` guards this.
 
 ### Pin / Gage (equipment-dependent)
 The Pin/Gage column format depends on the selected Inspection Equipment:
