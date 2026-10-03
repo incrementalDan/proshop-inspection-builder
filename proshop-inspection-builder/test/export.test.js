@@ -59,6 +59,8 @@ TEST.runExportTests = function(log) {
   r.user.pinGageEnabled = true; r.user.overrides.outputSpec = '6';
   PSB.recompute(r, g);
   assertEq('Pin/Gage uses typed OUT spec', r.computed.pinGage, 'P(Ø5.990+ | Ø6.010-)');
+  assertEq('Pin/Gage on: OUT Nominal display = pin/gage from typed OUT spec', r.computed.outNominal, 'P(Ø5.990+ | Ø6.010-)');
+  r.user.pinGageEnabled = false; PSB.recompute(r, g);
   assertEq('OUT Nominal display follows typed OUT spec', r.computed.outNominal, '6.000 [.2362]');
 
   // Pin/Gage never uses OUT Nominal (free field)
@@ -66,6 +68,13 @@ TEST.runExportTests = function(log) {
   r.user.pinGageEnabled = true; r.user.overrides.outNominal = '7';
   PSB.recompute(r, g);
   assertEq('Pin/Gage ignores typed OUT Nominal', r.computed.pinGage, 'P(Ø4.990+ | Ø5.010-)');
+
+  // Pin/Gage on → Nom Dim = pin/gage even if an old typed OUT Nominal exists
+  g = globals(); r = row('5', '0.01');
+  r.user.pinGageEnabled = true; r.user.overrides.outNominal = 'OLD';
+  e = exp(r, g);
+  assertEq('Pin/Gage on: OUT Nominal display = pin/gage', r.computed.outNominal, 'P(Ø4.990+ | Ø5.010-)');
+  assertEq('Pin/Gage on: Nom Dim export = pin/gage', e['Nom Dim'], 'P(Ø.1965+ | Ø.1972-)');
 
   // Plating on typed OUT spec: math applied same as calculated rows (10.5 + 2×0.254 mm)
   g = globals({ platingThickness: 0.01 }); r = row('10', '0.1');

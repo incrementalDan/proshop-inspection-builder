@@ -1249,6 +1249,12 @@ function handleRowUserChange(rowId, changes) {
     row.user.inspectionEquipment = 'GO / NO-GO';
   }
 
+  // Pin/Gage on → Nom Dim exports the pin/gage value, so clear any typed OUT Nominal
+  if (changes.pinGageEnabled && row.user.overrides.outNominal !== null) {
+    row.user.overrides = Object.assign({}, row.user.overrides, { outNominal: null });
+    PSB.showToast('Pin/Gage on — typed OUT Nominal cleared', 'info');
+  }
+
   // Auto-disable autoNominal when tolerance becomes asymmetric
   if (row.user.autoNominal && changes.overrides) {
     var ov = row.user.overrides;

@@ -684,7 +684,10 @@ function populateSidebar(rowId) {
 
   // Output values (right column — bold/bright, dual-unit format)
   document.getElementById('sidebar-out-spec').innerHTML = formatDualDisplay(c.outDrawingSpec) || '—';
-  document.getElementById('sidebar-out-nominal').innerHTML = formatDualDisplay(c.outNominal) || '—';
+  var outNomEl = document.getElementById('sidebar-out-nominal');
+  outNomEl.innerHTML = (u.pinGageEnabled ? '🔒 ' : '') + (formatDualDisplay(c.outNominal) || '—');
+  outNomEl.classList.toggle('sidebar-locked', !!u.pinGageEnabled);
+  outNomEl.title = u.pinGageEnabled ? 'Locked — Pin/Gage is on, so Nom Dim exports the pin/gage value' : '';
   document.getElementById('sidebar-out-tol').innerHTML = formatDualDisplay(tolDisplay(c.outTolerance)) || '—';
 
   // Override indicators — show arrow icon when value was manually changed
@@ -1134,6 +1137,10 @@ function setupSidebarValueEdit(elementId, overrideKey, rowId, clearKey) {
   clone.addEventListener('dblclick', function(e) {
     e.stopPropagation();
     if (clone.querySelector('input')) return;
+    if (clone.classList.contains('sidebar-locked')) {
+      if (PSB.showToast) PSB.showToast('Pin/Gage is on — Nom Dim exports the pin/gage value', 'info');
+      return;
+    }
 
     var originalHTML = clone.innerHTML;
     var originalValue = clone.textContent;

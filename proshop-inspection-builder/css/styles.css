@@ -1599,6 +1599,11 @@ td.has-override {
   color: var(--text-primary);
 }
 
+.sidebar-editable.sidebar-locked {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .sidebar-editable {
   cursor: text;
   border-radius: 3px;

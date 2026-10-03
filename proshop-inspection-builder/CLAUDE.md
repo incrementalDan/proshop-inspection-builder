@@ -157,6 +157,7 @@ Do NOT treat ProShop's "Nom Dim" column as a true nominal value. The name is mis
   - Pin/Gage spec, e.g. `P(Ø.1378+ | Ø.1398-)` or `G(.1370 | .1406)`
   - A user-typed value (`overrides.outNominal`, shown as "OUT Nominal" / "Output Nominal" in the UI)
 - Never run math on Nom Dim or use it as an input to other calculations. The real numeric value lives in Drawing Spec + Tol.
+- **Pin/Gage on → Nom Dim = pin/gage value.** OUT Nominal is locked in the sidebar (🔒, no edit), shows the pin/gage value, and any typed OUT Nominal is cleared when Pin/Gage is turned on (undo restores it). No silent conflicts.
 - Values may be unit-converted (mm→inch or vice versa)
 - IPC, Frequency, Equipment are populated from user selections
 

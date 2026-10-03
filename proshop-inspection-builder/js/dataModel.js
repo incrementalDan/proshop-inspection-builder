@@ -656,7 +656,8 @@ function recompute(row, globals) {
 
     // Other OP values (derived from OP2000 base + Types 3 & 4)
     outDrawingSpec: outDrawingSpec,
-    outNominal: user.overrides.outNominal !== null ? user.overrides.outNominal : outNominal,
+    // Pin/Gage on → Nom Dim is the pin/gage value; typed OUT Nominal is locked/ignored
+    outNominal: user.pinGageEnabled ? pinGageStr : (user.overrides.outNominal !== null ? user.overrides.outNominal : outNominal),
     outTolerance: outTolerance,
     pinGage: pinGageStr,
     pinGageAuto: pinGageAutoStr,
@@ -690,7 +691,7 @@ function recompute(row, globals) {
     // Export "Nom Dim" (before pin/gage). Free field: a typed OUT Nominal exports
     // exactly as typed — no unit conversion, no plating. Otherwise = Drawing Spec + plating label.
     exportNomDim: (function() {
-      if (user.overrides.outNominal !== null) return user.overrides.outNominal;
+      if (user.overrides.outNominal !== null && !user.pinGageEnabled) return user.overrides.outNominal;
       return platingAnnotation ? exportNominal + ' ' + platingAnnotation : exportNominal;
     })(),
     // Pin/Gage in export units (a hand-typed pin value is exported exactly as typed)
