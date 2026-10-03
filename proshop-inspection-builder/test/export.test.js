@@ -45,7 +45,7 @@ TEST.runExportTests = function(log) {
   g = globals(); r = row('10', '0.1');
   r.user.overrides.outNominal = '9.95';
   e = exp(r, g);
-  assertEq('Typed OUT Nominal exports', e['Nom Dim'], '.3917');
+  assertEq('Typed OUT Nominal exports exactly as typed', e['Nom Dim'], '9.95');
   assertEq('Typed OUT Nominal leaves Drawing Spec alone', e['Drawing Spec'], '.3937');
 
   // Angles never unit-converted
@@ -60,6 +60,12 @@ TEST.runExportTests = function(log) {
   PSB.recompute(r, g);
   assertEq('Pin/Gage uses typed OUT spec', r.computed.pinGage, 'P(Ø5.990+ | Ø6.010-)');
   assertEq('OUT Nominal display follows typed OUT spec', r.computed.outNominal, '6.000 [.2362]');
+
+  // Pin/Gage never uses OUT Nominal (free field)
+  g = globals(); r = row('5', '0.01');
+  r.user.pinGageEnabled = true; r.user.overrides.outNominal = '7';
+  PSB.recompute(r, g);
+  assertEq('Pin/Gage ignores typed OUT Nominal', r.computed.pinGage, 'P(Ø4.990+ | Ø5.010-)');
 
   // Plating on typed OUT spec: math applied same as calculated rows (10.5 + 2×0.254 mm)
   g = globals({ platingThickness: 0.01 }); r = row('10', '0.1');

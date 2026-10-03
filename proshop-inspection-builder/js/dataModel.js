@@ -517,16 +517,12 @@ function recompute(row, globals) {
     }
   }
 
-  // ── Typed OUT values (independent overrides) as numbers ──
-  // Strict numeric test so text like "9.95 MAX" is kept as text.
-  var NUM_RE = /^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/;
+  // ── Typed OUT spec (independent override) as a number ──
   var ovOutSpecNum = user.overrides.outputSpec !== null ? parseFloat(user.overrides.outputSpec) : NaN;
   // Typed OUT spec goes through plating exactly like a calculated nominal
   if (!isNaN(ovOutSpecNum) && platingValue) {
     ovOutSpecNum = PSB.applyPlating(ovOutSpecNum, platingValue, user.platingMode);
   }
-  var ovOutNomNum = (user.overrides.outNominal !== null && NUM_RE.test(user.overrides.outNominal))
-    ? parseFloat(user.overrides.outNominal) : NaN;
 
   // ── Build output display values (other OPs) ──────────────
   // Priority: 1) Independent OUT override, 2) Derived from pipeline (OP2000 base + modifiers)
@@ -580,10 +576,9 @@ function recompute(row, globals) {
 
   // ── Pin/Gage computation ─────────────────────────────────
   // Uses final OUT tolerance values (which may be independently overridden)
-  // Typed OUT Nominal / OUT spec win over the pipeline nominal (same priority as display)
-  var pgNom = primaryNom;
-  if (!isNaN(ovOutSpecNum)) pgNom = ovOutSpecNum;
-  if (!isNaN(ovOutNomNum)) pgNom = ovOutNomNum;
+  // Pin/Gage comes from Drawing Spec + Tol only (typed OUT spec wins over pipeline).
+  // Never from OUT Nominal — Nom Dim is a free field (see CLAUDE.md).
+  var pgNom = !isNaN(ovOutSpecNum) ? ovOutSpecNum : primaryNom;
   var pinGageStr = '';
   var pinGageAutoStr = '';
   if (user.pinGageEnabled) {
@@ -692,11 +687,10 @@ function recompute(row, globals) {
     },
     // Export-ready values (converted to exportUnits, no brackets)
     exportNominal: exportNominal,
-    // Export "Nom Dim" (before pin/gage): typed OUT Nominal > typed OUT spec > pipeline
+    // Export "Nom Dim" (before pin/gage). Free field: a typed OUT Nominal exports
+    // exactly as typed — no unit conversion, no plating. Otherwise = Drawing Spec + plating label.
     exportNomDim: (function() {
-      if (user.overrides.outNominal !== null) {
-        return isNaN(ovOutNomNum) ? user.overrides.outNominal : toExport(ovOutNomNum);
-      }
+      if (user.overrides.outNominal !== null) return user.overrides.outNominal;
       return platingAnnotation ? exportNominal + ' ' + platingAnnotation : exportNominal;
     })(),
     // Pin/Gage in export units (a hand-typed pin value is exported exactly as typed)

@@ -245,7 +245,7 @@ Drawing spec = final post-plating dimension. We compute the pre-plating machinin
 - **Pin/Gage export**: auto pin/gage is recomputed in export units for the CSV (screen stays in import units). A hand-typed pin value exports exactly as typed.
 - **Angles** (°/angle) are never unit-converted, on screen or in export.
 - **Note tolerances**: only a typed tolerance or one from the print. Title-block default / profile tolerances are never applied to notes.
-- **Typed OUT values win everywhere**: OUT Nominal / OUT spec overrides drive the export, OUT Nominal display and Pin/Gage. `test/export.test.js` guards this.
+- **Typed OUT values win**: a typed OUT spec drives the export, OUT Nominal display and Pin/Gage. A typed OUT Nominal exports exactly as typed (free field — no conversion, no plating) and never feeds any math. `test/export.test.js` guards this.
 
 ### Pin / Gage (equipment-dependent)
 The Pin/Gage column format depends on the selected Inspection Equipment:
