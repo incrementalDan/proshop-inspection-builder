@@ -109,10 +109,10 @@ TEST.runMathTests = function(log) {
 
   assert('4 decimal places', PSB.formatPrecision(1.23456, 4) === '1.2346');
   assert('3 decimal places', PSB.formatPrecision(1.23456, 3) === '1.235');
-  assert('0 value', PSB.formatPrecision(0, 4) === '.0000');
+  assert('0 value', PSB.formatPrecision(0, 4) === '0.0000');
   assert('NaN returns empty string', PSB.formatPrecision(NaN, 4) === '');
-  assert('Negative number', PSB.formatPrecision(-0.123, 3) === '-.123');
-  assert('Values < 1 drop leading zero', PSB.formatPrecision(0.5, 4) === '.5000');
+  assert('Negative number', PSB.formatPrecision(-0.123, 3) === '-0.123');
+  assert('Values < 1 keep leading zero', PSB.formatPrecision(0.5, 4) === '0.5000');
 
   // ── Pin Gage ─────────────────────────────────────────────
 

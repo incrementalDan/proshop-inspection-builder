@@ -72,6 +72,29 @@ var NOTE_PATTERNS = [
 // they are removed at import (Type 1 parsing).
 var COUNTERSINK_RE = /[⌄⌵]\s*/g;
 
+// Counterbore ⌴ and depth ↧ — ProShop supports these in Spec Unit 1,
+// so they move out of Drawing Spec into SU1 (Type 1 parsing).
+var HOLE_SU1_RE = /[⌴↧]/g;
+
+/**
+ * Pull counterbore/depth symbols out of text.
+ * @returns {{ symbols: string, text: string }}
+ */
+function extractHoleSymbols(text) {
+  var found = String(text || '').match(HOLE_SU1_RE) || [];
+  var unique = found.filter(function(c, i) { return found.indexOf(c) === i; });
+  return {
+    symbols: unique.join(''),
+    text: String(text || '').replace(/[⌴↧]\s*/g, '').trim(),
+  };
+}
+
+/** Prepend hole symbols to an existing SU1 ("⌴" + "Ø" → "⌴ Ø"). */
+function mergeSu1(symbols, su1) {
+  if (!symbols) return su1 || '';
+  return su1 ? symbols + ' ' + su1 : symbols;
+}
+
 // Spec Unit 2 keywords
 var SU2_KEYWORDS = [
   'THRU', 'DEEP', 'TYP', 'MIN', 'MAX',
@@ -135,12 +158,18 @@ function parseCSV(csvString) {
     var MINUS_VARIANTS = /[−–—‑]/g;
     if (rowObj.drawingSpec) {
       rowObj.drawingSpec = rowObj.drawingSpec.replace(COUNTERSINK_RE, '').trim();
+      var hole = extractHoleSymbols(rowObj.drawingSpec);
+      if (hole.symbols) {
+        rowObj.drawingSpec = hole.text;
+        rowObj.specUnit1 = mergeSu1(hole.symbols, rowObj.specUnit1);
+      }
       rowObj.drawingSpec = rowObj.drawingSpec.replace(MINUS_VARIANTS, '-');
       var dsNum = parseFloat(rowObj.drawingSpec);
       if (!isNaN(dsNum) && dsNum < 0) rowObj.drawingSpec = rowObj.drawingSpec.replace(/^-/, '');
     }
     if (rowObj.nominal) {
       rowObj.nominal = rowObj.nominal.replace(COUNTERSINK_RE, '').trim();
+      rowObj.nominal = extractHoleSymbols(rowObj.nominal).text;
       rowObj.nominal = rowObj.nominal.replace(MINUS_VARIANTS, '-');
       var nomNum = parseFloat(rowObj.nominal);
       if (!isNaN(nomNum) && nomNum < 0) rowObj.nominal = rowObj.nominal.replace(/^-/, '');
@@ -226,7 +255,8 @@ function detectFeatureType(drawingSpec) {
 function parseSpecUnits(text) {
   if (!text) return { su1: '', su2: '', su3: '', cleaned: '' };
 
-  var remaining = text.trim();
+  var hole = extractHoleSymbols(text.replace(COUNTERSINK_RE, ''));
+  var remaining = hole.text;
   var su1 = '';
   var su2 = '';
   var su3 = '';
@@ -271,7 +301,7 @@ function parseSpecUnits(text) {
   }
 
   return {
-    su1: su1,
+    su1: mergeSu1(hole.symbols, su1),
     su2: su2,
     su3: su3,
     cleaned: remaining.trim(),
