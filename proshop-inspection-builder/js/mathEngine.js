@@ -104,7 +104,7 @@ function convertUnits(value, fromUnit, toUnit) {
 
 /**
  * Format a number to a specific number of decimal places.
- * Removes leading zero for values between -1 and 1 (ProShop convention).
+ * Keeps the leading zero ("0.390") — screen and export match (RULES.md §5).
  *
  * @param {number} value
  * @param {number} decimalPlaces
@@ -112,11 +112,16 @@ function convertUnits(value, fromUnit, toUnit) {
  */
 function formatPrecision(value, decimalPlaces) {
   if (typeof value !== 'number' || isNaN(value)) return '';
-  const str = value.toFixed(decimalPlaces);
-  // Remove leading zero for values between -1 and 1 (ProShop convention)
-  if (str.startsWith('0.')) return str.slice(1);
-  if (str.startsWith('-0.')) return '-' + str.slice(2);
-  return str;
+  return value.toFixed(decimalPlaces);
+}
+
+/**
+ * Add a leading zero to bare decimals: ".390" → "0.390", "+.005 -.002" → "+0.005 -0.002".
+ * Only the zero is added — decimals are untouched.
+ */
+function addLeadingZero(str) {
+  if (!str) return str;
+  return String(str).replace(/(^|[^0-9])\.(\d)/g, '$10.$2');
 }
 
 /**
@@ -283,6 +288,7 @@ PSB.centerNominal = centerNominal;
 PSB.applyPlating = applyPlating;
 PSB.convertUnits = convertUnits;
 PSB.formatPrecision = formatPrecision;
+PSB.addLeadingZero = addLeadingZero;
 PSB.computePinGage = computePinGage;
 PSB.computeGageBlock = computeGageBlock;
 PSB.detectPrecision = detectPrecision;

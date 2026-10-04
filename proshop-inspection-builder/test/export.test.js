@@ -38,21 +38,21 @@ TEST.runExportTests = function(log) {
   r.user.overrides.outputSpec = '12.7';
   r.user.overrides.outputTolPlus = '0.05'; r.user.overrides.outputTolMinus = '0.05';
   e = exp(r, g);
-  assertEq('Typed OUT spec exports (no OP2000 value)', e['Drawing Spec'], '.5000');
-  assertEq('Typed OUT tol exports (no OP2000 value)', e['Tol ±'], '.0020');
+  assertEq('Typed OUT spec exports (no OP2000 value)', e['Drawing Spec'], '0.5000');
+  assertEq('Typed OUT tol exports (no OP2000 value)', e['Tol ±'], '0.0020');
 
   // Typed OUT Nominal
   g = globals(); r = row('10', '0.1');
   r.user.overrides.outNominal = '9.95';
   e = exp(r, g);
   assertEq('Typed OUT Nominal exports exactly as typed', e['Nom Dim'], '9.95');
-  assertEq('Typed OUT Nominal leaves Drawing Spec alone', e['Drawing Spec'], '.3937');
+  assertEq('Typed OUT Nominal leaves Drawing Spec alone', e['Drawing Spec'], '0.3937');
 
   // Angles never unit-converted
   g = globals(); r = row('45', '0.5', { specUnit2: '°' });
   e = exp(r, g);
   assertEq('Angle spec not converted, as printed', e['Drawing Spec'], '45');
-  assertEq('Angle tol not converted, as printed', e['Tol ±'], '.5');
+  assertEq('Angle tol not converted, as printed', e['Tol ±'], '0.5');
 
   // Pin/Gage follows typed OUT spec
   g = globals(); r = row('5', '0.01');
@@ -61,7 +61,7 @@ TEST.runExportTests = function(log) {
   assertEq('Pin/Gage uses typed OUT spec', r.computed.pinGage, 'P(Ø5.99+ | Ø6.01-)');
   assertEq('Pin/Gage on: OUT Nominal display = pin/gage from typed OUT spec', r.computed.outNominal, 'P(Ø5.99+ | Ø6.01-)');
   r.user.pinGageEnabled = false; PSB.recompute(r, g);
-  assertEq('OUT Nominal display follows typed OUT spec', r.computed.outNominal, '6 [.2362]');
+  assertEq('OUT Nominal display follows typed OUT spec', r.computed.outNominal, '6 [0.2362]');
 
   // Pin/Gage never uses OUT Nominal (free field)
   g = globals(); r = row('5', '0.01');
@@ -74,22 +74,22 @@ TEST.runExportTests = function(log) {
   r.user.pinGageEnabled = true; r.user.overrides.outNominal = 'OLD';
   e = exp(r, g);
   assertEq('Pin/Gage on: OUT Nominal display = pin/gage', r.computed.outNominal, 'P(Ø4.99+ | Ø5.01-)');
-  assertEq('Pin/Gage on: Nom Dim export = pin/gage', e['Nom Dim'], 'P(Ø.1965+ | Ø.1972-)');
+  assertEq('Pin/Gage on: Nom Dim export = pin/gage', e['Nom Dim'], 'P(Ø0.1965+ | Ø0.1972-)');
 
   // Plating on typed OUT spec: math applied same as calculated rows (10.5 + 2×0.254 mm)
   g = globals({ platingThickness: 0.01 }); r = row('10', '0.1');
   r.user.platingMode = '+2xI'; r.user.overrides.outputSpec = '10.5';
   e = exp(r, g);
-  assertEq('Typed OUT spec + plating: spec plated', e['Drawing Spec'], '.4334');
-  assertEq('Typed OUT spec + plating: Nom Dim plated + annotation', e['Nom Dim'], '.4334 (+2xI)');
-  assertEq('Typed OUT spec + plating: OUT Nominal display plated', r.computed.outNominal, '11.008 (+2xI) [.4334]');
+  assertEq('Typed OUT spec + plating: spec plated', e['Drawing Spec'], '0.4334');
+  assertEq('Typed OUT spec + plating: Nom Dim plated + annotation', e['Nom Dim'], '0.4334 (+2xI)');
+  assertEq('Typed OUT spec + plating: OUT Nominal display plated', r.computed.outNominal, '11.008 (+2xI) [0.4334]');
 
   // Pin/Gage exported in export units (screen stays in import units)
   g = globals(); r = row('5', '0.01');
   r.user.pinGageEnabled = true;
   e = exp(r, g);
   assertEq('Pin/Gage screen in import units', r.computed.pinGage, 'P(Ø4.99+ | Ø5.01-)');
-  assertEq('Pin/Gage export in export units', e['Nom Dim'], 'P(Ø.1965+ | Ø.1972-)');
+  assertEq('Pin/Gage export in export units', e['Nom Dim'], 'P(Ø0.1965+ | Ø0.1972-)');
   r.user.overrides.pinGageValue = 'P(Ø.19+ | Ø.20-)';
   e = exp(r, g);
   assertEq('Typed Pin/Gage exported as typed', e['Nom Dim'], 'P(Ø.19+ | Ø.20-)');
@@ -98,7 +98,7 @@ TEST.runExportTests = function(log) {
   g = globals({ platingThickness: 0.01 }); r = row('10', '0.1');
   r.user.platingMode = '+2xI';
   e = exp(r, g);
-  assertEq('Calculated plating keeps annotation', e['Nom Dim'], '.4137 (+2xI)');
+  assertEq('Calculated plating keeps annotation', e['Nom Dim'], '0.4137 (+2xI)');
 
   // Notes: typed tolerance exports, title-block default never does
   g = globals(); r = row('BREAK EDGES', '');

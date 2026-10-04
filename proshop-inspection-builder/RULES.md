@@ -72,11 +72,18 @@ Raw input → 1 Parse → 2 Overrides → [OP2000 values]
 | `2 HOLES`, `4 PLACES` | `2x`, `4x` in Spec Unit 3 | ProShop format |
 | `THRU`, `DEEP`, `TYP`, `°`… | Spec Unit 2 | ProShop format |
 | Countersink `⌄` / `⌵` in Drawing Spec | **Removed** | Blocks the number. ProShop handling unknown — revisit later |
+| Counterbore `⌴` / depth `↧` in Drawing Spec | **Moved to Spec Unit 1** (before `Ø`: `⌴ Ø`) | ProShop supports them in SU1. Number reads cleanly |
 | Thread (`M2.5 - 6H`, `1/4-20 UNC`, `M6x1`) | **Note**, tolerance **blank** in all OPs | GC puts junk in Tol (`2.5 - 6`) |
 | Text with no digits (`REMOVE SHARP EDGES`) | **Note** | Not measurable |
 | GD&T symbols, material/finish notes | **Note** | No math on notes |
 
 **Notes:** no math, ever. Tolerance only if typed or on the print — never a title-block default.
+
+| Note field | OP2000 | Other OPs |
+|---|---|---|
+| **Drawing Spec** | Print text (or typed OP2000 fix) | Typed OUT spec if set, else OP2000 text |
+| **Nom Dim** | = Drawing Spec | What GC gave, or typed OUT Nominal — else **blank** |
+| **Leading zero** | Never added to note text | Never added to note text |
 
 ---
 
@@ -94,7 +101,7 @@ Raw input → 1 Parse → 2 Overrides → [OP2000 values]
 
 **Why:** inch prints carry meaning in their decimals (`.25` ≠ `.250` for tolerancing). Math on a value must not be rounded away.
 
-- Leading zero is dropped on other OPs (`0.005` → `.005`). ProShop convention.
+- **Leading zero always shown** on dimensions, on screen and in every OP's export: `.390` → `0.390`. Only the zero is added — decimals never change. Screen and export always match.
 
 ---
 
