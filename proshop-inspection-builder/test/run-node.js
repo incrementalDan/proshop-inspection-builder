@@ -15,6 +15,7 @@ var ROOT = path.join(__dirname, '..');
 var FILES = [
   'js/mathEngine.js',
   'js/parser.js',
+  'js/units.js',
   'js/dataModel.js',
   'js/gdtParser.js',
   'js/ocrEngine.js',
@@ -26,6 +27,7 @@ var FILES = [
   'test/export.test.js',
   'test/fixtures/gcInchSample.js',
   'test/fixture.test.js',
+  'test/units.test.js',
 ];
 
 var ctx = { console: console };
@@ -41,6 +43,7 @@ var SUITES = [
   ['OCR Engine', 'runOcrTests'],
   ['Export', 'runExportTests'],
   ['Fixtures', 'runFixtureTests'],
+  ['Units', 'runUnitsTests'],
 ];
 
 function stripHtml(s) {

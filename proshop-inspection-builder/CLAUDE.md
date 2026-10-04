@@ -55,6 +55,7 @@ css/styles.css          — All styling, dark/light themes, CSS variables
 js/app.js               — App initialization, wires modules together, global state
 js/dataModel.js         — Row creation, recompute pipeline, state management
 js/parser.js            — CSV import, dimension text parsing, feature detection
+js/units.js             — Print units: detection, live title-block tol, safe unit change
 js/mathEngine.js        — Nominal centering, plating, unit conversion, precision
 js/ui.js                — Table rendering, sidebar, inline editing, theme toggle
 js/exportEngine.js      — ProShop CSV export generation
@@ -70,6 +71,7 @@ test/mathEngine.test.js — Math engine unit tests
 test/fixture.test.js    — Golden-file test + one test per RULES.md rule
 test/fixtures/          — Real input files (part numbers removed) + expected exports
 test/run-node.js        — Command-line test runner (node test/run-node.js)
+test/units.test.js      — Print units detection / unit change tests
 RULES.md                — Output rules and why (source of truth)
 docs/specs/             — Historical feature build specs (FAI, ballooning, GD&T)
 data/sample-input.csv   — Real Ground Control export (test fixture)
@@ -167,8 +169,8 @@ Override architecture for Spec/Tol:
 - Other editable fields: SU1, SU2, SU3, Output Nominal, Input Tolerance, Pin Gage.
 
 ## Global Settings (stored in app state, shown in header bar)
-- Import Units: mm or inch
-- Display Units: mm, inch, or both
+- Print Units (`importUnits`): mm or inch — the units the print is drawn in. Read via `PSB.getPrintUnits(globals)`. See RULES.md §10
+- `printUnitsConfirmed`: export is blocked until true
 - Plating Thickness: numeric value
 - Plating Units: mm or inch
 - Custom OP list: array of op numbers (e.g., [2000, 50, 60])

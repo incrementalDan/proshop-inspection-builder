@@ -567,47 +567,8 @@ function deleteDatumRef(id) {
  * title-block unit and the drawing (import) unit when they differ.
  */
 function lookupTitleBlockTol(spec, globals) {
-  if (!globals) return null;
-  spec = String(spec || '').trim();
-  if (!spec || !/\d/.test(spec)) return null;
-
-  var defaultTol = '';
-  var source = false;
-
-  if (globals.titleBlockTolGdt) {
-    // GD&T profile global override takes precedence over decimal-based entries.
-    defaultTol = globals.titleBlockTolGdt;
-    source = 'gdt-profile';
-  } else {
-    var decimals = PSB.detectPrecision ? PSB.detectPrecision(spec) : null;
-    if (decimals === null || decimals === 0) return null;
-    if      (decimals === 1 && globals.titleBlockTol1d) { defaultTol = globals.titleBlockTol1d; source = true; }
-    else if (decimals === 2 && globals.titleBlockTol2d) { defaultTol = globals.titleBlockTol2d; source = true; }
-    else if (decimals === 3 && globals.titleBlockTol3d) { defaultTol = globals.titleBlockTol3d; source = true; }
-    else if (decimals >= 4 && globals.titleBlockTol4d)  { defaultTol = globals.titleBlockTol4d; source = true; }
-  }
-
-  if (!defaultTol || !source) return null;
-
-  // Unit conversion: title block tolerances may be stored in a different unit
-  // than the drawing dimensions (importUnits). Convert if needed.
-  var tolUnits = globals.titleBlockTolUnits || 'inch';
-  var drawingUnits = globals.importUnits || 'inch';
-  var tolStr;
-  if (tolUnits === drawingUnits) {
-    // No conversion — use the entered string exactly to avoid floating-point noise.
-    tolStr = defaultTol;
-  } else if (PSB.convertUnits) {
-    var tolNum = parseFloat(defaultTol);
-    if (isNaN(tolNum)) return null;
-    tolNum = PSB.convertUnits(tolNum, tolUnits, drawingUnits);
-    var prec = (drawingUnits === 'mm') ? 3 : 4;
-    tolStr = tolNum.toFixed(prec).replace(/0+$/, '').replace(/\.$/, '') || tolNum.toString();
-  } else {
-    tolStr = defaultTol;
-  }
-
-  return { tol: tolStr, source: source };
+  // Shared with the math pipeline — see js/units.js
+  return PSB.lookupTitleBlockTol(spec, globals);
 }
 
 /**

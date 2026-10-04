@@ -329,7 +329,7 @@ function buildFaiFamilyHTML(row) {
   var appState = getAppState();
   var compareMode = (currentViewConfig && currentViewConfig.compareMode) || 'op2000';
   var warnThreshold = (appState && appState.globals && appState.globals.faiWarnThreshold) || 0.80;
-  var planUnits = (appState && appState.globals && appState.globals.importUnits) || 'inch';
+  var planUnits = PSB.getPrintUnits(appState && appState.globals);
   var isAngle = c.isAngle || false;
 
   // Plan tolerance values
@@ -1322,7 +1322,7 @@ function setupSidebarTolEdit(elementId, plusKey, minusKey, rowId, clearPlusKey, 
 
     var c = row.computed;
     var globals = state.globals || {};
-    var importUnits = globals.importUnits || 'mm';
+    var importUnits = PSB.getPrintUnits(globals);
     var prec = importUnits === 'inch' ? (globals.inchPrecision || 4) : (globals.mmPrecision || 3);
 
     var isOp2k = plusKey === 'outTolPlus';
@@ -1450,7 +1450,7 @@ function setupDualTolEdit(td, row, originalHTML) {
 
   var state = getAppState();
   var globals = state ? state.globals : {};
-  var importUnits = globals.importUnits || 'mm';
+  var importUnits = PSB.getPrintUnits(globals);
   var prec = importUnits === 'inch' ? (globals.inchPrecision || 4) : (globals.mmPrecision || 3);
 
   var plusStr = PSB.formatPrecision(plusVal, prec);

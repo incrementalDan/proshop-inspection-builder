@@ -70,8 +70,9 @@ function defaultGlobals() {
     faiWarnThreshold: 0.80,   // FAI warn threshold (fraction of tolerance band)
     cmmImportUnits: 'mm',     // units CMM report values are expressed in (mm | inch)
     cmmPartName: '',          // part name extracted from CMM report header
-    importUnits: 'mm',        // 'mm' or 'inch'
-    displayUnits: 'inch',     // 'mm', 'inch', or 'both'
+    importUnits: 'mm',        // PRINT units: 'mm' or 'inch' (RULES.md §10). Use PSB.getPrintUnits().
+    printUnitsConfirmed: false, // user confirmed print units — export is blocked until true
+    unitsMismatchDismissed: null, // detected unit the user chose to ignore ("Keep inch")
     exportUnits: 'inch',
     platingThickness: 0,
     platingUnits: 'inch',
@@ -328,15 +329,17 @@ function recompute(row, globals) {
   // Type 1 — Parsing: clean up raw data into correct columns
   // ══════════════════════════════════════════════════════════
   var specUnits = PSB.parseSpecUnits(raw.drawingSpec || '');
-  var tolParsed = PSB.parseTolerance(raw.toleranceText || raw.tolerance || '');
+  // Title-block "Default"/"Profile" balloon rows follow the title block live
+  var rawTolText = PSB.effectiveRawTolerance(row, globals);
+  var tolParsed = PSB.parseTolerance(rawTolText);
 
   var nominal = parseFloat(raw.nominalText || raw.nominal || raw.drawingSpec) || 0;
   var tolPlus = tolParsed.tolPlus;
   var tolMinus = tolParsed.tolMinus;
 
   // If tolerance was a single ± value from CSV
-  if (tolPlus === 0 && tolMinus === 0 && raw.tolerance) {
-    var t = parseFloat(raw.tolerance);
+  if (tolPlus === 0 && tolMinus === 0 && rawTolText) {
+    var t = parseFloat(rawTolText);
     if (!isNaN(t)) {
       tolPlus = t;
       tolMinus = t;
@@ -344,7 +347,7 @@ function recompute(row, globals) {
   }
 
   // ── Unit and precision settings (needed by Type 2 and all downstream) ──
-  var importUnits = globals.importUnits || 'mm';
+  var importUnits = PSB.getPrintUnits(globals);
   var secondaryUnits = importUnits === 'mm' ? 'inch' : 'mm';
   var primaryPrec = importUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
   var secondaryPrec = secondaryUnits === 'inch' ? globals.inchPrecision : globals.mmPrecision;
@@ -382,10 +385,10 @@ function recompute(row, globals) {
         op2000Tolerance = '+' + PSB.formatPrecision(ovPlus, ovTolDec) + ' -' + PSB.formatPrecision(ovMinus, ovTolDec);
       }
     } else {
-      op2000Tolerance = raw.tolerance || '';
+      op2000Tolerance = rawTolText;
     }
   } else {
-    op2000Tolerance = raw.tolerance || '';
+    op2000Tolerance = rawTolText;
   }
 
   // Feed OP2000 spec override into the numeric nominal so pipeline derives correctly
@@ -404,7 +407,7 @@ function recompute(row, globals) {
     if (isNaN(ovTpNum) && !isNaN(ovTmNum)) tolPlus = ovTmNum;
     if (isNaN(ovTmNum) && !isNaN(ovTpNum)) tolMinus = ovTpNum;
   }
-  var op2000InputTolerance = user.overrides.inputTolerance !== null ? user.overrides.inputTolerance : (raw.tolerance || '');
+  var op2000InputTolerance = user.overrides.inputTolerance !== null ? user.overrides.inputTolerance : rawTolText;
 
   // Store originals (pre-math) for reference
   var originalNominal = nominal;
@@ -432,8 +435,8 @@ function recompute(row, globals) {
     platingValue = globals.platingThickness;
 
     // Convert plating to same units as import if needed
-    if (globals.platingUnits !== globals.importUnits) {
-      platingValue = PSB.convertUnits(platingValue, globals.platingUnits, globals.importUnits);
+    if (globals.platingUnits !== importUnits) {
+      platingValue = PSB.convertUnits(platingValue, globals.platingUnits, importUnits);
     }
 
     nominal = PSB.applyPlating(nominal, platingValue, user.platingMode);
@@ -471,7 +474,7 @@ function recompute(row, globals) {
   if (printSpecDec === null) printSpecDec = PSB.countDecimals(raw.nominalText || raw.nominal || '');
   var printTolDec = hasOp2kTolOverride
     ? PSB.countDecimals(String(user.overrides.outTolPlus) + ' ' + String(user.overrides.outTolMinus))
-    : PSB.countDecimals(raw.toleranceText || raw.tolerance || '');
+    : PSB.countDecimals(rawTolText);
   var specChanged = Math.abs(nominal - originalNominal) > 1e-9;
   var tolChanged = Math.abs(tolPlus - originalTolPlus) > 1e-9 || Math.abs(tolMinus - originalTolMinus) > 1e-9;
   var specDec = keepDecimals(printSpecDec, specChanged, [nominal]);
@@ -479,7 +482,7 @@ function recompute(row, globals) {
   // No tolerance anywhere (print, typed) → Tol column stays blank, not ".0000"
   var noTolerance = !hasOp2kTolOverride &&
     user.overrides.outputTolPlus === null && user.overrides.outputTolMinus === null &&
-    String(raw.toleranceText || raw.tolerance || '').trim() === '';
+    String(rawTolText).trim() === '';
 
   // ── Dual-unit formatting ─────────────────────────────────
   var primaryNom = nominal;
