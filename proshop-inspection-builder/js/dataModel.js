@@ -158,7 +158,9 @@ function noteTolerances(raw, user) {
     return String(plus) === String(minus) ? String(plus) : '+' + plus + ' -' + minus;
   }
   var tolType = user.balloon && user.balloon.tolType;
-  var base = (tolType === 'default' || tolType === 'profile') ? '' : (raw.tolerance || '');
+  // Threads never carry a tolerance — Ground Control puts junk in Tol ("2.5 - 6").
+  var isThread = PSB.detectFeatureType(raw.drawingSpec || '') === 'thread';
+  var base = (tolType === 'default' || tolType === 'profile' || isThread) ? '' : (raw.tolerance || '');
   var op2000 = fmt(ov.outTolPlus, ov.outTolMinus);
   if (op2000 === null) op2000 = base;
   var out = fmt(ov.outputTolPlus, ov.outputTolMinus);
@@ -371,10 +373,13 @@ function recompute(row, globals) {
     if (isNaN(ovPlus) && !isNaN(ovMinus)) ovPlus = ovMinus;
     if (isNaN(ovMinus) && !isNaN(ovPlus)) ovMinus = ovPlus;
     if (!isNaN(ovPlus) && !isNaN(ovMinus)) {
+      // OP2000 is never converted — keep the decimals as typed
+      var ovTolDec = PSB.countDecimals(String(user.overrides.outTolPlus) + ' ' + String(user.overrides.outTolMinus));
+      if (ovTolDec === null) ovTolDec = primaryPrec;
       if (Math.abs(ovPlus - ovMinus) < 1e-10) {
-        op2000Tolerance = PSB.formatPrecision(ovPlus, primaryPrec);
+        op2000Tolerance = PSB.formatPrecision(ovPlus, ovTolDec);
       } else {
-        op2000Tolerance = '+' + PSB.formatPrecision(ovPlus, primaryPrec) + ' -' + PSB.formatPrecision(ovMinus, primaryPrec);
+        op2000Tolerance = '+' + PSB.formatPrecision(ovPlus, ovTolDec) + ' -' + PSB.formatPrecision(ovMinus, ovTolDec);
       }
     } else {
       op2000Tolerance = raw.tolerance || '';
@@ -443,6 +448,39 @@ function recompute(row, globals) {
     platingAnnotation = modeMap[user.platingMode] || '';
   }
 
+  // ── Precision (RULES.md "Precision") ─────────────────────
+  // Value stays in print units → keep the print's decimals.
+  // Math changed it (centering/plating) → at least the unit default,
+  // so the change isn't rounded away. Converted → unit default (export only).
+  function neededDecimals(v) {
+    for (var d = 0; d < 4; d++) {
+      if (Math.abs(Number(v.toFixed(d)) - v) < 1e-9) return d;
+    }
+    return 4;
+  }
+  function keepDecimals(printDec, changed, values) {
+    var floor = isAngle ? 0 : primaryPrec;
+    if (printDec === null) printDec = floor;
+    if (!changed) return printDec;
+    if (!isAngle) return Math.max(printDec, floor);
+    var d = printDec;
+    for (var i = 0; i < values.length; i++) d = Math.max(d, neededDecimals(values[i]));
+    return d;
+  }
+  var printSpecDec = PSB.countDecimals(op2000DrawingSpec);
+  if (printSpecDec === null) printSpecDec = PSB.countDecimals(raw.nominalText || raw.nominal || '');
+  var printTolDec = hasOp2kTolOverride
+    ? PSB.countDecimals(String(user.overrides.outTolPlus) + ' ' + String(user.overrides.outTolMinus))
+    : PSB.countDecimals(raw.toleranceText || raw.tolerance || '');
+  var specChanged = Math.abs(nominal - originalNominal) > 1e-9;
+  var tolChanged = Math.abs(tolPlus - originalTolPlus) > 1e-9 || Math.abs(tolMinus - originalTolMinus) > 1e-9;
+  var specDec = keepDecimals(printSpecDec, specChanged, [nominal]);
+  var tolDec = keepDecimals(printTolDec, tolChanged, [tolPlus, tolMinus]);
+  // No tolerance anywhere (print, typed) → Tol column stays blank, not ".0000"
+  var noTolerance = !hasOp2kTolOverride &&
+    user.overrides.outputTolPlus === null && user.overrides.outputTolMinus === null &&
+    String(raw.toleranceText || raw.tolerance || '').trim() === '';
+
   // ── Dual-unit formatting ─────────────────────────────────
   var primaryNom = nominal;
   var primaryTolPlus = tolPlus;
@@ -453,19 +491,21 @@ function recompute(row, globals) {
   var secondaryTolMinus = PSB.convertUnits(tolMinus, importUnits, secondaryUnits);
 
   // ── Precision formatting ─────────────────────────────────
-  var nominalStr = PSB.formatPrecision(primaryNom, primaryPrec);
-  var tolStr = PSB.formatPrecision(primaryTolPlus, primaryPrec);
+  var nominalStr = PSB.formatPrecision(primaryNom, specDec);
+  var tolStr = PSB.formatPrecision(primaryTolPlus, tolDec);
   var secNomStr = PSB.formatPrecision(secondaryNom, secondaryPrec);
   var secTolStr = PSB.formatPrecision(secondaryTolPlus, secondaryPrec);
 
   var dualNomStr = isAngle ? nominalStr + ' [Angle]' : (nominalStr + ' [' + secNomStr + ']');
   var dualTolStr;
-  if (isAngle) {
+  if (noTolerance) {
+    dualTolStr = '';
+  } else if (isAngle) {
     dualTolStr = tolStr;  // angles: no secondary unit
   } else if (Math.abs(primaryTolPlus - primaryTolMinus) < 1e-10) {
     dualTolStr = tolStr + ' [' + secTolStr + ']';
   } else {
-    var tolMinusStr = PSB.formatPrecision(primaryTolMinus, primaryPrec);
+    var tolMinusStr = PSB.formatPrecision(primaryTolMinus, tolDec);
     var secTolMinusStr = PSB.formatPrecision(secondaryTolMinus, secondaryPrec);
     dualTolStr = '+' + tolStr + ' -' + tolMinusStr + ' [+' + secTolStr + ' -' + secTolMinusStr + ']';
   }
@@ -519,6 +559,9 @@ function recompute(row, globals) {
 
   // ── Typed OUT spec (independent override) as a number ──
   var ovOutSpecNum = user.overrides.outputSpec !== null ? parseFloat(user.overrides.outputSpec) : NaN;
+  var typedSpecDec = keepDecimals(PSB.countDecimals(user.overrides.outputSpec), !!platingValue,
+    isNaN(ovOutSpecNum) ? [] : [applyPlatingIfAny(ovOutSpecNum)]);
+  function applyPlatingIfAny(v) { return platingValue ? PSB.applyPlating(v, platingValue, user.platingMode) : v; }
   // Typed OUT spec goes through plating exactly like a calculated nominal
   if (!isNaN(ovOutSpecNum) && platingValue) {
     ovOutSpecNum = PSB.applyPlating(ovOutSpecNum, platingValue, user.platingMode);
@@ -531,9 +574,9 @@ function recompute(row, globals) {
     var ovsNum = ovOutSpecNum;  // plated
     if (!isNaN(ovsNum)) {
       if (isAngle) {
-        outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [Angle]';
+        outDrawingSpec = PSB.formatPrecision(ovsNum, typedSpecDec) + ' [Angle]';
       } else {
-        outDrawingSpec = PSB.formatPrecision(ovsNum, primaryPrec) + ' [' +
+        outDrawingSpec = PSB.formatPrecision(ovsNum, typedSpecDec) + ' [' +
           PSB.formatPrecision(PSB.convertUnits(ovsNum, importUnits, secondaryUnits), secondaryPrec) + ']';
       }
     } else {
@@ -548,6 +591,7 @@ function recompute(row, globals) {
   var finalTolPlus = primaryTolPlus;
   var finalTolMinus = primaryTolMinus;
   var outTolerance;
+  var typedTolDec = null;
 
   if (hasOutTolOverride) {
     var outOvPlus = parseFloat(user.overrides.outputTolPlus);
@@ -557,12 +601,14 @@ function recompute(row, globals) {
     if (!isNaN(outOvPlus) && !isNaN(outOvMinus)) {
       finalTolPlus = outOvPlus;
       finalTolMinus = outOvMinus;
+      typedTolDec = PSB.countDecimals(String(user.overrides.outputTolPlus) + ' ' + String(user.overrides.outputTolMinus));
+      if (typedTolDec === null) typedTolDec = primaryPrec;
       if (Math.abs(outOvPlus - outOvMinus) < 1e-10) {
-        outTolerance = PSB.formatPrecision(outOvPlus, primaryPrec) + ' [' +
+        outTolerance = PSB.formatPrecision(outOvPlus, typedTolDec) + ' [' +
           PSB.formatPrecision(PSB.convertUnits(outOvPlus, importUnits, secondaryUnits), secondaryPrec) + ']';
       } else {
-        var ftp = PSB.formatPrecision(outOvPlus, primaryPrec);
-        var ftm = PSB.formatPrecision(outOvMinus, primaryPrec);
+        var ftp = PSB.formatPrecision(outOvPlus, typedTolDec);
+        var ftm = PSB.formatPrecision(outOvMinus, typedTolDec);
         var sftp = PSB.formatPrecision(PSB.convertUnits(outOvPlus, importUnits, secondaryUnits), secondaryPrec);
         var sftm = PSB.formatPrecision(PSB.convertUnits(outOvMinus, importUnits, secondaryUnits), secondaryPrec);
         outTolerance = '+' + ftp + ' -' + ftm + ' [+' + sftp + ' -' + sftm + ']';
@@ -579,15 +625,18 @@ function recompute(row, globals) {
   // Pin/Gage comes from Drawing Spec + Tol only (typed OUT spec wins over pipeline).
   // Never from OUT Nominal — Nom Dim is a free field (see CLAUDE.md).
   var pgNom = !isNaN(ovOutSpecNum) ? ovOutSpecNum : primaryNom;
+  var outSpecDec = !isNaN(ovOutSpecNum) ? typedSpecDec : specDec;
+  var outTolDec = typedTolDec !== null ? typedTolDec : tolDec;
+  var pgDec = Math.max(outSpecDec, outTolDec);
   var pinGageStr = '';
   var pinGageAutoStr = '';
   if (user.pinGageEnabled) {
     var pgIsAsym = Math.abs(finalTolPlus - finalTolMinus) >= 1e-10;
     if (user.inspectionEquipment === 'Gage Block' || pgIsAsym) {
-      var gb = PSB.computeGageBlock(pgNom, finalTolPlus, finalTolMinus, primaryPrec);
+      var gb = PSB.computeGageBlock(pgNom, finalTolPlus, finalTolMinus, pgDec);
       pinGageAutoStr = gb.formatted;
     } else {
-      var pg = PSB.computePinGage(pgNom, finalTolPlus, primaryPrec);
+      var pg = PSB.computePinGage(pgNom, finalTolPlus, pgDec);
       pinGageAutoStr = pg.formatted;
     }
     pinGageStr = user.overrides.pinGageValue !== null ? user.overrides.pinGageValue : pinGageAutoStr;
@@ -596,7 +645,7 @@ function recompute(row, globals) {
   var outNominal = dualNomStr;
   if (!isNaN(ovOutSpecNum)) {
     // Typed OUT spec (already plated above) — same format as a calculated nominal
-    var tsStr = PSB.formatPrecision(ovOutSpecNum, primaryPrec);
+    var tsStr = PSB.formatPrecision(ovOutSpecNum, typedSpecDec);
     var tsSec = isAngle ? 'Angle' : PSB.formatPrecision(PSB.convertUnits(ovOutSpecNum, importUnits, secondaryUnits), secondaryPrec);
     outNominal = tsStr + (platingAnnotation ? ' ' + platingAnnotation : '') + ' [' + tsSec + ']';
   } else if (platingAnnotation) {
@@ -620,10 +669,15 @@ function recompute(row, globals) {
 
   // ── Export values (export units, no brackets) ────────────
   // Angles are never unit-converted; they keep primary precision.
+  // Same units (or an angle) → screen decimals. Converted → unit default.
   var eu = globals.exportUnits || 'inch';
-  var ePrec = isAngle ? primaryPrec : (eu === 'inch' ? globals.inchPrecision : globals.mmPrecision);
+  var sameUnits = isAngle || eu === importUnits;
+  var euPrec = eu === 'inch' ? globals.inchPrecision : globals.mmPrecision;
+  var eSpecPrec = sameUnits ? outSpecDec : euPrec;
+  var eTolPrec = sameUnits ? outTolDec : euPrec;
+  var ePgPrec = sameUnits ? pgDec : euPrec;
   function toExport(v) {
-    return PSB.formatPrecision(isAngle ? v : PSB.convertUnits(v, importUnits, eu), ePrec);
+    return PSB.formatPrecision(isAngle ? v : PSB.convertUnits(v, importUnits, eu), eSpecPrec);
   }
   var exportNominal;
   if (user.overrides.outputSpec !== null) {
@@ -702,17 +756,18 @@ function recompute(row, globals) {
       var eTp = isAngle ? finalTolPlus : PSB.convertUnits(finalTolPlus, importUnits, eu);
       var eTm = isAngle ? finalTolMinus : PSB.convertUnits(finalTolMinus, importUnits, eu);
       if (user.inspectionEquipment === 'Gage Block' || Math.abs(finalTolPlus - finalTolMinus) >= 1e-10) {
-        return PSB.computeGageBlock(eNomPg, eTp, eTm, ePrec).formatted;
+        return PSB.computeGageBlock(eNomPg, eTp, eTm, ePgPrec).formatted;
       }
-      return PSB.computePinGage(eNomPg, eTp, ePrec).formatted;
+      return PSB.computePinGage(eNomPg, eTp, ePgPrec).formatted;
     })(),
     exportTolerance: (function() {
+      if (noTolerance) return '';
       var eTolPlus = isAngle ? finalTolPlus : PSB.convertUnits(finalTolPlus, importUnits, eu);
       var eTolMinus = isAngle ? finalTolMinus : PSB.convertUnits(finalTolMinus, importUnits, eu);
       if (Math.abs(eTolPlus - eTolMinus) < 1e-10) {
-        return PSB.formatPrecision(eTolPlus, ePrec);
+        return PSB.formatPrecision(eTolPlus, eTolPrec);
       }
-      return '+' + PSB.formatPrecision(eTolPlus, ePrec) + ' -' + PSB.formatPrecision(eTolMinus, ePrec);
+      return '+' + PSB.formatPrecision(eTolPlus, eTolPrec) + ' -' + PSB.formatPrecision(eTolMinus, eTolPrec);
     })(),
 
     status: user.status,
@@ -759,7 +814,8 @@ function getExportData(row, opNumber, globals) {
       'Spec Unit 2': computed.specUnit2,
       'Spec Unit 3': computed.specUnit3,
       'Inspec Equip': computed.inspectionEquipment || '',
-      'Nom Dim': computed.outNominal,
+      // OP2000 Nom Dim is always the Drawing Spec (RULES.md)
+      'Nom Dim': isOp2000 ? computed.op2000DrawingSpec : computed.outNominal,
       'Tol ±': isOp2000 ? computed.op2000Tolerance : computed.outTolerance,
       'IPC?': computed.ipc ? 'TRUE' : '',
       'Inspection Frequency': computed.inspectionFrequency || '',

@@ -51,29 +51,29 @@ TEST.runExportTests = function(log) {
   // Angles never unit-converted
   g = globals(); r = row('45', '0.5', { specUnit2: '°' });
   e = exp(r, g);
-  assertEq('Angle spec not converted', e['Drawing Spec'], '45.000');
-  assertEq('Angle tol not converted', e['Tol ±'], '.500');
+  assertEq('Angle spec not converted, as printed', e['Drawing Spec'], '45');
+  assertEq('Angle tol not converted, as printed', e['Tol ±'], '.5');
 
   // Pin/Gage follows typed OUT spec
   g = globals(); r = row('5', '0.01');
   r.user.pinGageEnabled = true; r.user.overrides.outputSpec = '6';
   PSB.recompute(r, g);
-  assertEq('Pin/Gage uses typed OUT spec', r.computed.pinGage, 'P(Ø5.990+ | Ø6.010-)');
-  assertEq('Pin/Gage on: OUT Nominal display = pin/gage from typed OUT spec', r.computed.outNominal, 'P(Ø5.990+ | Ø6.010-)');
+  assertEq('Pin/Gage uses typed OUT spec', r.computed.pinGage, 'P(Ø5.99+ | Ø6.01-)');
+  assertEq('Pin/Gage on: OUT Nominal display = pin/gage from typed OUT spec', r.computed.outNominal, 'P(Ø5.99+ | Ø6.01-)');
   r.user.pinGageEnabled = false; PSB.recompute(r, g);
-  assertEq('OUT Nominal display follows typed OUT spec', r.computed.outNominal, '6.000 [.2362]');
+  assertEq('OUT Nominal display follows typed OUT spec', r.computed.outNominal, '6 [.2362]');
 
   // Pin/Gage never uses OUT Nominal (free field)
   g = globals(); r = row('5', '0.01');
   r.user.pinGageEnabled = true; r.user.overrides.outNominal = '7';
   PSB.recompute(r, g);
-  assertEq('Pin/Gage ignores typed OUT Nominal', r.computed.pinGage, 'P(Ø4.990+ | Ø5.010-)');
+  assertEq('Pin/Gage ignores typed OUT Nominal', r.computed.pinGage, 'P(Ø4.99+ | Ø5.01-)');
 
   // Pin/Gage on → Nom Dim = pin/gage even if an old typed OUT Nominal exists
   g = globals(); r = row('5', '0.01');
   r.user.pinGageEnabled = true; r.user.overrides.outNominal = 'OLD';
   e = exp(r, g);
-  assertEq('Pin/Gage on: OUT Nominal display = pin/gage', r.computed.outNominal, 'P(Ø4.990+ | Ø5.010-)');
+  assertEq('Pin/Gage on: OUT Nominal display = pin/gage', r.computed.outNominal, 'P(Ø4.99+ | Ø5.01-)');
   assertEq('Pin/Gage on: Nom Dim export = pin/gage', e['Nom Dim'], 'P(Ø.1965+ | Ø.1972-)');
 
   // Plating on typed OUT spec: math applied same as calculated rows (10.5 + 2×0.254 mm)
@@ -88,7 +88,7 @@ TEST.runExportTests = function(log) {
   g = globals(); r = row('5', '0.01');
   r.user.pinGageEnabled = true;
   e = exp(r, g);
-  assertEq('Pin/Gage screen in import units', r.computed.pinGage, 'P(Ø4.990+ | Ø5.010-)');
+  assertEq('Pin/Gage screen in import units', r.computed.pinGage, 'P(Ø4.99+ | Ø5.01-)');
   assertEq('Pin/Gage export in export units', e['Nom Dim'], 'P(Ø.1965+ | Ø.1972-)');
   r.user.overrides.pinGageValue = 'P(Ø.19+ | Ø.20-)';
   e = exp(r, g);

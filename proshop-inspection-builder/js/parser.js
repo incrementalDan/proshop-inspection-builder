@@ -41,6 +41,7 @@ var GDT_SYMBOLS = [
 var THREAD_PATTERNS = [
   /\d+[\-\/]\d+\s*UN[CEFJS]/i,   // 1/4-20 UNC, 1-8 UNF
   /M\d+(\.\d+)?\s*[xX×]\s*\d/i,  // M6x1.0, M10X1.5
+  /\bM\d+(\.\d+)?\s*[-–]\s*\d+[A-Za-z]/,  // M2.5 - 6H (metric, coarse pitch implied, class given)
   /\d+[\-]\d+\s*ACME/i,           // 1-5 ACME
   /NPT/i,                          // NPT threads
   /BSPP/i,                         // BSPP threads
@@ -65,6 +66,11 @@ var NOTE_PATTERNS = [
   /INSPECT/i,
   /PACKAGE/i,
 ];
+
+// Countersink symbols. Ground Control puts these in Drawing Spec ("⌄ .248"),
+// which blocks the number from being read. ProShop handling is unknown, so
+// they are removed at import (Type 1 parsing).
+var COUNTERSINK_RE = /[⌄⌵]\s*/g;
 
 // Spec Unit 2 keywords
 var SU2_KEYWORDS = [
@@ -128,11 +134,13 @@ function parseCSV(csvString) {
     // Tolerance fields are intentionally NOT touched.
     var MINUS_VARIANTS = /[−–—‑]/g;
     if (rowObj.drawingSpec) {
+      rowObj.drawingSpec = rowObj.drawingSpec.replace(COUNTERSINK_RE, '').trim();
       rowObj.drawingSpec = rowObj.drawingSpec.replace(MINUS_VARIANTS, '-');
       var dsNum = parseFloat(rowObj.drawingSpec);
       if (!isNaN(dsNum) && dsNum < 0) rowObj.drawingSpec = rowObj.drawingSpec.replace(/^-/, '');
     }
     if (rowObj.nominal) {
+      rowObj.nominal = rowObj.nominal.replace(COUNTERSINK_RE, '').trim();
       rowObj.nominal = rowObj.nominal.replace(MINUS_VARIANTS, '-');
       var nomNum = parseFloat(rowObj.nominal);
       if (!isNaN(nomNum) && nomNum < 0) rowObj.nominal = rowObj.nominal.replace(/^-/, '');
@@ -197,6 +205,9 @@ function detectFeatureType(drawingSpec) {
   for (var i = 0; i < NOTE_PATTERNS.length; i++) {
     if (NOTE_PATTERNS[i].test(text)) return 'note';
   }
+
+  // Words with no digits at all ("REMOVE SHARP EDGES") → note
+  if (/[A-Za-z]/.test(text) && !/\d/.test(text)) return 'note';
 
   // Long text strings that aren't numeric → likely notes
   if (text.length > 20 && isNaN(parseFloat(text))) return 'note';
