@@ -633,17 +633,7 @@ function bindGlobalControls() {
   if (unitToggle) {
     unitToggle.addEventListener('click', function() {
       var isMm = unitToggle.getAttribute('aria-checked') === 'true';
-      var newUnit = isMm ? 'inch' : 'mm';
-      var oldUnit = state.globals.importUnits;
-      PSB.pushUndo(state, 'Units: ' + oldUnit + ' → ' + newUnit);
-      unitToggle.setAttribute('aria-checked', newUnit === 'mm' ? 'true' : 'false');
-      document.getElementById('import-units').value = newUnit;
-      state.globals.importUnits = newUnit;
-      PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Units: ' + oldUnit + ' → ' + newUnit, details: [{ field: 'importUnits', from: oldUnit, to: newUnit }] });
-      applyUnitColors(newUnit);
-      recomputeAll();
-      markDirty();
-      scheduleAutoSave();
+      setPrintUnits(isMm ? 'inch' : 'mm');
     });
     unitToggle.addEventListener('keydown', function(e) {
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); unitToggle.click(); }
@@ -652,12 +642,21 @@ function bindGlobalControls() {
 
   // Fallback: hidden select (for programmatic sync)
   document.getElementById('import-units').addEventListener('change', function(e) {
-    state.globals.importUnits = e.target.value;
-    syncUnitToggle(e.target.value);
-    applyUnitColors(e.target.value);
-    recomputeAll();
-    markDirty();
-    scheduleAutoSave();
+    setPrintUnits(e.target.value);
+  });
+
+  // Print units banner buttons (confirm / switch / keep)
+  document.getElementById('units-banner').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.units) setPrintUnits(btn.dataset.units);
+    if (btn.dataset.dismiss) {
+      // "Keep" on a mismatch warning — don't nag again for this guess
+      state.globals.unitsMismatchDismissed = btn.dataset.dismiss;
+      markDirty();
+      scheduleAutoSave();
+      refreshPrintUnitsUI();
+    }
   });
 
   // Plating thickness
@@ -718,6 +717,7 @@ function bindGlobalControls() {
 }
 
 function syncGlobalsToUI() {
+  refreshPrintUnitsUI();
   document.getElementById('import-units').value = state.globals.importUnits;
   syncUnitToggle(state.globals.importUnits);
   applyUnitColors(state.globals.importUnits);
@@ -742,6 +742,143 @@ function syncGlobalsToUI() {
   if (tb3) tb3.value = state.globals.titleBlockTol3d  || '';
   if (tb4) tb4.value = state.globals.titleBlockTol4d  || '';
   if (tbg) tbg.value = state.globals.titleBlockTolGdt || '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// PRINT UNITS (RULES.md §10)
+// Values stay in the units they were written in. Changing print units
+// RELABELS — nothing is converted, so no work is lost.
+// ═══════════════════════════════════════════════════════════
+var pdfTitleText = { name: null, text: '' };
+
+// Read page-1 text of the loaded PDF once (local only) for title block clues
+function loadPdfTitleText() {
+  var name = (PSB.hasPdf && PSB.hasPdf()) ? PSB.getPdfFileName() : null;
+  if (!name || pdfTitleText.name === name) return;
+  var doc = PSB.getPdfDoc && PSB.getPdfDoc();
+  if (!doc) return;
+  pdfTitleText = { name: name, text: '' };
+  doc.getPage(1).then(function(page) { return page.getTextContent(); }).then(function(content) {
+    if (pdfTitleText.name !== name) return;
+    pdfTitleText.text = content.items.map(function(i) { return i.str; }).join(' ');
+    refreshPrintUnitsUI();
+  }).catch(function() {});
+}
+
+function detectUnitsNow() {
+  return PSB.detectPrintUnits(PSB.unitSamplesFromRows(state.rows), pdfTitleText.text);
+}
+
+function unitName(u) { return u === 'inch' ? 'INCH' : 'MM'; }
+
+function unitButtonsHtml(primary, detected) {
+  var other = primary === 'inch' ? 'mm' : 'inch';
+  function b(u, cls, label) {
+    return '<button class="btn btn-small ' + cls + '" data-units="' + u + '">' + label +
+      (u === detected ? ' (detected)' : '') + '</button>';
+  }
+  return '<div class="units-banner-actions">' +
+    b(primary, 'btn-primary', 'Confirm ' + unitName(primary)) +
+    b(other, 'btn-secondary', 'Use ' + unitName(other)) + '</div>';
+}
+
+function refreshPrintUnitsUI() {
+  loadPdfTitleText();
+  var g = state.globals;
+  var cur = PSB.getPrintUnits(g);
+  var status = document.getElementById('print-units-status');
+  if (status) {
+    status.textContent = g.printUnitsConfirmed ? '✓ Confirmed' : '⚠ Not confirmed';
+    status.className = 'print-units-status' + (g.printUnitsConfirmed ? '' : ' unconfirmed');
+  }
+  var banner = document.getElementById('units-banner');
+  if (!banner) return;
+  if (!state.rows.length) { banner.classList.add('hidden'); return; }
+
+  var d = detectUnitsNow();
+  var why = d.reasons.length ? '<div class="units-banner-why">' + PSB.esc(d.reasons.slice(0, 3).join(' · ')) + '</div>' : '';
+  var html = '';
+  banner.classList.remove('mismatch');
+  if (!g.printUnitsConfirmed) {
+    var guess = d.units || cur;
+    html = '<div class="units-banner-msg">' +
+      (d.units
+        ? '⚠ Print units not confirmed. Looks like <strong>' + unitName(d.units) + '</strong>' + (d.confidence === 'low' ? ' (low confidence)' : '') + '.'
+        : '⚠ Print units not confirmed — could not tell from the values.') +
+      why + '</div>' + unitButtonsHtml(guess, d.units);
+  } else if (d.confidence === 'high' && d.units !== cur && g.unitsMismatchDismissed !== d.units) {
+    banner.classList.add('mismatch');
+    html = '<div class="units-banner-msg">⚠ Values look like <strong>' + unitName(d.units) +
+      '</strong>, but print units are <strong>' + unitName(cur) + '</strong>.' + why + '</div>' +
+      '<div class="units-banner-actions">' +
+      '<button class="btn btn-small btn-primary" data-units="' + d.units + '">Switch to ' + unitName(d.units) + '</button>' +
+      '<button class="btn btn-small btn-secondary" data-dismiss="' + d.units + '">Keep ' + unitName(cur) + '</button></div>';
+  }
+  banner.innerHTML = html;
+  banner.classList.toggle('hidden', !html);
+}
+
+var TYPED_KEY_LABELS = {
+  outDrawingSpec: 'OP2000 spec', outTolPlus: 'OP2000 tol +', outTolMinus: 'OP2000 tol −',
+  outputSpec: 'OUT spec', outputTolPlus: 'OUT tol +', outputTolMinus: 'OUT tol −',
+};
+
+/**
+ * Set (and confirm) the print units. Same units → just confirms.
+ * Different → relabel; if the user typed values, ask keep vs convert.
+ */
+function setPrintUnits(newUnits, onDone) {
+  var g = state.globals;
+  var oldUnits = PSB.getPrintUnits(g);
+
+  if (newUnits === oldUnits) {
+    if (!g.printUnitsConfirmed) {
+      PSB.pushUndo(state, 'Confirm print units: ' + newUnits);
+      g.printUnitsConfirmed = true;
+      PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Confirmed print units: ' + newUnits, details: [{ field: 'printUnitsConfirmed', from: 'false', to: 'true' }] });
+    }
+    g.unitsMismatchDismissed = null;
+    finishUnitsChange();
+    if (onDone) onDone();
+    return;
+  }
+
+  var apply = function(convert) {
+    PSB.pushUndo(state, 'Print units: ' + oldUnits + ' → ' + newUnits);
+    g.importUnits = newUnits;
+    g.printUnitsConfirmed = true;
+    g.unitsMismatchDismissed = null;
+    var n = convert ? PSB.convertTypedValues(state.rows, oldUnits, newUnits, g) : 0;
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null,
+      description: 'Print units: ' + oldUnits + ' → ' + newUnits + ' (relabeled' + (n ? ', converted ' + n + ' typed values' : '') + ')',
+      details: [{ field: 'importUnits', from: oldUnits, to: newUnits }] });
+    finishUnitsChange();
+    PSB.showToast('Print units: ' + unitName(newUnits) + ' — relabeled, nothing lost' + (n ? ', ' + n + ' typed values converted' : '') + '.', 'success');
+    if (onDone) onDone();
+  };
+
+  var typed = PSB.listTypedValues(state.rows);
+  if (!typed.length) { apply(false); return; }
+
+  document.getElementById('units-change-title').textContent = 'Change print units: ' + unitName(oldUnits) + ' → ' + unitName(newUnits);
+  document.getElementById('units-change-list').innerHTML = typed.map(function(t) {
+    return '<li>#' + PSB.esc(t.dimTag) + ' ' + (TYPED_KEY_LABELS[t.key] || t.key) + ': ' + PSB.esc(t.value) + '</li>';
+  }).join('');
+  var close = function() { PSB.closeModal('units-change-modal'); };
+  document.getElementById('units-change-keep').onclick = function() { close(); apply(false); };
+  document.getElementById('units-change-convert').onclick = function() { close(); apply(true); };
+  document.getElementById('units-change-cancel').onclick = function() { close(); syncUnitToggle(oldUnits); };
+  PSB.openModal('units-change-modal');
+}
+
+function finishUnitsChange() {
+  var u = PSB.getPrintUnits(state.globals);
+  document.getElementById('import-units').value = u;
+  syncUnitToggle(u);
+  applyUnitColors(u);
+  recomputeAll();
+  markDirty();
+  scheduleAutoSave();
 }
 
 function syncUnitToggle(unit) {
@@ -944,6 +1081,7 @@ function bindExportModal() {
   });
 
   document.getElementById('btn-export-confirm').addEventListener('click', function() {
+    if (!state.globals.printUnitsConfirmed) { renderExportGate(); return; }
     var checkboxes = document.querySelectorAll('#export-op-checkboxes input:checked');
     var selectedOps = [];
     for (var i = 0; i < checkboxes.length; i++) {
@@ -1017,7 +1155,29 @@ function openExportModal() {
     container.appendChild(label);
   }
 
+  renderExportGate();
   PSB.openModal('export-modal');
+}
+
+// Export is blocked until print units are confirmed — confirm right here.
+function renderExportGate() {
+  var gate = document.getElementById('export-units-gate');
+  var btn = document.getElementById('btn-export-confirm');
+  if (state.globals.printUnitsConfirmed) {
+    gate.classList.add('hidden');
+    btn.disabled = false;
+    return;
+  }
+  var d = detectUnitsNow();
+  var guess = d.units || PSB.getPrintUnits(state.globals);
+  gate.innerHTML = '<p><strong>Confirm print units to export.</strong> ' +
+    (d.units ? 'Looks like <strong>' + unitName(d.units) + '</strong>.' : 'Could not tell from the values.') +
+    ' What units is the print drawn in?</p>' + unitButtonsHtml(guess, d.units);
+  gate.classList.remove('hidden');
+  btn.disabled = true;
+  gate.querySelectorAll('button[data-units]').forEach(function(b) {
+    b.addEventListener('click', function() { setPrintUnits(b.dataset.units, renderExportGate); });
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1159,6 +1319,12 @@ function handleFileImport(content, fileName) {
       PSB.resetIdCounter();
       state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
       state.auditLog = [];
+      // Guess print units from the values; user must confirm before export
+      var unitGuess = PSB.detectPrintUnits(PSB.unitSamplesFromRows(state.rows));
+      if (unitGuess.units) state.globals.importUnits = unitGuess.units;
+      state.globals.printUnitsConfirmed = false;
+      state.globals.unitsMismatchDismissed = null;
+      syncGlobalsToUI();
       importedFileName = fileName;
       PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'Imported ' + state.rows.length + ' rows from ' + fileName });
       recomputeAll();
@@ -1342,6 +1508,7 @@ function recomputeAll() {
   }
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   updateFaiTabBadge();
+  refreshPrintUnitsUI();
 
   // Refresh sidebar if a row is selected so values stay in sync
   var selId = PSB.getSelectedRowId();
@@ -1424,7 +1591,7 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
 
   PSB.pushUndo(state, 'Import CMM run: ' + fileName);
 
-  var planUnits = state.globals.importUnits || 'mm';
+  var planUnits = PSB.getPrintUnits(state.globals);
   var needConvert = cmmUnits !== planUnits;
 
   var runId = 'run_' + Date.now();

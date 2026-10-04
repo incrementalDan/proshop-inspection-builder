@@ -139,26 +139,61 @@ Raw input → 1 Parse → 2 Overrides → [OP2000 values]
 
 ---
 
-## 10. Units — how it works today
+## 10. Print units
 
-- **All math runs in the print's units** (`globals.importUnits`, the mm/inch toggle).
-- **Conversion happens only at the edges:** the `[bracket]` value on screen, and the export.
-- Typed values are assumed to be in print units.
+**Model:** every value stays in the units it was written in. Like a label on a parts bin — the parts don't change when you relabel the bin.
 
-### Known problems (to fix next)
+- **Print units** (`globals.importUnits`, mm/in toggle) = the units the print is drawn in.
+- **All math runs in print units.** Conversion happens only at the edges: the `[bracket]` value on screen, and the export.
+- **Typed values** are in print units.
+- **Not "everything in mm"** — that would lose print decimals and add rounding noise.
 
-- **Default is mm.** Forget to flip it on an inch print → everything ~25× wrong, silently.
-- **6 separate unit settings** (import, export, display, plating, title block, CMM). Code disagrees on which fallback to use (`'mm'` vs `'inch'`).
-- **Title-block default tol** is converted once at balloon time and stored. Flip units later → stale value.
+### Detect → confirm → export
 
-### Planned direction
+| Step | What happens |
+|---|---|
+| **Import** | App guesses units from the values and sets them. Status: **not confirmed**. |
+| **Banner** | "Looks like INCH — Confirm / Use MM", with the reasons. |
+| **Export** | **Blocked** until confirmed. You can confirm right in the export dialog. |
+| **Old projects** | Open with their saved units, **not confirmed**. |
 
-- Every number keeps the unit it was written in (like a label on a parts bin).
-- Convert only at the edges: screen and export.
-- One clear **Print Units** setting, required on import, with no silent default.
-- Not "everything in mm" — that loses print decimals and adds rounding noise.
+Detection clues (title block text from the PDF beats everything):
 
----
+| Clue | Points to |
+|---|---|
+| "DIMENSIONS ARE IN INCHES / MM" on the PDF | That unit (decisive) |
+| Leading dot `.390` | Inch |
+| 3–4 decimals | Inch |
+| 1–2 decimals | mm |
+| Value > 50 | mm |
+| Tolerance < .02 | Inch |
+| Tolerance ≥ .05 | mm |
+
+- Notes, angles and metric threads are ignored (inch prints use M-threads too).
+- **High confidence** = enough clues, 80%+ agree.
+
+### Changing print units later
+
+- **Relabel, never convert** the print values. Nothing is lost: overrides, balloons, plating, frequencies, tags all stay.
+- **Values you typed** get a review list: **Keep as typed** (default) or **Convert them**.
+- Undo works.
+
+### Mismatch warning
+
+- After confirming, the detector keeps checking.
+- Confident the values look like the *other* unit → red banner: "Switch / Keep".
+- "Keep" silences it until units change.
+
+### Other unit settings
+
+| Setting | Why it's separate |
+|---|---|
+| **Export units** | What ProShop/the machinist wants. Chosen at export. |
+| **Plating units** | Plating spec is often in a different unit than the print. |
+| **Title block units** | Title block tolerances entered in their own unit. Converted **live** when used — never stored, so never stale. |
+| **CMM units** | Units of the CMM report. |
+
+- Balloon rows set to **Default / Profile** tolerance follow the title block live.
 
 ## 11. Changing a rule
 

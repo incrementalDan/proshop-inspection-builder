@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=40">
+  <link rel="stylesheet" href="css/styles.css?v=41">
 </head>
 <body>
 
@@ -127,6 +127,9 @@
         </div>
       </div>
       <div id="pdf-resizer" class="hidden"></div>
+
+      <!-- Print units banner (unconfirmed / mismatch) — filled by app.js -->
+      <div id="units-banner" class="units-banner hidden" role="status"></div>
 
       <!-- Data Table -->
       <div id="table-container">
@@ -355,13 +358,14 @@
 
         <!-- Import Units -->
         <fieldset class="setup-panel-section">
-          <legend>Import Units</legend>
+          <legend>Print Units</legend>
           <div class="control-group">
-            <div id="unit-toggle" class="unit-toggle" tabindex="0" role="switch" aria-checked="true">
+            <div id="unit-toggle" class="unit-toggle" tabindex="0" role="switch" aria-checked="true" title="Units the print is drawn in. Changing this relabels — nothing is converted.">
               <span class="unit-toggle-option unit-toggle-mm">mm</span>
               <span class="unit-toggle-option unit-toggle-in">in</span>
               <span class="unit-toggle-thumb"></span>
             </div>
+            <span id="print-units-status" class="print-units-status"></span>
           </div>
         </fieldset>
 
@@ -469,6 +473,7 @@
         <button id="export-close" class="btn btn-icon">✕</button>
       </div>
       <div class="modal-body">
+        <div id="export-units-gate" class="export-units-gate hidden"></div>
         <fieldset>
           <legend>Select OPs to Export</legend>
           <div id="export-op-checkboxes"></div>
@@ -498,6 +503,25 @@
         <div class="confirm-modal-actions">
           <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
           <button id="confirm-modal-ok" class="btn btn-primary">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print units change — review typed values -->
+  <div id="units-change-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="units-change-title">Change print units</h2>
+      </div>
+      <div class="modal-body">
+        <p>Print values are <strong>relabeled, not converted</strong> — your work is kept.</p>
+        <p>These values were <strong>typed by you</strong>. Keep them as typed, or convert them?</p>
+        <ul id="units-change-list" class="units-change-list"></ul>
+        <div class="confirm-modal-actions">
+          <button id="units-change-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="units-change-convert" class="btn btn-secondary">Convert them</button>
+          <button id="units-change-keep" class="btn btn-primary">Keep as typed</button>
         </div>
       </div>
     </div>
@@ -630,22 +654,23 @@
   <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
   <script src="lib/pdf-lib.min.js"></script>
 
-  <script src="lib/pdf-lib.min.js?v=40"></script>
-  <script src="js/mathEngine.js?v=40"></script>
-  <script src="js/parser.js?v=40"></script>
-  <script src="js/dataModel.js?v=40"></script>
-  <script src="js/exportEngine.js?v=40"></script>
-  <script src="js/storage.js?v=40"></script>
-  <script src="js/history.js?v=40"></script>
-  <script src="js/pdfViewer.js?v=40"></script>
-  <script src="js/cmmParser.js?v=40"></script>
-  <script src="js/gdtParser.js?v=40"></script>
-  <script src="js/ocrEngine.js?v=40"></script>
-  <script src="js/tolModeInput.js?v=40"></script>
-  <script src="js/balloonManager.js?v=40"></script>
-  <script src="js/pdfExport.js?v=40"></script>
-  <script src="js/ui.js?v=40"></script>
-  <script src="js/app.js?v=40"></script>
+  <script src="lib/pdf-lib.min.js?v=41"></script>
+  <script src="js/mathEngine.js?v=41"></script>
+  <script src="js/parser.js?v=41"></script>
+  <script src="js/units.js?v=41"></script>
+  <script src="js/dataModel.js?v=41"></script>
+  <script src="js/exportEngine.js?v=41"></script>
+  <script src="js/storage.js?v=41"></script>
+  <script src="js/history.js?v=41"></script>
+  <script src="js/pdfViewer.js?v=41"></script>
+  <script src="js/cmmParser.js?v=41"></script>
+  <script src="js/gdtParser.js?v=41"></script>
+  <script src="js/ocrEngine.js?v=41"></script>
+  <script src="js/tolModeInput.js?v=41"></script>
+  <script src="js/balloonManager.js?v=41"></script>
+  <script src="js/pdfExport.js?v=41"></script>
+  <script src="js/ui.js?v=41"></script>
+  <script src="js/app.js?v=41"></script>
 
 </body>
 </html>

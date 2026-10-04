@@ -3087,3 +3087,34 @@ tr.row-flash {
   align-items: center;
   gap: 6px;
 }
+
+/* ── Print units banner + export gate (RULES.md §10) ───────── */
+.units-banner {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border-left: 4px solid var(--accent-yellow);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.units-banner.mismatch { border-left-color: var(--accent-red); }
+.units-banner .units-banner-msg { flex: 1 1 260px; }
+.units-banner .units-banner-why { color: var(--text-muted); font-size: 12px; }
+.units-banner .units-banner-actions { display: flex; gap: 6px; }
+.print-units-status { display: block; margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.print-units-status.unconfirmed { color: var(--accent-yellow); }
+.export-units-gate {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--accent-yellow);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+}
+.export-units-gate p { margin: 0 0 8px; }
+.export-units-gate .units-banner-actions { display: flex; gap: 6px; }
+.units-change-list { max-height: 200px; overflow: auto; font-family: var(--font-mono); font-size: 12px; margin: 8px 0 14px; padding-left: 18px; }
+#btn-export-confirm:disabled { opacity: 0.45; cursor: not-allowed; }
