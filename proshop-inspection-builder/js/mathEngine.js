@@ -205,6 +205,30 @@ function detectPrecision(str) {
 }
 
 /**
+ * Largest number of decimal places among the numbers in a string.
+ * Unlike detectPrecision, works on tolerance text too.
+ *
+ *   "0.005"          → 3
+ *   "+.005 -.0020"   → 4
+ *   "90"             → 0
+ *   "THRU"           → null
+ *
+ * @param {string|number} str
+ * @returns {number|null}
+ */
+function countDecimals(str) {
+  if (str === null || str === undefined) return null;
+  var nums = String(str).match(/\d*\.?\d+/g);
+  if (!nums) return null;
+  var max = 0;
+  for (var i = 0; i < nums.length; i++) {
+    var dot = nums[i].indexOf('.');
+    if (dot >= 0) max = Math.max(max, nums[i].length - dot - 1);
+  }
+  return max;
+}
+
+/**
  * Compute FAI pass/warn/fail status for a single measurement.
  *
  * @param {number} measured
@@ -262,5 +286,6 @@ PSB.formatPrecision = formatPrecision;
 PSB.computePinGage = computePinGage;
 PSB.computeGageBlock = computeGageBlock;
 PSB.detectPrecision = detectPrecision;
+PSB.countDecimals = countDecimals;
 PSB.computeFaiStatus = computeFaiStatus;
 PSB.computeAggregateStatus = computeAggregateStatus;
