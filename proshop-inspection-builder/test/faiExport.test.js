@@ -150,6 +150,34 @@ TEST.runFaiExportTests = function(log) {
   assertEq('Pass/Fail column', col(res.files[0], 'Pass/Fail'), 'PASS');
   assertEq('Deviation column', col(res.files[0], 'Deviation'), '0.0040');
 
+  // ── File name / Part # ──────────────────────────────────
+  st = makeState();
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }] }));
+  assertEq('File name: {part} from CMM header', res.files[0].fileName, 'PART-0000_FAI.csv');
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }], partNumber: '1500AS252 Rev C' }));
+  assertEq('File name: typed Part # wins', res.files[0].fileName, '1500AS252 Rev C_FAI.csv');
+  st.globals.cmmPartName = '';
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }] }));
+  assertEq('File name: nothing known → Part', res.files[0].fileName, 'Part_FAI.csv');
+
+  res = PSB.buildFaiExport(st, settings({ runMode: 'all', fileMode: 'one', fileNamePattern: '{run}_{part}' }));
+  assertEq('File name: no stray leading _', res.files[0].fileName, 'Part.csv');
+
+  // ── Combine + unmatched: no repeats ─────────────────────
+  st = makeState();
+  st.faiRuns[1].unmatchedRows = [Object.assign({}, st.faiRuns[0].unmatchedRows[0], { measured: -0.07 })];
+  res = PSB.buildFaiExport(st, settings({ runMode: 'combine', runs: [{ id: 'B', on: true }, { id: 'A', on: true }], includeUnmatched: true }));
+  assertEq('Combine: unmatched value once, from top run', res.files[0].records.filter(function(r) { return r['Dim Tag #'] === ''; }).map(function(r) { return r['Measured']; }).join('|'), '-0.0028'); // run B is mm → inch
+
+  // ── Unilateral tolerance + measurement units ────────────
+  st = makeState();
+  st.rows[0].fai.measurements = [meas('A', '#7 Diameter_Cyl1', 0.145, 0.142, 0.006, { minusTol: -0.002 })];
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }] }));
+  assertEq('Unilateral: CMM Tol Lower keeps + sign', res.files[0].records[0]['CMM Tol Lower'], '0.0020');
+  st.rows[0].fai.measurements[0].units = 'mm';
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }] }));
+  assertEq('Export converts from the measurement\'s own units', res.files[0].records[0]['Measured'], '0.0057');
+
   // ── Settings sync ───────────────────────────────────────
   st = makeState();
   st.globals.faiExport = { runs: [{ id: 'gone', on: true }, { id: 'B', on: false }], equipment: 'CMM003' };

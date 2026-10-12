@@ -46,7 +46,9 @@ function buildCmmRow(name, nums) {
     measured: parseFloat(nums[0]),
     nominal: parseFloat(nums[1]),
     plusTol: parseFloat(nums[2]),
-    minusTol: Math.abs(parseFloat(nums[3])),
+    // -Tol column is the signed lower deviation. minusTol = how far BELOW nominal
+    // the lower limit sits, so a unilateral "+0.005" lower tol → minusTol -0.005.
+    minusTol: -parseFloat(nums[3]) || 0,
     deviation: parseFloat(nums[4]),
   };
 }
@@ -113,6 +115,9 @@ function parseCmmHeader(rawText) {
     if (!partName) {
       var pm = line.match(/^Part\s+name\s+(.+)$/i);
       if (pm) partName = pm[1].trim();
+      // Labels-then-values layout: "Part name" alone, more labels, then the values.
+      // The first line after the label block is the part name.
+      else if (/^Part\s+name$/i.test(line)) partName = cmmHeaderValueAfter(lines, i);
     }
 
     if (!dateStr) {
@@ -124,6 +129,19 @@ function parseCmmHeader(rawText) {
   }
 
   return { partName: partName, dateStr: dateStr };
+}
+
+var CMM_HEADER_LABEL_RE = /^\d*\s*(Part\s+name|Order\s+number|Part\s+ident|Operator|Time\/Date|Drawing\s+(no\.?|number))$/i;
+
+function cmmHeaderValueAfter(lines, i) {
+  for (var j = i + 1; j < lines.length; j++) {
+    if (CMM_HEADER_LABEL_RE.test(lines[j])) continue;
+    // Blank values are skipped in the report, so this line may belong to a
+    // later field (operator, date…). Part numbers have digits — trust only those.
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(lines[j])) return '';
+    return /\d/.test(lines[j]) ? lines[j] : '';
+  }
+  return '';
 }
 
 PSB.parseCmmHeader = parseCmmHeader;

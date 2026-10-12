@@ -238,8 +238,8 @@ function countDecimals(str) {
  *
  * @param {number} measured
  * @param {number} nominal
- * @param {number} plusTol   — positive number, upper limit
- * @param {number} minusTol  — positive number, lower limit magnitude
+ * @param {number} plusTol   — upper limit = nominal + plusTol (may be negative)
+ * @param {number} minusTol  — lower limit = nominal - minusTol (negative = lower limit above nominal)
  * @param {number} warnThreshold — fraction of tolerance band used before warn (default 0.8)
  * @returns {'pass'|'warn'|'fail'}
  */
@@ -339,6 +339,32 @@ function refreshFaiStatus(row, warnThreshold) {
   row.fai.aggregateStatus = computeAggregateStatus(ms);
 }
 
+/**
+ * Keep a row's CMM measurements in print units.
+ * Measurements are real sizes, not print text — when print units change they
+ * must be converted (unlike print values, which are relabeled). Each
+ * measurement remembers its units in m.units; old ones without it are
+ * assumed to already be in print units. Angles are never converted.
+ *
+ * @returns {boolean} true if anything was converted
+ */
+function syncFaiUnits(row, printUnits) {
+  if (!row || !row.fai || !row.fai.measurements) return false;
+  var changed = false;
+  var rowIsAngle = !!(row.computed && row.computed.isAngle);
+  row.fai.measurements.forEach(function(m) {
+    var from = m.units || printUnits;
+    if (from !== printUnits && !rowIsAngle && !/angle|°/i.test(m.cmmName || '')) {
+      ['measured', 'nominal', 'deviation', 'plusTol', 'minusTol'].forEach(function(k) {
+        if (typeof m[k] === 'number') m[k] = convertUnits(m[k], from, printUnits);
+      });
+      changed = true;
+    }
+    m.units = printUnits;
+  });
+  return changed;
+}
+
 // ── Export to namespace ───────────────────────────────────
 PSB.centerNominal = centerNominal;
 PSB.applyPlating = applyPlating;
@@ -354,3 +380,4 @@ PSB.computeAggregateStatus = computeAggregateStatus;
 PSB.getFaiLimits = getFaiLimits;
 PSB.computeFaiMeasurementStatus = computeFaiMeasurementStatus;
 PSB.refreshFaiStatus = refreshFaiStatus;
+PSB.syncFaiUnits = syncFaiUnits;

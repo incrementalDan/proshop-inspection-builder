@@ -51,6 +51,7 @@ function defaultFaiExportSettings() {
     includeSourceRun: false,
     includeCmmName: false,
     fileNamePattern: '{part}_FAI',
+    partNumber: '',             // typed Part # for {part}; blank = auto
   };
 }
 
@@ -112,10 +113,13 @@ function faiBandUsed(entry) {
   var lim = entry.row
     ? PSB.getFaiLimits(entry.row.computed, m, 'op2000')
     : { nominal: m.nominal, plusTol: m.plusTol, minusTol: m.minusTol };
-  var dev = m.measured - lim.nominal;
-  var tol = dev >= 0 ? lim.plusTol : lim.minusTol;
-  if (!tol) return dev === 0 ? 0 : Infinity;
-  return Math.abs(dev) / tol;
+  // Measured from the middle of the tolerance zone, so unilateral tols score right
+  var upper = lim.nominal + lim.plusTol;
+  var lower = lim.nominal - lim.minusTol;
+  var half = (upper - lower) / 2;
+  var off = Math.abs(m.measured - (upper + lower) / 2);
+  if (!(half > 0)) return off === 0 ? 0 : Infinity;
+  return off / half;
 }
 
 function faiPickDuplicates(list, rule) {
@@ -173,7 +177,7 @@ function faiGatherEntries(state, runs, s) {
         row: row,
         m: m,
         runId: m.runId,
-        fromUnits: printUnits,
+        fromUnits: m.units || printUnits,
         isAngle: FAI_ANGLE_RE.test(m.cmmName || '') || !!row.computed.isAngle,
       });
     });
@@ -209,6 +213,15 @@ function faiSelectEntries(entries, runs, s, combine) {
 
   var matched = entries.filter(function(e) { return e.matched; });
   var unmatched = entries.filter(function(e) { return !e.matched; });
+  if (combine) {
+    // No dim tag to rank by — same CMM name from a lower run is a repeat
+    var topRank = {};
+    unmatched.forEach(function(e) {
+      var k = e.m.cmmName || '';
+      if (!(k in topRank) || rank[e.runId] < topRank[k]) topRank[k] = rank[e.runId];
+    });
+    unmatched = unmatched.filter(function(e) { return rank[e.runId] === topRank[e.m.cmmName || '']; });
+  }
 
   var groups = {}; // key → entries
   var order = [];
@@ -302,7 +315,7 @@ function faiEntryRecord(entry, s, state, runsById) {
     'Equipment Used': (m.equipment || '').trim() || s.equipment || '',
     'CMM Nominal': val(m.nominal),
     'CMM Tol Upper': val(m.plusTol),
-    'CMM Tol Lower': typeof m.minusTol === 'number' ? val(-Math.abs(m.minusTol)) : '',
+    'CMM Tol Lower': typeof m.minusTol === 'number' ? val(-m.minusTol) : '',
     'Deviation': val(m.deviation),
     'Pass/Fail': faiPassFail(entry),
     'Source Run': run ? (run.label || run.fileName || run.id) : '',
@@ -327,11 +340,17 @@ function faiMissingRecords(state, picked, runLabel) {
   return out;
 }
 
-function faiFileName(s, state, runLabel) {
+/** {part} when none is typed: CMM report header, then project file name. */
+function faiAutoPartName(state) {
   var part = (state.globals.cmmPartName || '').trim();
   if (!part && PSB.getProjectFileName) {
     part = (PSB.getProjectFileName() || '').replace(/\.[^.]+$/, '');
   }
+  return part;
+}
+
+function faiFileName(s, state, runLabel) {
+  var part = (s.partNumber || '').trim() || faiAutoPartName(state);
   var d = new Date();
   var date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   var pattern = s.fileNamePattern || '{part}_FAI';
@@ -340,7 +359,7 @@ function faiFileName(s, state, runLabel) {
     .replace(/\{part\}/g, part || 'Part')
     .replace(/\{date\}/g, date)
     .replace(/\{run\}/g, runLabel || '');
-  return faiSafeFileName(name.replace(/_+$/, '')) + '.csv';
+  return faiSafeFileName(name.replace(/^[_\-\s]+|[_\-\s]+$/g, '')) + '.csv';
 }
 
 // ── Build ─────────────────────────────────────────────────
@@ -420,3 +439,4 @@ PSB.FAI_PROSHOP_COLUMNS = FAI_PROSHOP_COLUMNS;
 PSB.defaultFaiExportSettings = defaultFaiExportSettings;
 PSB.getFaiExportSettings = getFaiExportSettings;
 PSB.buildFaiExport = buildFaiExport;
+PSB.faiAutoPartName = faiAutoPartName;

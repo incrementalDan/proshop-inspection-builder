@@ -215,6 +215,17 @@ Detection clues (title block text from the PDF beats everything):
   - Re-tagged rows show `#old → new`.
   - The measurement moves. The CMM name is never changed. The original tag is kept on the measurement.
 
+### Units
+- CMM values are stored in **print units** (converted at import, never angles).
+- **Print units changed later** → CMM values are **converted**, not relabeled. They are real measured sizes, not print text.
+  - Each measurement remembers its units. Old projects: assumed already in print units.
+
+### CMM tolerance
+- The CMM's **-Tol** is the signed lower deviation. Kept with its sign.
+  - `-0.005` → lower limit 0.005 **below** nominal (normal).
+  - `+0.005` → lower limit 0.005 **above** nominal (unilateral, e.g. `+.010 / +.005`).
+- **Measured / nominal** are made positive at import (X/Y/Z included) — wanted.
+
 ### Pass / fail
 - **Plan tolerance wins** when the plan row has one.
 - **No plan tolerance** (or no numeric nominal) → grade with the CMM's own nominal + tolerance.
@@ -234,7 +245,7 @@ Export FAI button in FAI view. **Options save with the project** (`globals.faiEx
 | **Measured** | The measured number only |
 | **Equipment Used** | Optional. Default `CMM008`, or free text. A per-measurement equipment value wins |
 | **CMM Nominal** | CMM's nominal. ProShop ignores it — kept for the record |
-| **CMM Tol Upper / Lower** | CMM's tolerance, separate columns. Lower is negative (`-0.0050`) |
+| **CMM Tol Upper / Lower** | CMM's tolerance, separate columns, signed limits. Normal lower is negative (`-0.0050`); unilateral keeps `+` |
 | Optional | Deviation, Pass/Fail, Source Run, CMM Name — off by default |
 
 ### Runs
@@ -252,14 +263,18 @@ Export FAI button in FAI view. **Options save with the project** (`globals.faiEx
 |---|---|---|
 | **Units** | Print units | Or inch / mm / each run's CMM units. **Angles never converted** |
 | **Decimals** | Unit default (in 4 / mm 3) | Or match print decimals (same units only), or fixed |
-| **Same tag** (e.g. 6x holes) | Worst case | Worst = most tolerance band used. Or all / first / last |
+| **Same tag** (e.g. 6x holes) | Worst case | Worst = furthest from the middle of the tolerance zone. Or all / first / last |
 | **Not measured** | Leave out | Or blank row with just the dim tag |
 | **Dim tag corrections** | On | Off → the tag the CMM gave it. A CMM tag not in the plan counts as unmatched |
-| **Unmatched CMM values** | Off | On → added at the end, raw CMM units and sign, tag blank (or the CMM's tag) |
+| **Unmatched CMM values** | Off | On → added at the end, raw CMM sign, tag blank (or the CMM's tag). Combine: one per CMM name, from the top run |
 
 - Rows sort by dim tag number.
 - Export is blocked until print units are confirmed (values convert from print units).
 - File name pattern: `{part}`, `{run}`, `{date}`. Per-run / combined files add the run name.
+- `{part}` = typed **Part #** → else the CMM report's part name (whole line) → else the project file name → else `Part`.
+- CMM part name: CALYPSO may print the labels first (`Part name`, `Order number`…) and the values after. The first value after the label block is the part name — **only if it has a digit** (blank fields are skipped, so it could be the operator).
+- Several files → each click saves the next one (browsers only open a save dialog right after a click).
+- Export options are not undo steps — undo leaves them alone.
 
 ## 13. Changing a rule
 

@@ -429,7 +429,9 @@ function buildFaiFamilyHTML(row) {
   function tolStr(plus, minus) {
     if (!plus && !minus) return '—';
     if (Math.abs(plus - minus) < 1e-10) return '±' + String(plus);
-    return '+' + String(plus) + ' / -' + String(minus);
+    // Signed limits: minus is "below nominal", so a unilateral lower tol shows as +
+    function signed(v) { return (v < 0 ? '-' : '+') + String(Math.abs(v)); }
+    return signed(plus) + ' / ' + signed(-minus);
   }
 
   var op2kTolDisplay = tolStr(op2kTolPlus, op2kTolMinus);

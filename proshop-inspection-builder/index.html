@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=42">
+  <link rel="stylesheet" href="css/styles.css?v=44">
 </head>
 <body>
 
@@ -724,9 +724,15 @@
         <fieldset>
           <legend>File name</legend>
           <div class="cmm-option-row">
+            <label class="cmm-option-label" for="fai-exp-part">Part #</label>
+            <input type="text" id="fai-exp-part" data-key="partNumber" class="fai-exp-filename" title="Blank = part name from the CMM report">
+          </div>
+          <div class="cmm-option-row">
+            <label class="cmm-option-label" for="fai-exp-filename">Pattern</label>
             <input type="text" id="fai-exp-filename" data-key="fileNamePattern" class="fai-exp-filename">
             <span class="hint">{part} {run} {date}</span>
           </div>
+          <div id="fai-exp-filenames" class="fai-exp-summary"></div>
         </fieldset>
 
         <fieldset>
@@ -760,24 +766,24 @@
   <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
   <script src="lib/pdf-lib.min.js"></script>
 
-  <script src="lib/pdf-lib.min.js?v=42"></script>
-  <script src="js/mathEngine.js?v=42"></script>
-  <script src="js/parser.js?v=42"></script>
-  <script src="js/units.js?v=42"></script>
-  <script src="js/dataModel.js?v=42"></script>
-  <script src="js/exportEngine.js?v=42"></script>
-  <script src="js/storage.js?v=42"></script>
-  <script src="js/history.js?v=42"></script>
-  <script src="js/pdfViewer.js?v=42"></script>
-  <script src="js/cmmParser.js?v=42"></script>
-  <script src="js/faiExport.js?v=42"></script>
-  <script src="js/gdtParser.js?v=42"></script>
-  <script src="js/ocrEngine.js?v=42"></script>
-  <script src="js/tolModeInput.js?v=42"></script>
-  <script src="js/balloonManager.js?v=42"></script>
-  <script src="js/pdfExport.js?v=42"></script>
-  <script src="js/ui.js?v=42"></script>
-  <script src="js/app.js?v=42"></script>
+  <script src="lib/pdf-lib.min.js?v=44"></script>
+  <script src="js/mathEngine.js?v=44"></script>
+  <script src="js/parser.js?v=44"></script>
+  <script src="js/units.js?v=44"></script>
+  <script src="js/dataModel.js?v=44"></script>
+  <script src="js/exportEngine.js?v=44"></script>
+  <script src="js/storage.js?v=44"></script>
+  <script src="js/history.js?v=44"></script>
+  <script src="js/pdfViewer.js?v=44"></script>
+  <script src="js/cmmParser.js?v=44"></script>
+  <script src="js/faiExport.js?v=44"></script>
+  <script src="js/gdtParser.js?v=44"></script>
+  <script src="js/ocrEngine.js?v=44"></script>
+  <script src="js/tolModeInput.js?v=44"></script>
+  <script src="js/balloonManager.js?v=44"></script>
+  <script src="js/pdfExport.js?v=44"></script>
+  <script src="js/ui.js?v=44"></script>
+  <script src="js/app.js?v=44"></script>
 
 </body>
 </html>
