@@ -150,6 +150,16 @@ TEST.runFaiExportTests = function(log) {
   assertEq('Pass/Fail column', col(res.files[0], 'Pass/Fail'), 'PASS');
   assertEq('Deviation column', col(res.files[0], 'Deviation'), '0.0040');
 
+  // ── File name / Part # ──────────────────────────────────
+  st = makeState();
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }] }));
+  assertEq('File name: {part} from CMM header', res.files[0].fileName, 'PART-0000_FAI.csv');
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }], partNumber: '1500AS252 Rev C' }));
+  assertEq('File name: typed Part # wins', res.files[0].fileName, '1500AS252 Rev C_FAI.csv');
+  st.globals.cmmPartName = '';
+  res = PSB.buildFaiExport(st, settings({ runMode: 'pick', runs: [{ id: 'A', on: true }] }));
+  assertEq('File name: nothing known → Part', res.files[0].fileName, 'Part_FAI.csv');
+
   // ── Settings sync ───────────────────────────────────────
   st = makeState();
   st.globals.faiExport = { runs: [{ id: 'gone', on: true }, { id: 'B', on: false }], equipment: 'CMM003' };

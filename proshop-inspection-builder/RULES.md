@@ -260,6 +260,8 @@ Export FAI button in FAI view. **Options save with the project** (`globals.faiEx
 - Rows sort by dim tag number.
 - Export is blocked until print units are confirmed (values convert from print units).
 - File name pattern: `{part}`, `{run}`, `{date}`. Per-run / combined files add the run name.
+- `{part}` = typed **Part #** → else the CMM report's part name (whole line) → else the project file name → else `Part`.
+- CMM part name: CALYPSO may print the labels first (`Part name`, `Order number`…) and the values after. The first value after the label block is the part name.
 
 ## 13. Changing a rule
 

@@ -19,6 +19,14 @@ TEST.runCmmTests = function(log) {
     }
   }
 
+  // ── Header ──────────────────────────────────────────────
+  assertEq('Header: part name from labels-then-values layout',
+    PSB.parseCmmHeader(TEST.CMM_CALYPSO_SAMPLE).partName, 'PART-0000 - Sample Part');
+  assertEq('Header: part name on the same line',
+    PSB.parseCmmHeader('Part name ABC-123 Rev B\n').partName, 'ABC-123 Rev B');
+  assertEq('Header: blank part name stays blank',
+    PSB.parseCmmHeader('Part name\nOrder number\nTime/Date\n10/1/2026 9:07 AM\n').partName, '');
+
   // ── Parsing ─────────────────────────────────────────────
   var rows = PSB.parseCmmText(TEST.CMM_CALYPSO_SAMPLE);
   assertEq('Parse: every measured value becomes a row', rows.length, 27);

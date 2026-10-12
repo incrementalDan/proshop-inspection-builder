@@ -2120,7 +2120,11 @@ function renderFaiExportPreview() {
   var confirmed = !!state.globals.printUnitsConfirmed;
   gate.classList.toggle('hidden', confirmed);
 
+  var auto = PSB.faiAutoPartName(state);
+  document.getElementById('fai-exp-part').placeholder = auto ? auto + ' (from CMM report)' : 'Type the part #';
+
   var res = PSB.buildFaiExport(state, s);
+  document.getElementById('fai-exp-filenames').textContent = res.files.map(function(f) { return f.fileName; }).join(', ');
   var summary = res.files.map(function(f) {
     return PSB.esc(f.fileName) + ' — ' + f.records.length + ' rows';
   }).join('<br>');

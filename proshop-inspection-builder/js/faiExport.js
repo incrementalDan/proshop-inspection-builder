@@ -51,6 +51,7 @@ function defaultFaiExportSettings() {
     includeSourceRun: false,
     includeCmmName: false,
     fileNamePattern: '{part}_FAI',
+    partNumber: '',             // typed Part # for {part}; blank = auto
   };
 }
 
@@ -327,11 +328,17 @@ function faiMissingRecords(state, picked, runLabel) {
   return out;
 }
 
-function faiFileName(s, state, runLabel) {
+/** {part} when none is typed: CMM report header, then project file name. */
+function faiAutoPartName(state) {
   var part = (state.globals.cmmPartName || '').trim();
   if (!part && PSB.getProjectFileName) {
     part = (PSB.getProjectFileName() || '').replace(/\.[^.]+$/, '');
   }
+  return part;
+}
+
+function faiFileName(s, state, runLabel) {
+  var part = (s.partNumber || '').trim() || faiAutoPartName(state);
   var d = new Date();
   var date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   var pattern = s.fileNamePattern || '{part}_FAI';
@@ -420,3 +427,4 @@ PSB.FAI_PROSHOP_COLUMNS = FAI_PROSHOP_COLUMNS;
 PSB.defaultFaiExportSettings = defaultFaiExportSettings;
 PSB.getFaiExportSettings = getFaiExportSettings;
 PSB.buildFaiExport = buildFaiExport;
+PSB.faiAutoPartName = faiAutoPartName;

@@ -113,6 +113,9 @@ function parseCmmHeader(rawText) {
     if (!partName) {
       var pm = line.match(/^Part\s+name\s+(.+)$/i);
       if (pm) partName = pm[1].trim();
+      // Labels-then-values layout: "Part name" alone, more labels, then the values.
+      // The first line after the label block is the part name.
+      else if (/^Part\s+name$/i.test(line)) partName = cmmHeaderValueAfter(lines, i);
     }
 
     if (!dateStr) {
@@ -124,6 +127,18 @@ function parseCmmHeader(rawText) {
   }
 
   return { partName: partName, dateStr: dateStr };
+}
+
+var CMM_HEADER_LABEL_RE = /^\d*\s*(Part\s+name|Order\s+number|Part\s+ident|Operator|Time\/Date|Drawing\s+(no\.?|number))$/i;
+
+function cmmHeaderValueAfter(lines, i) {
+  for (var j = i + 1; j < lines.length; j++) {
+    if (CMM_HEADER_LABEL_RE.test(lines[j])) continue;
+    // A date here means the part name was blank
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(lines[j])) return '';
+    return lines[j];
+  }
+  return '';
 }
 
 PSB.parseCmmHeader = parseCmmHeader;
