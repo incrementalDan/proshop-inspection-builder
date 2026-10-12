@@ -78,6 +78,7 @@ function defaultGlobals() {
     platingUnits: 'inch',
     inchPrecision: 4,
     mmPrecision: 3,
+    angleDecimals: 3,         // angles: round only when they have more decimals than this
     ops: [50, 60],            // default OPs
     equipmentList: [
       'Calipers',
@@ -369,6 +370,16 @@ function recompute(row, globals) {
   var ANGLE_RE = /angle|°/i;
   var isAngle = ANGLE_RE.test(op2000SpecUnit1) || ANGLE_RE.test(op2000SpecUnit2) ||
                 ANGLE_RE.test(op2000SpecUnit3) || ANGLE_RE.test(op2000DrawingSpec);
+  // Angles: round long decimals (e.g. 12°5' imported as 12.0833333333333925).
+  // Applied to the OP2000 base, so every OP and export follows (RULES.md §5).
+  var angleDec = globals.angleDecimals != null ? globals.angleDecimals : 3;
+  if (isAngle) {
+    op2000DrawingSpec = PSB.capAngleDecimals(op2000DrawingSpec, angleDec);
+    rawTolText = PSB.capAngleDecimals(rawTolText, angleDec);
+    nominal = Number(nominal.toFixed(angleDec));
+    tolPlus = Number(tolPlus.toFixed(angleDec));
+    tolMinus = Number(tolMinus.toFixed(angleDec));
+  }
   // Build OP2000 tolerance display from plus/minus overrides or raw
   var hasOp2kTolOverride = user.overrides.outTolPlus !== null || user.overrides.outTolMinus !== null;
   var op2000Tolerance;
@@ -381,6 +392,7 @@ function recompute(row, globals) {
       // OP2000 is never converted — keep the decimals as typed
       var ovTolDec = PSB.countDecimals(String(user.overrides.outTolPlus) + ' ' + String(user.overrides.outTolMinus));
       if (ovTolDec === null) ovTolDec = primaryPrec;
+      if (isAngle) ovTolDec = Math.min(ovTolDec, angleDec);
       if (Math.abs(ovPlus - ovMinus) < 1e-10) {
         op2000Tolerance = PSB.formatPrecision(ovPlus, ovTolDec);
       } else {
@@ -395,7 +407,7 @@ function recompute(row, globals) {
 
   // Feed OP2000 spec override into the numeric nominal so pipeline derives correctly
   if (user.overrides.outDrawingSpec !== null) {
-    var ovSpecAsNum = parseFloat(user.overrides.outDrawingSpec);
+    var ovSpecAsNum = parseFloat(op2000DrawingSpec);  // = override (angle-rounded)
     if (!isNaN(ovSpecAsNum)) nominal = ovSpecAsNum;
   }
   var op2000Nominal = nominal;
@@ -466,11 +478,12 @@ function recompute(row, globals) {
   function keepDecimals(printDec, changed, values) {
     var floor = isAngle ? 0 : primaryPrec;
     if (printDec === null) printDec = floor;
+    if (isAngle) printDec = Math.min(printDec, angleDec);
     if (!changed) return printDec;
     if (!isAngle) return Math.max(printDec, floor);
     var d = printDec;
     for (var i = 0; i < values.length; i++) d = Math.max(d, neededDecimals(values[i]));
-    return d;
+    return Math.min(d, angleDec);
   }
   var printSpecDec = PSB.countDecimals(op2000DrawingSpec);
   if (printSpecDec === null) printSpecDec = PSB.countDecimals(raw.nominalText || raw.nominal || '');
@@ -608,6 +621,7 @@ function recompute(row, globals) {
       finalTolMinus = outOvMinus;
       typedTolDec = PSB.countDecimals(String(user.overrides.outputTolPlus) + ' ' + String(user.overrides.outputTolMinus));
       if (typedTolDec === null) typedTolDec = primaryPrec;
+      if (isAngle) typedTolDec = Math.min(typedTolDec, angleDec);
       if (Math.abs(outOvPlus - outOvMinus) < 1e-10) {
         outTolerance = PSB.formatPrecision(outOvPlus, typedTolDec) + ' [' +
           PSB.formatPrecision(PSB.convertUnits(outOvPlus, importUnits, secondaryUnits), secondaryPrec) + ']';

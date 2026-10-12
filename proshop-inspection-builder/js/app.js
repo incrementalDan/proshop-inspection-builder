@@ -720,6 +720,18 @@ function bindGlobalControls() {
     markDirty();
     scheduleAutoSave();
   });
+
+  document.getElementById('angle-precision').addEventListener('input', function(e) {
+    var oldVal = state.globals.angleDecimals;
+    var newVal = parseInt(e.target.value, 10);
+    if (isNaN(newVal) || newVal < 0) newVal = 3;
+    PSB.pushUndo(state, 'Angle decimals: ' + oldVal + ' → ' + newVal);
+    state.globals.angleDecimals = newVal;
+    PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Angle decimals: ' + oldVal + ' → ' + newVal, details: [{ field: 'angleDecimals', from: String(oldVal), to: String(newVal) }] });
+    recomputeAll();
+    markDirty();
+    scheduleAutoSave();
+  });
 }
 
 function syncGlobalsToUI() {
@@ -731,6 +743,7 @@ function syncGlobalsToUI() {
   document.getElementById('plating-units').value = state.globals.platingUnits;
   document.getElementById('inch-precision').value = state.globals.inchPrecision;
   document.getElementById('mm-precision').value = state.globals.mmPrecision;
+  document.getElementById('angle-precision').value = state.globals.angleDecimals;
   var sizeSlider = document.getElementById('pdf-balloon-size');
   if (sizeSlider && state.globals.balloonRadius > 0) {
     sizeSlider.value = state.globals.balloonRadius;
@@ -1597,6 +1610,9 @@ function buildCmmMeasurement(cmmRow, planRow, runId, cmmUnits, planUnits) {
   var ANGLE_RE_CMM = /angle|°/i;
   var isCmmAngle = ANGLE_RE_CMM.test(cmmRow.cmmName) || (planRow.computed && planRow.computed.isAngle);
   var doConvert = cmmUnits !== planUnits && !isCmmAngle;
+  // Angles round to the Angle Decimals setting; everything else caps at 5 places
+  var ad = state.globals.angleDecimals != null ? state.globals.angleDecimals : 3;
+  var places = isCmmAngle ? Math.min(5, ad) : 5;
 
   // Convert CMM values to plan units if needed
   var measured  = doConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
@@ -1612,12 +1628,12 @@ function buildCmmMeasurement(cmmRow, planRow, runId, cmmUnits, planUnits) {
   return {
     runId: runId,
     cmmName: cmmRow.cmmName,
-    // Cap all stored values to 5 decimal places
-    measured:  parseFloat(measured.toFixed(5)),
-    nominal:   parseFloat(nominal.toFixed(5)),
-    deviation: parseFloat(deviation.toFixed(5)),
-    plusTol:   parseFloat(plusTol.toFixed(5)),
-    minusTol:  parseFloat(minusTol.toFixed(5)),
+    // Cap stored values (5 places, or angle decimals for angles)
+    measured:  parseFloat(measured.toFixed(places)),
+    nominal:   parseFloat(nominal.toFixed(places)),
+    deviation: parseFloat(deviation.toFixed(places)),
+    plusTol:   parseFloat(plusTol.toFixed(places)),
+    minusTol:  parseFloat(minusTol.toFixed(places)),
     units: planUnits,             // units these values are in (kept = print units)
     status: null,
     equipment: '',
