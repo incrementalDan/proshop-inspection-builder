@@ -200,8 +200,10 @@ function restoreSnapshot(snapshot) {
       raw: raw,
       user: r.user,
       computed: {},
+      fai: r.fai || null,
     };
   });
+  if (snapshot.faiRuns) state.faiRuns = snapshot.faiRuns;
   recomputeAll();
   syncGlobalsToUI();
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
@@ -326,6 +328,7 @@ document.addEventListener('DOMContentLoaded', function() {
       onFileImport: handleFileImport,
       onAddRow: handleAddRow,
       onDeleteRow: handleDeleteRow,
+      onFaiRetag: handleFaiRetag,
       getAppState: function() { return state; },
     });
     console.log('[PSB] UI initialized');
@@ -1505,6 +1508,7 @@ function handleDeleteRow(rowId) {
 function recomputeAll() {
   for (var i = 0; i < state.rows.length; i++) {
     PSB.recompute(state.rows[i], state.globals);
+    PSB.refreshFaiStatus(state.rows[i], state.globals.faiWarnThreshold);
   }
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   updateFaiTabBadge();
@@ -1545,7 +1549,7 @@ function deleteFaiRuns(runIds) {
     if (row.fai.measurements.length === 0) {
       row.fai = null;
     } else {
-      row.fai.aggregateStatus = PSB.computeAggregateStatus(row.fai.measurements);
+      PSB.refreshFaiStatus(row, state.globals.faiWarnThreshold);
     }
   }
 
@@ -1565,6 +1569,132 @@ function updateCmmPartBadge(partName) {
   } else {
     badge.classList.add('hidden');
   }
+}
+
+/** Find the plan row whose dim tag matches (string compare). */
+function findRowByDimTag(dimTag) {
+  for (var ri = 0; ri < state.rows.length; ri++) {
+    var r = state.rows[ri];
+    var tag = r.computed.dimTag || r.raw['Dim Tag #'];
+    if (String(tag) === String(dimTag)) return r;
+  }
+  return null;
+}
+
+/**
+ * Turn one parsed CMM row into a stored measurement for a plan row:
+ * converts units (never angles), makes measured/nominal positive, caps to 5 places.
+ */
+function buildCmmMeasurement(cmmRow, planRow, runId, cmmUnits, planUnits) {
+  // Angles are never converted between units — degrees are degrees regardless of unit system.
+  // An angle CMM row is one where the CMM name contains "angle" or "°",
+  // or the matched plan row is flagged as an angle dimension.
+  var ANGLE_RE_CMM = /angle|°/i;
+  var isCmmAngle = ANGLE_RE_CMM.test(cmmRow.cmmName) || (planRow.computed && planRow.computed.isAngle);
+  var doConvert = cmmUnits !== planUnits && !isCmmAngle;
+
+  // Convert CMM values to plan units if needed
+  var measured  = doConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
+  var nominal   = doConvert ? PSB.convertUnits(cmmRow.nominal,   cmmUnits, planUnits) : cmmRow.nominal;
+  var deviation = doConvert ? PSB.convertUnits(cmmRow.deviation, cmmUnits, planUnits) : cmmRow.deviation;
+  var plusTol   = doConvert ? PSB.convertUnits(cmmRow.plusTol,   cmmUnits, planUnits) : cmmRow.plusTol;
+  var minusTol  = doConvert ? PSB.convertUnits(cmmRow.minusTol,  cmmUnits, planUnits) : cmmRow.minusTol;
+
+  // Measured and nominal are always positive; tolerance is never touched
+  measured = Math.abs(measured);
+  nominal  = Math.abs(nominal);
+
+  return {
+    runId: runId,
+    cmmName: cmmRow.cmmName,
+    // Cap all stored values to 5 decimal places
+    measured:  parseFloat(measured.toFixed(5)),
+    nominal:   parseFloat(nominal.toFixed(5)),
+    deviation: parseFloat(deviation.toFixed(5)),
+    plusTol:   parseFloat(plusTol.toFixed(5)),
+    minusTol:  parseFloat(minusTol.toFixed(5)),
+    status: null,
+    equipment: '',
+    notes: '',
+    attachments: [],
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/**
+ * Move one CMM measurement to a different dim tag (fixes a wrong tag typed on the CMM).
+ * Keeps the CMM name as-is; remembers the original tag on the measurement.
+ */
+function handleFaiRetag(fromRowId, measurementIndex, newTag) {
+  newTag = String(newTag).replace(/^#/, '').trim();
+  var fromRow = null;
+  for (var i = 0; i < state.rows.length; i++) {
+    if (String(state.rows[i].id) === String(fromRowId)) { fromRow = state.rows[i]; break; }
+  }
+  if (!fromRow || !fromRow.fai || !fromRow.fai.measurements[measurementIndex]) return;
+  if (String(fromRow.computed.dimTag) === newTag) return;
+
+  var toRow = findRowByDimTag(newTag);
+  if (!toRow) {
+    PSB.showToast('No dim tag ' + newTag + ' in this plan', 'warn');
+    return;
+  }
+
+  PSB.pushUndo(state, 'Re-tag CMM ' + fromRow.computed.dimTag + ' → ' + newTag);
+  var m = fromRow.fai.measurements.splice(measurementIndex, 1)[0];
+  if (m.originalTag == null) m.originalTag = PSB.cmmDimTagFromName(m.cmmName);
+  if (String(m.originalTag) === newTag) delete m.originalTag;
+
+  if (fromRow.fai.measurements.length === 0) fromRow.fai = null;
+  else PSB.refreshFaiStatus(fromRow, state.globals.faiWarnThreshold);
+
+  if (!toRow.fai) toRow.fai = { measurements: [], aggregateStatus: null, isExpanded: false };
+  toRow.fai.measurements.push(m);
+  PSB.refreshFaiStatus(toRow, state.globals.faiWarnThreshold);
+
+  PSB.logChange(state.auditLog, { type: 'edit', rowId: toRow.id, description: 'CMM "' + m.cmmName + '" re-tagged ' + fromRow.computed.dimTag + ' → ' + newTag });
+  afterFaiChange();
+  PSB.showToast('Moved to dim tag ' + newTag, 'info');
+}
+
+/**
+ * Assign an unmatched CMM row (no "#" or unknown tag) to a dim tag.
+ * @returns {boolean} true if assigned
+ */
+function assignUnmatchedCmmRow(runId, unmatchedIndex, newTag) {
+  newTag = String(newTag).replace(/^#/, '').trim();
+  var run = null;
+  for (var i = 0; i < (state.faiRuns || []).length; i++) {
+    if (state.faiRuns[i].id === runId) { run = state.faiRuns[i]; break; }
+  }
+  if (!run || !run.unmatchedRows || !run.unmatchedRows[unmatchedIndex]) return false;
+  var toRow = findRowByDimTag(newTag);
+  if (!toRow) {
+    PSB.showToast('No dim tag ' + newTag + ' in this plan', 'warn');
+    return false;
+  }
+
+  PSB.pushUndo(state, 'Assign CMM row to ' + newTag);
+  var cmmRow = run.unmatchedRows.splice(unmatchedIndex, 1)[0];
+  var m = buildCmmMeasurement(cmmRow, toRow, run.id, run.units || 'mm', PSB.getPrintUnits(state.globals));
+  m.originalTag = cmmRow.dimTag;
+  if (m.originalTag != null && String(m.originalTag) === newTag) delete m.originalTag;
+  if (!toRow.fai) toRow.fai = { measurements: [], aggregateStatus: null, isExpanded: false };
+  toRow.fai.measurements.push(m);
+  PSB.refreshFaiStatus(toRow, state.globals.faiWarnThreshold);
+  run.matchedCount = (run.matchedCount || 0) + 1;
+
+  PSB.logChange(state.auditLog, { type: 'edit', rowId: toRow.id, description: 'CMM "' + cmmRow.cmmName + '" assigned to ' + newTag });
+  afterFaiChange();
+  return true;
+}
+
+function afterFaiChange() {
+  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+  updateFaiTabBadge();
+  updateUndoRedoButtons();
+  markDirty();
 }
 
 function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
@@ -1592,7 +1722,6 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   PSB.pushUndo(state, 'Import CMM run: ' + fileName);
 
   var planUnits = PSB.getPrintUnits(state.globals);
-  var needConvert = cmmUnits !== planUnits;
 
   var runId = 'run_' + Date.now();
   var matchedCount = 0;
@@ -1614,12 +1743,7 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   // Match to plan rows and attach measurements
   for (var dimTag in byDimTag) {
     var group = byDimTag[dimTag];
-    var planRow = null;
-    for (var ri = 0; ri < state.rows.length; ri++) {
-      var r = state.rows[ri];
-      var tag = r.computed.dimTag || r.raw['Dim Tag #'];
-      if (String(tag) === String(dimTag)) { planRow = r; break; }
-    }
+    var planRow = findRowByDimTag(dimTag);
 
     if (!planRow) {
       for (var gi = 0; gi < group.length; gi++) unmatchedRows.push(group[gi]);
@@ -1629,54 +1753,10 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
     matchedCount += group.length;
     if (!planRow.fai) planRow.fai = { measurements: [], aggregateStatus: null, isExpanded: false };
 
-    var now = new Date().toISOString();
     for (var gi = 0; gi < group.length; gi++) {
-      var cmmRow = group[gi];
-
-      // Angles are never converted between units — degrees are degrees regardless of unit system.
-      // An angle CMM row is one where the CMM name contains "angle" or "°",
-      // or the matched plan row is flagged as an angle dimension.
-      var ANGLE_RE_CMM = /angle|°/i;
-      var isCmmAngle = ANGLE_RE_CMM.test(cmmRow.cmmName) || (planRow.computed && planRow.computed.isAngle);
-      var doConvert = needConvert && !isCmmAngle;
-
-      // Convert CMM values to plan units if needed
-      var measured  = doConvert ? PSB.convertUnits(cmmRow.measured,  cmmUnits, planUnits) : cmmRow.measured;
-      var nominal   = doConvert ? PSB.convertUnits(cmmRow.nominal,   cmmUnits, planUnits) : cmmRow.nominal;
-      var deviation = doConvert ? PSB.convertUnits(cmmRow.deviation, cmmUnits, planUnits) : cmmRow.deviation;
-      var plusTol   = doConvert ? PSB.convertUnits(cmmRow.plusTol,   cmmUnits, planUnits) : cmmRow.plusTol;
-      var minusTol  = doConvert ? PSB.convertUnits(cmmRow.minusTol,  cmmUnits, planUnits) : cmmRow.minusTol;
-
-      // Measured and nominal are always positive; tolerance is never touched
-      measured = Math.abs(measured);
-      nominal  = Math.abs(nominal);
-
-      // Cap all stored values to 5 decimal places
-      measured  = parseFloat(measured.toFixed(5));
-      nominal   = parseFloat(nominal.toFixed(5));
-      deviation = parseFloat(deviation.toFixed(5));
-      plusTol   = parseFloat(plusTol.toFixed(5));
-      minusTol  = parseFloat(minusTol.toFixed(5));
-
-      var status = PSB.computeFaiStatus(measured, nominal, plusTol, minusTol, warnThreshold);
-      planRow.fai.measurements.push({
-        runId: runId,
-        cmmName: cmmRow.cmmName,
-        measured: measured,
-        nominal: nominal,
-        deviation: deviation,
-        plusTol: plusTol,
-        minusTol: minusTol,
-        status: status,
-        isChild: gi > 0,
-        childIndex: gi > 0 ? gi : null,
-        equipment: '',
-        notes: '',
-        attachments: [],
-        timestamp: now,
-      });
+      planRow.fai.measurements.push(buildCmmMeasurement(group[gi], planRow, runId, cmmUnits, planUnits));
     }
-    planRow.fai.aggregateStatus = PSB.computeAggregateStatus(planRow.fai.measurements);
+    PSB.refreshFaiStatus(planRow, warnThreshold);
   }
 
   // Append run metadata
@@ -1700,30 +1780,58 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   updateFaiTabBadge();
 
   // Show import summary
-  showCmmImportSummary(parsed.length, matchedCount, unmatchedRows);
+  showCmmImportSummary(runId, parsed.length, matchedCount, unmatchedRows);
+  updateUndoRedoButtons();
   markDirty();
 }
 
-function showCmmImportSummary(totalParsed, matchedCount, unmatchedRows) {
-  var unmatchedHtml = '';
-  if (unmatchedRows.length > 0) {
-    var items = '';
-    var limit = unmatchedRows.length < 20 ? unmatchedRows.length : 20;
-    for (var i = 0; i < limit; i++) {
-      var row = unmatchedRows[i];
-      items += '<li>' + PSB.esc(row.cmmName || '(no name)') + ' — ' + (row.measured != null ? row.measured : '?') + '</li>';
-    }
-    if (unmatchedRows.length > 20) items += '<li>…and ' + (unmatchedRows.length - 20) + ' more</li>';
-    unmatchedHtml = '<p><strong>Unmatched rows:</strong></p><ul>' + items + '</ul>';
-  }
-
+function showCmmImportSummary(runId, totalParsed, matchedCount, unmatchedRows) {
   var modal = document.getElementById('modal-cmm-summary');
-  if (modal) {
-    document.getElementById('cmm-summary-total').textContent = totalParsed;
-    document.getElementById('cmm-summary-matched').textContent = matchedCount;
-    document.getElementById('cmm-summary-unmatched').textContent = unmatchedRows.length;
-    document.getElementById('cmm-summary-unmatched-list').innerHTML = unmatchedHtml;
-    PSB.openModal('modal-cmm-summary');
+  if (!modal) return;
+  document.getElementById('cmm-summary-total').textContent = totalParsed;
+  document.getElementById('cmm-summary-matched').textContent = matchedCount;
+  document.getElementById('cmm-summary-unmatched').textContent = unmatchedRows.length;
+  renderCmmUnmatchedList(runId);
+  PSB.openModal('modal-cmm-summary');
+}
+
+/**
+ * Unmatched CMM rows, each with a dim tag box: type a tag + Enter to assign it.
+ * Re-renders after each assign (indexes shift as rows leave the list).
+ */
+function renderCmmUnmatchedList(runId) {
+  var listEl = document.getElementById('cmm-summary-unmatched-list');
+  var run = null;
+  for (var i = 0; i < (state.faiRuns || []).length; i++) {
+    if (state.faiRuns[i].id === runId) { run = state.faiRuns[i]; break; }
+  }
+  var rows = (run && run.unmatchedRows) || [];
+  document.getElementById('cmm-summary-matched').textContent = run ? run.matchedCount : 0;
+  document.getElementById('cmm-summary-unmatched').textContent = rows.length;
+  if (rows.length === 0) { listEl.innerHTML = ''; return; }
+
+  var items = '';
+  for (var u = 0; u < rows.length; u++) {
+    var row = rows[u];
+    items += '<li class="cmm-unmatched-item">' +
+      '<input type="text" class="cmm-assign-tag" data-index="' + u + '" placeholder="#" title="Type a dim tag and press Enter" size="4"' +
+        (row.dimTag != null ? ' value="' + PSB.esc(String(row.dimTag)) + '"' : '') + '> ' +
+      PSB.esc(row.cmmName || '(no name)') + ' — ' + (row.measured != null ? row.measured : '?') + '</li>';
+  }
+  listEl.innerHTML = '<p><strong>Unmatched rows</strong> — type the dim tag and press Enter to assign:</p>' +
+    '<ul class="cmm-unmatched-ul">' + items + '</ul>';
+
+  var inputs = listEl.querySelectorAll('input.cmm-assign-tag');
+  for (var k = 0; k < inputs.length; k++) {
+    inputs[k].addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var tag = e.target.value.trim();
+      if (!tag) return;
+      if (assignUnmatchedCmmRow(runId, parseInt(e.target.getAttribute('data-index'), 10), tag)) {
+        renderCmmUnmatchedList(runId);
+      }
+    });
   }
 }
 

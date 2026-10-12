@@ -283,6 +283,62 @@ function computeAggregateStatus(measurements) {
   return worst;
 }
 
+/**
+ * Pick the nominal + tolerance a CMM measurement is graded against.
+ * Plan values win. If the plan has no tolerance (both 0 / missing) or no
+ * numeric nominal, fall back to the CMM's own nominal + tolerance — otherwise
+ * a tol-less dim (e.g. a countersink "⌄ .248") is graded as zero-tolerance
+ * and every measurement FAILs.
+ *
+ * @param {Object} c — row.computed
+ * @param {Object} m — measurement { nominal, plusTol, minusTol }
+ * @param {string} compareMode — 'op2000' | 'compensated'
+ * @returns {{ nominal: number, plusTol: number, minusTol: number, source: 'plan'|'cmm' }}
+ */
+function getFaiLimits(c, m, compareMode) {
+  c = c || {};
+  var op2kPlus  = Number(c.op2kTolPlus)  || 0;
+  var op2kMinus = Number(c.op2kTolMinus) || 0;
+  var out = c.output || {};
+  var nominal, plus, minus;
+  if (compareMode === 'compensated') {
+    nominal = out.nominal != null ? out.nominal : c.op2000Nominal;
+    plus    = out.tolPlus  != null ? Number(out.tolPlus)  : op2kPlus;
+    minus   = out.tolMinus != null ? Number(out.tolMinus) : op2kMinus;
+  } else {
+    nominal = c.op2000Nominal;
+    plus    = op2kPlus;
+    minus   = op2kMinus;
+  }
+  nominal = parseFloat(nominal);
+  var hasTol = (plus || 0) !== 0 || (minus || 0) !== 0;
+  if (!hasTol || !isFinite(nominal)) {
+    return { nominal: m.nominal, plusTol: m.plusTol, minusTol: m.minusTol, source: 'cmm' };
+  }
+  return { nominal: nominal, plusTol: plus || 0, minusTol: minus || 0, source: 'plan' };
+}
+
+/**
+ * Grade one CMM measurement for a plan row (see getFaiLimits).
+ */
+function computeFaiMeasurementStatus(c, m, compareMode, warnThreshold) {
+  var lim = getFaiLimits(c, m, compareMode);
+  return computeFaiStatus(m.measured, lim.nominal, lim.plusTol, lim.minusTol, warnThreshold);
+}
+
+/**
+ * Re-grade every measurement on a row (OP2000 compare) and its aggregate.
+ * Call after import, re-tag, or delete so stored statuses match the table.
+ */
+function refreshFaiStatus(row, warnThreshold) {
+  if (!row || !row.fai || !row.fai.measurements) return;
+  var ms = row.fai.measurements;
+  for (var i = 0; i < ms.length; i++) {
+    ms[i].status = computeFaiMeasurementStatus(row.computed, ms[i], 'op2000', warnThreshold);
+  }
+  row.fai.aggregateStatus = computeAggregateStatus(ms);
+}
+
 // ── Export to namespace ───────────────────────────────────
 PSB.centerNominal = centerNominal;
 PSB.applyPlating = applyPlating;
@@ -295,3 +351,6 @@ PSB.detectPrecision = detectPrecision;
 PSB.countDecimals = countDecimals;
 PSB.computeFaiStatus = computeFaiStatus;
 PSB.computeAggregateStatus = computeAggregateStatus;
+PSB.getFaiLimits = getFaiLimits;
+PSB.computeFaiMeasurementStatus = computeFaiMeasurementStatus;
+PSB.refreshFaiStatus = refreshFaiStatus;

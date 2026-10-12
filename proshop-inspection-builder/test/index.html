@@ -26,6 +26,7 @@
   <script src="../js/gdtParser.js"></script>
   <script src="../js/ocrEngine.js"></script>
   <script src="../js/exportEngine.js"></script>
+  <script src="../js/cmmParser.js"></script>
 
   <!-- Load test data and test suites -->
   <script src="testData.js"></script>
@@ -36,6 +37,8 @@
   <script src="fixtures/gcInchSample.js"></script>
   <script src="fixture.test.js"></script>
   <script src="units.test.js"></script>
+  <script src="fixtures/cmmCalypsoSample.js"></script>
+  <script src="cmm.test.js"></script>
 
   <!-- Run tests -->
   <script>
@@ -62,6 +65,7 @@
     runSuite('Export Tests', TEST.runExportTests);
     runSuite('Fixture + Rule Tests', TEST.runFixtureTests);
     runSuite('Print Units Tests', TEST.runUnitsTests);
+    runSuite('CMM Tests', TEST.runCmmTests);
 
     var color = totalFail === 0 ? 'pass' : 'fail';
     summary.innerHTML = '<span class="' + color + '">' +
