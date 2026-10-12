@@ -6,12 +6,12 @@
 /* ── CSS Variables (Theme) ─────────────────────────────── */
 :root {
   /* Dark theme (default) — medium-dark, neutral gray with subtle blue tint */
-  --bg-primary: #2b2b36;
-  --bg-secondary: #262630;
-  --bg-tertiary: #383844;
-  --bg-surface: #31313c;
-  --bg-hover: #3c3c4a;
-  --bg-selected: #464658;
+  --bg-primary: #434350;
+  --bg-secondary: #3e3e4a;
+  --bg-tertiary: #50505c;
+  --bg-surface: #494956;
+  --bg-hover: #545462;
+  --bg-selected: #5a5a6e;
 
   --text-primary: #dadadc;
   --text-secondary: #a8a8b8;
@@ -38,8 +38,8 @@
   --op-color-6: #ffc107;   /* 6th — yellow */
   --op-color-7: #ff6e40;   /* 7th — deep orange */
 
-  --border-color: #3a3a48;
-  --border-light: #48485a;
+  --border-color: #50505e;
+  --border-light: #5c5c70;
 
   --row-even: #292934;
   --row-odd: #2e2e3a;
@@ -827,7 +827,20 @@ input.no-spinners {
 }
 
 /* Table within left-panel when PDF is visible */
-#left-panel.has-pdf > #table-container {
+#left-panel.has-pdf > /* Dark mode: panels/menus were lightened; the table keeps its original darker colors */
+[data-theme="dark"] #table-container {
+  --bg-primary: #2b2b36;
+  --bg-secondary: #262630;
+  --bg-tertiary: #383844;
+  --bg-surface: #31313c;
+  --bg-hover: #3c3c4a;
+  --bg-selected: #464658;
+  --border-color: #3a3a48;
+  --border-light: #48485a;
+  background: var(--bg-primary);
+}
+
+#table-container {
   flex: 1;
   min-height: 120px;
 }
