@@ -78,7 +78,9 @@ data/sample-input.csv   — Real Ground Control export (test fixture)
 data/sample-output.csv  — Known-good ProShop import (validation target)
 docs/spec.txt           — Full engineering spec
 docs/proshop-field-mapping.png — ProShop UI field reference screenshot
-js/cmmParser.js
+js/cmmParser.js         — Zeiss CALYPSO CMM text → measurements
+js/faiExport.js         — FAI export (CMM results → ProShop CSV), RULES.md §12
+test/faiExport.test.js  — FAI export tests
 ```
 
 ## Module APIs (keep these stable)
