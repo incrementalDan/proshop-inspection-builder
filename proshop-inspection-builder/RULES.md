@@ -210,7 +210,9 @@ Detection clues (title block text from the PDF beats everything):
 - **Stacked labels**: CALYPSO can print many `#N` labels on one line, then their values on the lines below.
   - Label 1 → values on that line. Label 2 → next line. And so on.
 - **No `#`** → unmatched. Tag box to assign it in the import summary, and under each run in the CMM runs list.
-- **Wrong tag on the CMM** → double-click the measurement's dim tag in the FAI view, type the right one.
+- **Wrong tag on the CMM** → click the orange bar between Print Data and CMM Data to open the **CMM Tag** column, double-click the tag, type the right one.
+  - The Print Data dim tag is never editable here — it belongs to the print.
+  - Re-tagged rows show `#old → new`.
   - The measurement moves. The CMM name is never changed. The original tag is kept on the measurement.
 
 ### Pass / fail

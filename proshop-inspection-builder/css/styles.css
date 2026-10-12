@@ -3162,3 +3162,52 @@ tr.row-flash {
   max-height: none;
   margin: 4px 0 0;
 }
+
+/* FAI view: thin bar between Print Data and CMM Data — click to show/hide the CMM Tag column */
+#data-table .col-cmm-sep {
+  width: 12px;
+  min-width: 12px;
+  max-width: 12px;
+  padding: 0 !important;
+  background: #6b3c18 !important;
+  cursor: pointer !important;
+  border-left: 1px solid #8a4e20;
+  border-right: 1px solid #8a4e20;
+  transition: background 0.12s;
+}
+#data-table thead th.th-cmm-sep {
+  color: #ffd2a8 !important;
+  font-size: 16px !important;
+  font-weight: 700;
+  text-align: center !important;
+  vertical-align: middle;
+  line-height: 1;
+}
+#data-table .col-cmm-sep:hover,
+#data-table thead th.th-cmm-sep:hover {
+  background: #ff8c42 !important;
+}
+
+/* CMM Tag column */
+#data-table td.col-cmm-tag {
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(255, 140, 66, 0.06);
+}
+#data-table thead th.col-cmm-tag { white-space: nowrap; }
+.cmm-tag-num { font-weight: 600; }
+.cmm-tag-old {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+.cmm-tag-new {
+  color: var(--accent-orange);
+  font-weight: 700;
+}
+.cmm-tag-name {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
