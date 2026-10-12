@@ -17,6 +17,40 @@ var CMM_SKIP_PATTERNS = [
 // Matches: <Name text> <5 numbers at end of line>
 var CMM_ROW_REGEX = /^(.*?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*$/;
 
+// Matches a line of only 5 numbers (no name) — the values for a stacked label block
+var CMM_VALUES_ONLY_REGEX = /^(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*$/;
+
+/**
+ * Dim tag = the FIRST "#N" in the name. Later "#" numbers are part of the
+ * feature name (e.g. "#8 Cone Angle_#8 COUNTERSINK") and are ignored.
+ */
+function cmmDimTagFromName(name) {
+  var m = (name || '').match(/#\s*(\d{1,3})/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/**
+ * Split a stacked label line into one label per "#N".
+ * CALYPSO sometimes prints many labels on one line, then their values on
+ * the following lines:  "#1 X Value_Cyl1 #16 Y Value_Cyl1 #7 Diameter_Cyl1 ..."
+ * Only splits on a "#" that starts a word, so "Angle_#8" stays in its label.
+ */
+function splitCmmLabels(name) {
+  return name.split(/\s+(?=#\s*\d{1,3}\b)/).map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+function buildCmmRow(name, nums) {
+  return {
+    dimTag: cmmDimTagFromName(name),
+    cmmName: name,
+    measured: parseFloat(nums[0]),
+    nominal: parseFloat(nums[1]),
+    plusTol: parseFloat(nums[2]),
+    minusTol: Math.abs(parseFloat(nums[3])),
+    deviation: parseFloat(nums[4]),
+  };
+}
+
 /**
  * Parse pasted Zeiss CALYPSO text into structured rows.
  * Column order: Name | MeasuredValue | NominalValue | +Tol | -Tol | Deviation
@@ -32,17 +66,20 @@ function parseCmmText(rawText) {
     var m = line.match(CMM_ROW_REGEX);
     if (!m) continue;
 
-    var name = (m[1] || '').trim();
-    var dimMatch = name.match(/#\s*(\d{1,3})/);
-    var dimTag = dimMatch ? parseInt(dimMatch[1], 10) : null;
+    var labels = splitCmmLabels((m[1] || '').trim());
+    if (labels.length === 0) continue;
 
-    var measured  = parseFloat(m[2]);
-    var nominal   = parseFloat(m[3]);
-    var plusTol   = parseFloat(m[4]);
-    var minusTol  = Math.abs(parseFloat(m[5]));
-    var deviation = parseFloat(m[6]);
+    // First label owns the numbers on this line
+    rows.push(buildCmmRow(labels[0], m.slice(2, 7)));
 
-    rows.push({ dimTag: dimTag, cmmName: name, measured: measured, nominal: nominal, plusTol: plusTol, minusTol: minusTol, deviation: deviation });
+    // Stacked block: each following values-only line belongs to the next label
+    for (var li = 1; li < labels.length; li++) {
+      var next = lines[i + 1];
+      var vm = next ? next.match(CMM_VALUES_ONLY_REGEX) : null;
+      if (!vm) break;
+      i++;
+      rows.push(buildCmmRow(labels[li], vm.slice(1, 6)));
+    }
   }
 
   return rows;
@@ -56,6 +93,7 @@ function shouldSkipCmmLine(line) {
 }
 
 PSB.parseCmmText = parseCmmText;
+PSB.cmmDimTagFromName = cmmDimTagFromName;
 
 /**
  * Extract header metadata from a Zeiss CALYPSO CMM report.

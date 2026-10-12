@@ -37,6 +37,7 @@ var onRowUserChange = null;   // (rowId, userChanges) => void
 var onFileImport = null;      // (fileContent, fileName) => void
 var onAddRow = null;           // () => void
 var onDeleteRow = null;        // (rowId) => void
+var onFaiRetag = null;        // (rowId, measurementIndex, newTag) — move a CMM measurement
 var getAppState = null;       // () => { rows, globals }
 
 // Edit flash: tracks which cell should flash after re-render
@@ -86,8 +87,10 @@ function initUI(callbacks) {
   onAddRow = callbacks.onAddRow;
   onDeleteRow = callbacks.onDeleteRow;
   getAppState = callbacks.getAppState;
+  onFaiRetag = callbacks.onFaiRetag;
 
   setupDragDrop();
+  setupFaiRetagEditing();
   setupSidebarResizer();
   setupSetupPanelResizer();
   setupThemeToggle();
@@ -338,12 +341,10 @@ function buildFaiFamilyHTML(row) {
   var outTolPlus   = (c.output && c.output.tolPlus  != null) ? c.output.tolPlus  : op2kTolPlus;
   var outTolMinus  = (c.output && c.output.tolMinus != null) ? c.output.tolMinus : op2kTolMinus;
 
-  // Which plan tolerance is used for pass/fail (based on compare mode)
-  var planNominal  = compareMode === 'compensated'
-    ? ((c.output && c.output.nominal != null) ? c.output.nominal : c.op2000Nominal)
-    : c.op2000Nominal;
-  var planTolPlus  = compareMode === 'compensated' ? outTolPlus  : op2kTolPlus;
-  var planTolMinus = compareMode === 'compensated' ? outTolMinus : op2kTolMinus;
+  // Pass/fail limits: plan tol (by compare mode), or CMM tol when the plan has none
+  function gradeMeasurement(m) {
+    return PSB.computeFaiMeasurementStatus(c, m, compareMode, warnThreshold);
+  }
 
   // Format tolerance string helper (inline)
   function tolStr(plus, minus) {
@@ -371,6 +372,13 @@ function buildFaiFamilyHTML(row) {
     '<td class="col-op2000-tol">' + esc(op2kTolDisplay) + '</td>' +
     '<td class="col-out-tol">' + esc(outTolDisplay) + '</td>';
 
+  // Dim tag cell of a measurement line: double-click to move it to another dim tag
+  function retagAttrs(mi, m) {
+    var tip = (m.cmmName || '') + (m.originalTag != null ? '  (CMM tag #' + m.originalTag + ', re-tagged)' : '') +
+      '\nDouble-click to change dim tag';
+    return 'data-retag-row="' + esc(String(row.id)) + '" data-retag-mi="' + mi + '" title="' + esc(tip) + '"';
+  }
+
   // Status badge helper
   function statusBadge(status) {
     var cls = status ? 'fai-badge fai-' + status : 'fai-badge fai-none';
@@ -394,10 +402,11 @@ function buildFaiFamilyHTML(row) {
   // Single measurement — simple full row
   if (measurements.length === 1) {
     var m = measurements[0];
-    var status = PSB.computeFaiStatus(m.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
+    var status = gradeMeasurement(m);
     var devTint = status ? ' dev-tint-' + status : '';
     return '<tr>' +
-      printCells.replace('{STATUS}', statusBadge(status)) +
+      printCells.replace('{STATUS}', statusBadge(status))
+        .replace('<td class="col-dimtag">', '<td class="col-dimtag" ' + retagAttrs(0, m) + '>') +
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
       '<td class="col-cmm-nominal">' + formatDualDisplay(buildCmmDualString(m.nominal, planUnits, isAngle)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
@@ -416,8 +425,10 @@ function buildFaiFamilyHTML(row) {
   var devMin  = Math.min.apply(null, devVals);
   var devMax  = Math.max.apply(null, devVals);
 
-  // Aggregate status for parent
-  var aggStatus = fai.aggregateStatus;
+  // Aggregate status for parent — same grading as the child rows
+  var aggStatus = PSB.computeAggregateStatus(measurements.map(function(m) {
+    return { status: gradeMeasurement(m) };
+  }));
 
   // Parent CMM tol: use first measurement (assume same spec for all in group)
   var parentCmmTol = tolStr(measurements[0].plusTol, measurements[0].minusTol);
@@ -451,12 +462,12 @@ function buildFaiFamilyHTML(row) {
   // Child rows
   for (var mi = 0; mi < measurements.length; mi++) {
     var m = measurements[mi];
-    var mStatus = PSB.computeFaiStatus(m.measured, planNominal, planTolPlus, planTolMinus, warnThreshold);
+    var mStatus = gradeMeasurement(m);
     var mDevTint = mStatus ? ' dev-tint-' + mStatus : '';
     var isLast = (mi === measurements.length - 1);
     html += '<tr class="fai-child-row' + (isLast ? ' fai-last-child' : '') + '">' +
       '<td class="col-fai-status">' + statusBadge(mStatus) + '</td>' +
-      '<td class="col-dimtag fai-child-indent" title="' + esc(m.cmmName || '') + '">' + esc(String(c.dimTag)) + '</td>' +
+      '<td class="col-dimtag fai-child-indent" ' + retagAttrs(mi, m) + '>' + esc(String(c.dimTag)) + '</td>' +
       '<td class="col-drawing-spec"></td>' +
       '<td class="col-su1"></td>' +
       '<td class="col-su2"></td>' +
@@ -520,6 +531,46 @@ function setupFaiNotesEditing(tr, row) {
         committed = true;
         notesTd.textContent = originalValue;
       }
+    });
+  });
+}
+
+/**
+ * FAI view: double-click a measurement's dim tag to move it to another tag.
+ * One delegated listener on the table body (FAI rows are rebuilt as HTML).
+ */
+function setupFaiRetagEditing() {
+  var tbody = document.getElementById('table-body');
+  if (!tbody) return;
+  tbody.addEventListener('dblclick', function(e) {
+    var td = e.target.closest ? e.target.closest('td[data-retag-row]') : null;
+    if (!td || td.querySelector('input')) return;
+    e.stopPropagation();
+
+    var rowId = td.getAttribute('data-retag-row');
+    var mi = parseInt(td.getAttribute('data-retag-mi'), 10);
+    var originalHtml = td.innerHTML;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = td.textContent.replace(/REF$/, '').trim();
+    input.className = 'inline-edit-input';
+    td.innerHTML = '';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    var done = false;
+    function finish(save) {
+      if (done) return;
+      done = true;
+      var newTag = input.value.trim();
+      td.innerHTML = originalHtml;
+      if (save && newTag && onFaiRetag) onFaiRetag(rowId, mi, newTag);
+    }
+    input.addEventListener('blur', function() { finish(true); });
+    input.addEventListener('keydown', function(ke) {
+      if (ke.key === 'Enter') input.blur();
+      if (ke.key === 'Escape') finish(false);
     });
   });
 }

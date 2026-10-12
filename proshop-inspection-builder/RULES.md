@@ -202,7 +202,25 @@ Detection clues (title block text from the PDF beats everything):
 
 - Balloon rows set to **Default / Profile** tolerance follow the title block live.
 
-## 11. Changing a rule
+## 11. CMM import (FAI)
+
+### Dim tag
+- **First `#N`** in the CMM name is the dim tag. Later `#` numbers are part of the name.
+  - `#8 Cone Angle_#8 COUNTERSINK` → 8
+- **Stacked labels**: CALYPSO can print many `#N` labels on one line, then their values on the lines below.
+  - Label 1 → values on that line. Label 2 → next line. And so on.
+- **No `#`** → unmatched. Shown in the import summary with a tag box to assign it.
+- **Wrong tag on the CMM** → double-click the measurement's dim tag in the FAI view, type the right one.
+  - The measurement moves. The CMM name is never changed. The original tag is kept on the measurement.
+
+### Pass / fail
+- **Plan tolerance wins** when the plan row has one.
+- **No plan tolerance** (or no numeric nominal) → grade with the CMM's own nominal + tolerance.
+  - Why: a tol-less dim (e.g. `⌄ .248`) would otherwise be graded as zero tolerance, so everything FAILs.
+- **Parent row** = worst of its measurements, graded the same way. Never disagrees with its children.
+- **Count** (e.g. 6x spec, 2 measured) is not checked. Fewer measurements is not a FAIL.
+
+## 12. Changing a rule
 
 1. Update this file first.
 2. Update or add the test.

@@ -30,8 +30,10 @@ function cloneStateForSnapshot(state) {
         id: row.id,
         raw: rawSnap,
         user: JSON.parse(JSON.stringify(row.user)),
+        fai: row.fai ? JSON.parse(JSON.stringify(row.fai)) : null,
       };
     }),
+    faiRuns: JSON.parse(JSON.stringify(state.faiRuns || [])),
   };
 }
 

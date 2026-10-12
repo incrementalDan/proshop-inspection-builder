@@ -20,6 +20,7 @@ var FILES = [
   'js/gdtParser.js',
   'js/ocrEngine.js',
   'js/exportEngine.js',
+  'js/cmmParser.js',
   'test/testData.js',
   'test/parser.test.js',
   'test/mathEngine.test.js',
@@ -28,6 +29,8 @@ var FILES = [
   'test/fixtures/gcInchSample.js',
   'test/fixture.test.js',
   'test/units.test.js',
+  'test/fixtures/cmmCalypsoSample.js',
+  'test/cmm.test.js',
 ];
 
 var ctx = { console: console };
@@ -44,6 +47,7 @@ var SUITES = [
   ['Export', 'runExportTests'],
   ['Fixtures', 'runFixtureTests'],
   ['Units', 'runUnitsTests'],
+  ['CMM', 'runCmmTests'],
 ];
 
 function stripHtml(s) {
