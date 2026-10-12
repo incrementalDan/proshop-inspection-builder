@@ -3211,3 +3211,55 @@ tr.row-flash {
   font-size: 11px;
   color: var(--text-secondary);
 }
+
+/* SU1: long ProShop notes clipped to a few characters; click to expand */
+.su1-long {
+  display: inline-block;
+  max-width: 6ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--text-secondary);
+}
+.su1-long:hover { color: var(--accent-orange); }
+#data-table td.su1-open .su1-long,
+#data-table.su1-all-open .su1-long {
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  text-overflow: clip;
+  text-align: left;
+  border-bottom: none;
+}
+.su1-toggle-all {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  margin-left: 2px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.su1-toggle-all:hover { color: var(--accent-orange); }
+#data-table.su1-all-open .su1-toggle-all { color: var(--accent-orange); }
+
+/* SU1 editor: floats over the row so long notes are easy to type */
+#data-table td.su1-editing { position: relative; overflow: visible; }
+#data-table td.su1-editing .su1-wide-input {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(520px, 60vw);
+  height: 30px;
+  padding: 0 8px;
+  z-index: 20;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
