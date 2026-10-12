@@ -1857,21 +1857,7 @@ function bindFaiControls() {
   if (cmpOp2kBtn) cmpOp2kBtn.addEventListener('click', function() { setFaiCompareMode('op2000'); });
   if (cmpCompBtn) cmpCompBtn.addEventListener('click', function() { setFaiCompareMode('compensated'); });
 
-  // FAI Export button
-  var exportFaiBtn = document.getElementById('btn-export-fai');
-  if (exportFaiBtn) {
-    exportFaiBtn.addEventListener('click', function() {
-      PSB.openModal('modal-fai-export');
-    });
-  }
-
-  // FAI Export modal close
-  var faiExportClose = document.getElementById('btn-fai-export-close');
-  if (faiExportClose) {
-    faiExportClose.addEventListener('click', function() {
-      PSB.closeModal('modal-fai-export');
-    });
-  }
+  bindFaiExportModal();
 
   // CMM Import button — populate existing runs list when modal opens
   var importCmmBtn = document.getElementById('btn-import-cmm');
@@ -1994,6 +1980,195 @@ function bindFaiControls() {
       PSB.closeModal('modal-cmm-summary');
     });
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FAI EXPORT — options live in globals.faiExport (saved with the project)
+// ═══════════════════════════════════════════════════════════
+
+var faiExportSettings = null;
+
+function bindFaiExportModal() {
+  var modal = document.getElementById('modal-fai-export');
+  if (!modal) return;
+
+  document.getElementById('btn-export-fai').addEventListener('click', openFaiExportModal);
+  document.getElementById('btn-fai-export-close').addEventListener('click', function() { PSB.closeModal('modal-fai-export'); });
+  document.getElementById('btn-fai-export-cancel').addEventListener('click', function() { PSB.closeModal('modal-fai-export'); });
+  document.getElementById('btn-fai-export-download').addEventListener('click', downloadFaiExport);
+
+  // Any option change → save + refresh preview
+  modal.addEventListener('change', onFaiExportInput);
+  modal.addEventListener('input', function(e) {
+    if (e.target.type === 'text' || e.target.type === 'number') onFaiExportInput(e);
+  });
+
+  // Run list: tick boxes and rank arrows
+  document.getElementById('fai-exp-runs').addEventListener('click', function(e) {
+    var btn = e.target.closest('button[data-move]');
+    if (!btn) return;
+    var i = parseInt(btn.getAttribute('data-index'), 10);
+    var j = i + parseInt(btn.getAttribute('data-move'), 10);
+    var runs = faiExportSettings.runs;
+    if (j < 0 || j >= runs.length) return;
+    var tmp = runs[i]; runs[i] = runs[j]; runs[j] = tmp;
+    saveFaiExportSettings();
+    renderFaiExportRuns();
+    renderFaiExportPreview();
+  });
+}
+
+function openFaiExportModal() {
+  if (!state.faiRuns || state.faiRuns.length === 0) {
+    PSB.showToast('Import CMM data first.', 'warn');
+    return;
+  }
+  faiExportSettings = PSB.getFaiExportSettings(state.globals, state.faiRuns);
+  fillFaiExportForm();
+  PSB.openModal('modal-fai-export');
+}
+
+function fillFaiExportForm() {
+  var s = faiExportSettings;
+  var modal = document.getElementById('modal-fai-export');
+  var fields = modal.querySelectorAll('[data-key]');
+  for (var i = 0; i < fields.length; i++) {
+    var key = fields[i].getAttribute('data-key');
+    if (fields[i].type === 'checkbox') fields[i].checked = !!s[key];
+    else fields[i].value = s[key] == null ? '' : s[key];
+  }
+  setRadio('fai-exp-runmode', s.runMode);
+  setRadio('fai-exp-filemode', s.fileMode);
+  renderFaiExportRuns();
+  renderFaiExportPreview();
+}
+
+function setRadio(name, value) {
+  var el = document.querySelector('input[name="' + name + '"][value="' + value + '"]');
+  if (el) el.checked = true;
+}
+
+function onFaiExportInput(e) {
+  var s = faiExportSettings;
+  if (!s) return;
+  var t = e.target;
+  var key = t.getAttribute('data-key');
+  if (key) {
+    if (t.type === 'checkbox') s[key] = t.checked;
+    else if (t.type === 'number') s[key] = parseInt(t.value, 10);
+    else s[key] = t.value;
+  } else if (t.name === 'fai-exp-runmode') {
+    s.runMode = t.value;
+    renderFaiExportRuns();
+  } else if (t.name === 'fai-exp-filemode') {
+    s.fileMode = t.value;
+  } else if (t.hasAttribute('data-run-id')) {
+    var id = t.getAttribute('data-run-id');
+    for (var i = 0; i < s.runs.length; i++) {
+      if (s.runs[i].id === id) s.runs[i].on = t.checked;
+    }
+    renderFaiExportRuns();
+  } else {
+    return;
+  }
+  saveFaiExportSettings();
+  renderFaiExportPreview();
+}
+
+function saveFaiExportSettings() {
+  state.globals.faiExport = JSON.parse(JSON.stringify(faiExportSettings));
+  markDirty();
+  scheduleAutoSave();
+}
+
+function renderFaiExportRuns() {
+  var s = faiExportSettings;
+  var list = document.getElementById('fai-exp-runs');
+  var mode = s.runMode;
+  var html = '';
+  var rank = 0;
+  for (var i = 0; i < s.runs.length; i++) {
+    var r = s.runs[i];
+    var run = findFaiRun(r.id);
+    if (!run) continue;
+    var on = mode === 'all' ? true : r.on;
+    if (on) rank++;
+    var meta = run.matchedCount + ' dims' + (run.units ? ' · ' + run.units : '') +
+      (run.importedAt ? ' · ' + run.importedAt.slice(0, 10) : '');
+    html += '<div class="cmm-run-row">' +
+      '<input type="checkbox" data-run-id="' + PSB.esc(r.id) + '"' + (on ? ' checked' : '') + (mode === 'all' ? ' disabled' : '') + '>' +
+      (mode === 'combine' ? '<span class="fai-exp-rank">' + (on ? rank : '') + '</span>' : '') +
+      '<span class="cmm-run-label">' + PSB.esc(run.label || run.fileName) + '</span>' +
+      '<span class="cmm-run-meta">' + PSB.esc(meta) + '</span>' +
+      (mode === 'combine'
+        ? '<button class="btn btn-small fai-exp-move" data-move="-1" data-index="' + i + '" title="Rank higher">▲</button>' +
+          '<button class="btn btn-small fai-exp-move" data-move="1" data-index="' + i + '" title="Rank lower">▼</button>'
+        : '') +
+      '</div>';
+  }
+  list.innerHTML = html;
+  document.getElementById('fai-exp-filemode-row').classList.toggle('hidden', mode === 'combine');
+}
+
+function renderFaiExportPreview() {
+  var s = faiExportSettings;
+  document.getElementById('fai-exp-fixed').classList.toggle('hidden', s.precision !== 'fixed');
+  document.getElementById('fai-exp-equipment').disabled = !s.includeEquipment;
+
+  var gate = document.getElementById('fai-exp-gate');
+  var btn = document.getElementById('btn-fai-export-download');
+  var confirmed = !!state.globals.printUnitsConfirmed;
+  gate.classList.toggle('hidden', confirmed);
+
+  var res = PSB.buildFaiExport(state, s);
+  var summary = res.files.map(function(f) {
+    return PSB.esc(f.fileName) + ' — ' + f.records.length + ' rows';
+  }).join('<br>');
+  res.warnings.forEach(function(w) { summary += '<br><span class="fai-exp-warn">' + PSB.esc(w) + '</span>'; });
+  document.getElementById('fai-exp-summary').innerHTML = summary;
+
+  var f = res.files[0];
+  var preview = '';
+  if (f) {
+    var MAX = 25;
+    preview = '<table><thead><tr>' + f.headers.map(function(h) { return '<th>' + PSB.esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    f.records.slice(0, MAX).forEach(function(rec) {
+      preview += '<tr>' + f.headers.map(function(h) { return '<td>' + PSB.esc(rec[h] == null ? '' : String(rec[h])) + '</td>'; }).join('') + '</tr>';
+    });
+    preview += '</tbody></table>';
+    if (f.records.length > MAX) preview += '<div class="hint">…' + (f.records.length - MAX) + ' more rows</div>';
+  }
+  document.getElementById('fai-exp-preview').innerHTML = preview;
+
+  var count = res.files.length;
+  btn.disabled = !confirmed || count === 0;
+  btn.textContent = count > 1 ? 'Download ' + count + ' CSVs' : 'Download CSV';
+}
+
+function downloadFaiExport() {
+  if (!state.globals.printUnitsConfirmed) return;
+  var res = PSB.buildFaiExport(state, faiExportSettings);
+  if (res.files.length === 0) return;
+  var handle = PSB.getProjectFileHandle();
+  var saved = 0;
+  // One save at a time — browsers only allow one file picker open
+  var chain = Promise.resolve(true);
+  res.files.forEach(function(f) {
+    chain = chain.then(function(ok) {
+      if (!ok) return false;
+      return PSB.downloadCSV(f.csv, f.fileName, handle).then(function(done) {
+        if (done) saved++;
+        return done;
+      });
+    });
+  });
+  chain.then(function() {
+    if (saved === 0) return; // cancelled — keep the dialog open
+    PSB.showToast('FAI exported (' + saved + ' file' + (saved > 1 ? 's' : '') + ').', 'success');
+    PSB.closeModal('modal-fai-export');
+  }).catch(function() {
+    PSB.showToast('FAI export failed.', 'error');
+  });
 }
 
 var cmmLastLoadedFileName = 'CMM_Import.txt';

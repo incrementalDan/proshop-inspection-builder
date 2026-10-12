@@ -3263,3 +3263,85 @@ tr.row-flash {
   font-size: 13px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
+
+/* ── FAI export modal ───────────────────────────────────── */
+.modal-content.fai-export-content {
+  width: 760px;
+  max-width: calc(100vw - 32px);
+  max-height: 90vh;
+}
+.fai-exp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 12px;
+}
+.fai-exp-grid fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+@media (max-width: 640px) {
+  .fai-exp-grid { grid-template-columns: 1fr; }
+}
+.fai-exp-num { width: 56px; }
+.fai-exp-filename { flex: 1; }
+.fai-exp-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 13px;
+}
+.fai-exp-equip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#fai-exp-runs { margin: 8px 0; }
+.fai-exp-rank {
+  min-width: 18px;
+  font-weight: 600;
+  color: var(--accent-orange);
+}
+.fai-exp-move {
+  padding: 0 6px;
+  line-height: 18px;
+}
+.fai-exp-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.fai-exp-summary .fai-exp-warn { color: var(--accent-orange); }
+.fai-exp-preview {
+  max-height: 220px;
+  overflow: auto;
+}
+.fai-exp-preview table {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  width: 100%;
+}
+.fai-exp-preview th,
+.fai-exp-preview td {
+  border: 1px solid var(--border-color);
+  padding: 2px 6px;
+  text-align: left;
+  white-space: nowrap;
+}
+.fai-exp-preview th { background: var(--bg-surface); position: sticky; top: 0; }
+.fai-export-content select,
+.fai-export-content input[type="text"],
+.fai-export-content input[type="number"] {
+  height: 26px;
+  padding: 0 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.fai-export-content input[type="text"]:disabled { opacity: 0.5; }
+.fai-export-content input[type="checkbox"],
+.fai-export-content input[type="radio"] { accent-color: var(--accent-blue); }
+.fai-export-content fieldset { min-width: 0; }

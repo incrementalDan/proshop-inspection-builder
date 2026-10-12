@@ -222,7 +222,46 @@ Detection clues (title block text from the PDF beats everything):
 - **Parent row** = worst of its measurements, graded the same way. Never disagrees with its children.
 - **Count** (e.g. 6x spec, 2 measured) is not checked. Fewer measurements is not a FAIL.
 
-## 12. Changing a rule
+## 12. FAI export (CMM results → ProShop)
+
+Export FAI button in FAI view. **Options save with the project** (`globals.faiExport`).
+
+### ProShop CSV columns
+
+| Column | What goes in it |
+|---|---|
+| **Dim Tag #** | Same as OP2000: zero-padded number (`07`). No `REF`, no other text |
+| **Measured** | The measured number only |
+| **Equipment Used** | Optional. Default `CMM008`, or free text. A per-measurement equipment value wins |
+| **CMM Nominal** | CMM's nominal. ProShop ignores it — kept for the record |
+| **CMM Tol Upper / Lower** | CMM's tolerance, separate columns. Lower is negative (`-0.0050`) |
+| Optional | Deviation, Pass/Fail, Source Run, CMM Name — off by default |
+
+### Runs
+
+| Mode | Result |
+|---|---|
+| **All runs** / **Pick runs** | One file, or one file per run |
+| **Combine (ranked)** | One file. Each dim tag comes from the **top-ranked run that has it**; lower runs fill the gaps |
+
+- Many runs in **one file** (not combined) → **Source Run** column is forced on, so repeated tags can be told apart.
+
+### Values
+
+| Option | Default | Notes |
+|---|---|---|
+| **Units** | Print units | Or inch / mm / each run's CMM units. **Angles never converted** |
+| **Decimals** | Unit default (in 4 / mm 3) | Or match print decimals (same units only), or fixed |
+| **Same tag** (e.g. 6x holes) | Worst case | Worst = most tolerance band used. Or all / first / last |
+| **Not measured** | Leave out | Or blank row with just the dim tag |
+| **Dim tag corrections** | On | Off → the tag the CMM gave it. A CMM tag not in the plan counts as unmatched |
+| **Unmatched CMM values** | Off | On → added at the end, raw CMM units and sign, tag blank (or the CMM's tag) |
+
+- Rows sort by dim tag number.
+- Export is blocked until print units are confirmed (values convert from print units).
+- File name pattern: `{part}`, `{run}`, `{date}`. Per-run / combined files add the run name.
+
+## 13. Changing a rule
 
 1. Update this file first.
 2. Update or add the test.

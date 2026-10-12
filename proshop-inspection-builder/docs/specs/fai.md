@@ -402,7 +402,7 @@ function switchView(viewId) {
 
 ### FAI Export — ProShop Format
 
-**PLACEHOLDER — spec TBD.**
+**Built.** Rules now live in `RULES.md` §12. The notes below are the original placeholder.
 
 Add an “Export FAI” button to FAI view toolbar.
 When clicked: show a modal with message “FAI export format not yet defined — coming soon.”

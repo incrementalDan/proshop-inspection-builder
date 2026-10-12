@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=41">
+  <link rel="stylesheet" href="css/styles.css?v=42">
 </head>
 <body>
 
@@ -621,17 +621,123 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════ -->
-  <!-- FAI EXPORT MODAL (placeholder)                    -->
+  <!-- FAI EXPORT MODAL — options save with the project -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div id="modal-fai-export" class="modal hidden">
-    <div class="modal-content">
+    <div class="modal-content fai-export-content">
       <div class="modal-header">
         <h2>Export FAI</h2>
+        <button id="btn-fai-export-close" class="btn btn-icon">✕</button>
       </div>
       <div class="modal-body">
-        <p>FAI export format not yet defined &mdash; coming soon.</p>
-        <div class="confirm-modal-actions" style="margin-top:12px;">
-          <button id="btn-fai-export-close" class="btn btn-primary">OK</button>
+        <div id="fai-exp-gate" class="export-units-gate hidden">
+          <p><strong>Confirm print units first.</strong> Use the units banner, then come back.</p>
+        </div>
+
+        <div class="fai-exp-grid">
+          <fieldset>
+            <legend>Format</legend>
+            <div class="cmm-option-row">
+              <label class="cmm-option-label" for="fai-exp-format">File</label>
+              <select id="fai-exp-format" data-key="format"><option value="csv">CSV</option></select>
+            </div>
+            <div class="cmm-option-row">
+              <label class="cmm-option-label" for="fai-exp-template">Layout</label>
+              <select id="fai-exp-template" data-key="template"><option value="proshop">ProShop</option></select>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Values</legend>
+            <div class="cmm-option-row">
+              <label class="cmm-option-label" for="fai-exp-units">Units</label>
+              <select id="fai-exp-units" data-key="units">
+                <option value="print">Print units</option>
+                <option value="inch">Inch</option>
+                <option value="mm">mm</option>
+                <option value="cmm">CMM run units</option>
+              </select>
+            </div>
+            <div class="cmm-option-row">
+              <label class="cmm-option-label" for="fai-exp-precision">Decimals</label>
+              <select id="fai-exp-precision" data-key="precision">
+                <option value="unitDefault">Unit default</option>
+                <option value="print">Match print</option>
+                <option value="fixed">Fixed</option>
+              </select>
+              <input type="number" id="fai-exp-fixed" data-key="fixedDecimals" min="0" max="8" class="fai-exp-num">
+            </div>
+            <div class="cmm-option-row">
+              <label class="cmm-option-label" for="fai-exp-dupes" title="Several CMM values on one dim tag (e.g. 6x holes)">Same tag</label>
+              <select id="fai-exp-dupes" data-key="duplicates">
+                <option value="worst">Worst case</option>
+                <option value="all">All values</option>
+                <option value="first">First</option>
+                <option value="last">Last</option>
+              </select>
+            </div>
+            <div class="cmm-option-row">
+              <label class="cmm-option-label" for="fai-exp-missing">Not measured</label>
+              <select id="fai-exp-missing" data-key="missingDims">
+                <option value="skip">Leave out</option>
+                <option value="blank">Blank row</option>
+              </select>
+            </div>
+            <label class="cmm-radio-label"><input type="checkbox" data-key="applyTagCorrections"> Use dim tag corrections</label>
+            <label class="cmm-radio-label"><input type="checkbox" data-key="includeUnmatched"> Include unmatched CMM values</label>
+          </fieldset>
+        </div>
+
+        <fieldset>
+          <legend>Runs</legend>
+          <div class="cmm-option-row">
+            <label class="cmm-radio-label"><input type="radio" name="fai-exp-runmode" value="all"> All runs</label>
+            <label class="cmm-radio-label"><input type="radio" name="fai-exp-runmode" value="pick"> Pick runs</label>
+            <label class="cmm-radio-label" title="Top run wins. Lower runs fill dims it doesn't have."><input type="radio" name="fai-exp-runmode" value="combine"> Combine (ranked)</label>
+          </div>
+          <div id="fai-exp-runs" class="cmm-runs-list"></div>
+          <div class="cmm-option-row" id="fai-exp-filemode-row">
+            <label class="cmm-radio-label"><input type="radio" name="fai-exp-filemode" value="one"> One file</label>
+            <label class="cmm-radio-label"><input type="radio" name="fai-exp-filemode" value="perRun"> One file per run</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Columns</legend>
+          <div class="fai-exp-cols">
+            <label class="cmm-radio-label"><input type="checkbox" checked disabled> Dim Tag #</label>
+            <label class="cmm-radio-label"><input type="checkbox" checked disabled> Measured</label>
+            <span class="fai-exp-equip">
+              <label class="cmm-radio-label"><input type="checkbox" data-key="includeEquipment"> Equipment Used</label>
+              <input type="text" id="fai-exp-equipment" data-key="equipment" list="fai-exp-equipment-list" size="10">
+              <datalist id="fai-exp-equipment-list"><option value="CMM008"></option></datalist>
+            </span>
+            <label class="cmm-radio-label"><input type="checkbox" data-key="includeCmmNominal"> CMM Nominal</label>
+            <label class="cmm-radio-label"><input type="checkbox" data-key="includeCmmTol"> CMM Tol Upper / Lower</label>
+            <label class="cmm-radio-label"><input type="checkbox" data-key="includeDeviation"> Deviation</label>
+            <label class="cmm-radio-label"><input type="checkbox" data-key="includePassFail"> Pass/Fail</label>
+            <label class="cmm-radio-label" title="Always on when one file holds many runs"><input type="checkbox" data-key="includeSourceRun"> Source Run</label>
+            <label class="cmm-radio-label"><input type="checkbox" data-key="includeCmmName"> CMM Name</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>File name</legend>
+          <div class="cmm-option-row">
+            <input type="text" id="fai-exp-filename" data-key="fileNamePattern" class="fai-exp-filename">
+            <span class="hint">{part} {run} {date}</span>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Preview</legend>
+          <div id="fai-exp-summary" class="fai-exp-summary"></div>
+          <div id="fai-exp-preview" class="fai-exp-preview"></div>
+        </fieldset>
+
+        <div class="confirm-modal-actions">
+          <button id="btn-fai-export-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="btn-fai-export-download" class="btn btn-accent">Download CSV</button>
         </div>
       </div>
     </div>
@@ -654,23 +760,24 @@
   <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
   <script src="lib/pdf-lib.min.js"></script>
 
-  <script src="lib/pdf-lib.min.js?v=41"></script>
-  <script src="js/mathEngine.js?v=41"></script>
-  <script src="js/parser.js?v=41"></script>
-  <script src="js/units.js?v=41"></script>
-  <script src="js/dataModel.js?v=41"></script>
-  <script src="js/exportEngine.js?v=41"></script>
-  <script src="js/storage.js?v=41"></script>
-  <script src="js/history.js?v=41"></script>
-  <script src="js/pdfViewer.js?v=41"></script>
-  <script src="js/cmmParser.js?v=41"></script>
-  <script src="js/gdtParser.js?v=41"></script>
-  <script src="js/ocrEngine.js?v=41"></script>
-  <script src="js/tolModeInput.js?v=41"></script>
-  <script src="js/balloonManager.js?v=41"></script>
-  <script src="js/pdfExport.js?v=41"></script>
-  <script src="js/ui.js?v=41"></script>
-  <script src="js/app.js?v=41"></script>
+  <script src="lib/pdf-lib.min.js?v=42"></script>
+  <script src="js/mathEngine.js?v=42"></script>
+  <script src="js/parser.js?v=42"></script>
+  <script src="js/units.js?v=42"></script>
+  <script src="js/dataModel.js?v=42"></script>
+  <script src="js/exportEngine.js?v=42"></script>
+  <script src="js/storage.js?v=42"></script>
+  <script src="js/history.js?v=42"></script>
+  <script src="js/pdfViewer.js?v=42"></script>
+  <script src="js/cmmParser.js?v=42"></script>
+  <script src="js/faiExport.js?v=42"></script>
+  <script src="js/gdtParser.js?v=42"></script>
+  <script src="js/ocrEngine.js?v=42"></script>
+  <script src="js/tolModeInput.js?v=42"></script>
+  <script src="js/balloonManager.js?v=42"></script>
+  <script src="js/pdfExport.js?v=42"></script>
+  <script src="js/ui.js?v=42"></script>
+  <script src="js/app.js?v=42"></script>
 
 </body>
 </html>
