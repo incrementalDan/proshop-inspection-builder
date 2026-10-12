@@ -94,7 +94,7 @@ Raw input → 1 Parse → 2 Overrides → [OP2000 values]
 | **Same units** in and out, no math | **As printed**: `.390 ±0.005` → `.390 ±.005` |
 | **Same units**, math changed the value (plating, centering) | **Print decimals or unit default, whichever is more**: `.081` +2xI .0002 → `.0814` |
 | **Converted** (inch ↔ mm) | **Unit default**: inch 4, mm 3 |
-| **Angles** | Always as printed (never converted): `90 ±0.5` → `90 ±.5` |
+| **Angles** | As printed (never converted), but **rounded to Angle Decimals (default 3)** when longer — never padded: `12.0833333333333925` → `12.083`, `41` → `41`. Applies to OP2000 too, so every OP follows. CMM angle values use the same rounding. |
 | **OP2000** | As printed / as typed. Never reformatted. |
 | **Typed OUT values** | As typed (same units) |
 | **No tolerance anywhere** | Tol column **blank**, not `.0000` |

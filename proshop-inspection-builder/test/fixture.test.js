@@ -94,6 +94,20 @@ TEST.runFixtureTests = function(log) {
   e = exp('90', '+1 -0', inchGlobals(), function(r) { r.raw = Object.freeze(Object.assign({}, r.raw, { specUnit2: '°' })); });
   assertEq('Angle: centering keeps needed decimals', e['Drawing Spec'], '90.5');
 
+  // Angles — long decimals round to Angle Decimals (default 3), never padded
+  function deg(r) { r.raw = Object.freeze(Object.assign({}, r.raw, { specUnit2: '°' })); }
+  e = exp('12.0833333333333925', '0.5', inchGlobals(), deg, 2000);
+  assertEq('Angle: OP2000 spec rounded to 3', e['Drawing Spec'], '12.083');
+  assertEq('Angle: OP2000 Nom Dim rounded to 3', e['Nom Dim'], '12.083');
+  e = exp('15.8333333333333925', '0.5', inchGlobals(), deg);
+  assertEq('Angle: OUT spec rounded to 3', e['Drawing Spec'], '15.833');
+  e = exp('41', '0.5', inchGlobals(), deg, 2000);
+  assertEq('Angle: whole number not padded', e['Drawing Spec'], '41');
+  e = exp('12.0833333333333925', '0.5', inchGlobals({ angleDecimals: 1 }), deg, 2000);
+  assertEq('Angle: user-set decimals', e['Drawing Spec'], '12.1');
+  e = exp('12.0833333333333925', '+1 -0', inchGlobals(), deg);
+  assertEq('Angle: centering capped at angle decimals', e['Drawing Spec'], '12.583');
+
   // No tolerance → blank, not ".0000"
   e = exp('.248', '', inchGlobals());
   assertEq('No tolerance: Tol blank', e['Tol ±'], '');

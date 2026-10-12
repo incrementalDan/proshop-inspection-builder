@@ -116,6 +116,22 @@ function formatPrecision(value, decimalPlaces) {
 }
 
 /**
+ * Round angle text to at most maxDec decimals (RULES.md §5).
+ * Only numbers with MORE decimals are touched — never pads:
+ *   "12.0833333333333925" (3) → "12.083",  "41" → "41",  "±0.5" → "±0.5"
+ */
+function capAngleDecimals(str, maxDec) {
+  if (str === null || str === undefined || maxDec === null || maxDec === undefined || isNaN(maxDec)) return str;
+  return String(str).replace(/\d*\.\d+/g, function(num) {
+    var dec = num.length - num.indexOf('.') - 1;
+    if (dec <= maxDec) return num;
+    var out = parseFloat(num).toFixed(maxDec);
+    // Keep the print's bare-decimal style (".25" not "0.25")
+    return num.charAt(0) === '.' ? out.replace(/^0\./, '.') : out;
+  });
+}
+
+/**
  * Add a leading zero to bare decimals: ".390" → "0.390", "+.005 -.002" → "+0.005 -0.002".
  * Only the zero is added — decimals are untouched.
  */
@@ -375,6 +391,7 @@ PSB.computePinGage = computePinGage;
 PSB.computeGageBlock = computeGageBlock;
 PSB.detectPrecision = detectPrecision;
 PSB.countDecimals = countDecimals;
+PSB.capAngleDecimals = capAngleDecimals;
 PSB.computeFaiStatus = computeFaiStatus;
 PSB.computeAggregateStatus = computeAggregateStatus;
 PSB.getFaiLimits = getFaiLimits;
