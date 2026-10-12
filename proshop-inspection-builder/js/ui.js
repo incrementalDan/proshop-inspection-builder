@@ -91,6 +91,7 @@ function initUI(callbacks) {
 
   setupDragDrop();
   setupFaiRetagEditing();
+  setupCmmSepToggle();
   setupSidebarResizer();
   setupSetupPanelResizer();
   setupThemeToggle();
@@ -271,6 +272,38 @@ function updateFaiFrozenOffsets() {
   }
 }
 
+// ── CMM Tag column (FAI view) — opened/closed by the bar between Print and CMM data ──
+var CMM_TAG_COL_KEY = 'psb_fai_cmm_tag_open';
+var cmmTagColOpen = (function() {
+  try { return localStorage.getItem(CMM_TAG_COL_KEY) === '1'; } catch (e) { return false; }
+})();
+var CMM_SEP_TD = '<td class="col-cmm-sep" title="Show / hide CMM dim tags"></td>';
+
+function cmmSepHeaderHTML() {
+  return '<th class="col-cmm-sep th-cmm-sep" rowspan="2" title="' +
+    (cmmTagColOpen ? 'Hide CMM dim tags' : 'Show CMM dim tags — double-click a tag there to change it') + '">' +
+    (cmmTagColOpen ? '‹' : '›') + '</th>';
+}
+
+function toggleCmmTagColumn() {
+  cmmTagColOpen = !cmmTagColOpen;
+  try { localStorage.setItem(CMM_TAG_COL_KEY, cmmTagColOpen ? '1' : '0'); } catch (e) {}
+  var st = getAppState && getAppState();
+  if (st) renderTable(st, currentViewConfig);
+}
+
+/** Click anywhere on the separator bar (header or body) toggles the CMM Tag column. */
+function setupCmmSepToggle() {
+  var table = document.getElementById('data-table');
+  if (!table) return;
+  table.addEventListener('click', function(e) {
+    var sep = e.target.closest ? e.target.closest('.col-cmm-sep') : null;
+    if (!sep) return;
+    e.stopPropagation();
+    toggleCmmTagColumn();
+  });
+}
+
 /**
  * Update table header cells based on the active view.
  */
@@ -283,7 +316,8 @@ function updateTableHeaders(isFaiView) {
       '<tr>' +
         '<th class="th-group-print fai-frozen-group" colspan="3">Print Data</th>' +
         '<th class="th-group-print" colspan="6"></th>' +
-        '<th class="th-group-cmm" colspan="5">CMM Data</th>' +
+        cmmSepHeaderHTML() +
+        '<th class="th-group-cmm" colspan="' + (cmmTagColOpen ? 6 : 5) + '">CMM Data</th>' +
       '</tr>' +
       '<tr>' +
         '<th class="col-fai-status">Status</th>' +
@@ -295,6 +329,7 @@ function updateTableHeaders(isFaiView) {
         '<th class="col-plating">Plating</th>' +
         '<th class="col-op2000-tol">OP2000 Tol</th>' +
         '<th class="col-out-tol">OUT Tol</th>' +
+        (cmmTagColOpen ? '<th class="col-cmm-tag">CMM Tag</th>' : '') +
         '<th class="col-cmm-tol">CMM Tol</th>' +
         '<th class="col-cmm-nominal">Nominal</th>' +
         '<th class="col-measured">Measured</th>' +
@@ -370,13 +405,22 @@ function buildFaiFamilyHTML(row) {
     '<td class="col-su3">' + esc(c.specUnit3 || '') + '</td>' +
     '<td class="col-plating">' + esc(platingLabel) + '</td>' +
     '<td class="col-op2000-tol">' + esc(op2kTolDisplay) + '</td>' +
-    '<td class="col-out-tol">' + esc(outTolDisplay) + '</td>';
+    '<td class="col-out-tol">' + esc(outTolDisplay) + '</td>' +
+    CMM_SEP_TD;
 
-  // Dim tag cell of a measurement line: double-click to move it to another dim tag
-  function retagAttrs(mi, m) {
-    var tip = (m.cmmName || '') + (m.originalTag != null ? '  (CMM tag #' + m.originalTag + ', re-tagged)' : '') +
-      '\nDouble-click to change dim tag';
-    return 'data-retag-row="' + esc(String(row.id)) + '" data-retag-mi="' + mi + '" title="' + esc(tip) + '"';
+  // CMM Tag cell (only when the column is open): the tag the CMM report used,
+  // "#8 → 9" if re-tagged, + the CMM feature name. Double-click to change.
+  function cmmTagCell(mi, m) {
+    if (!cmmTagColOpen) return '';
+    var retagged = Object.prototype.hasOwnProperty.call(m, 'originalTag');
+    var tagHtml = retagged
+      ? '<span class="cmm-tag-old">' + (m.originalTag != null ? '#' + esc(String(m.originalTag)) : 'none') + '</span>' +
+        ' → <span class="cmm-tag-new">' + esc(String(c.dimTag)) + '</span>'
+      : '<span class="cmm-tag-num">#' + esc(String(c.dimTag)) + '</span>';
+    return '<td class="col-cmm-tag" data-retag-row="' + esc(String(row.id)) + '" data-retag-mi="' + mi + '"' +
+      ' data-retag-current="' + esc(String(c.dimTag)) + '"' +
+      ' title="' + esc((m.cmmName || '') + '\nDouble-click to change the CMM dim tag') + '">' +
+      tagHtml + ' <span class="cmm-tag-name">' + esc(m.cmmName || '') + '</span></td>';
   }
 
   // Status badge helper
@@ -389,6 +433,7 @@ function buildFaiFamilyHTML(row) {
   // No measurements
   if (!fai || !fai.measurements || fai.measurements.length === 0) {
     return '<tr>' + printCells.replace('{STATUS}', statusBadge(null)) +
+      (cmmTagColOpen ? '<td class="col-cmm-tag">—</td>' : '') +
       '<td class="col-cmm-tol">—</td>' +
       '<td class="col-cmm-nominal">—</td>' +
       '<td class="col-measured">—</td>' +
@@ -405,8 +450,8 @@ function buildFaiFamilyHTML(row) {
     var status = gradeMeasurement(m);
     var devTint = status ? ' dev-tint-' + status : '';
     return '<tr>' +
-      printCells.replace('{STATUS}', statusBadge(status))
-        .replace('<td class="col-dimtag">', '<td class="col-dimtag" ' + retagAttrs(0, m) + '>') +
+      printCells.replace('{STATUS}', statusBadge(status)) +
+      cmmTagCell(0, m) +
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
       '<td class="col-cmm-nominal">' + formatDualDisplay(buildCmmDualString(m.nominal, planUnits, isAngle)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
@@ -452,6 +497,7 @@ function buildFaiFamilyHTML(row) {
   var parentDevTint = aggStatus ? ' dev-tint-' + aggStatus : '';
   var html = '<tr class="fai-parent-row has-children">' +
     printCells.replace('{STATUS}', statusBadge(aggStatus)) +
+    (cmmTagColOpen ? '<td class="col-cmm-tag"></td>' : '') +
     '<td class="col-cmm-tol">' + esc(parentCmmTol) + '</td>' +
     '<td class="col-cmm-nominal">—</td>' +
     '<td class="col-measured">' + measRangeHtml + '</td>' +
@@ -467,7 +513,7 @@ function buildFaiFamilyHTML(row) {
     var isLast = (mi === measurements.length - 1);
     html += '<tr class="fai-child-row' + (isLast ? ' fai-last-child' : '') + '">' +
       '<td class="col-fai-status">' + statusBadge(mStatus) + '</td>' +
-      '<td class="col-dimtag fai-child-indent" ' + retagAttrs(mi, m) + '>' + esc(String(c.dimTag)) + '</td>' +
+      '<td class="col-dimtag fai-child-indent" title="' + esc(m.cmmName || '') + '">' + esc(String(c.dimTag)) + '</td>' +
       '<td class="col-drawing-spec"></td>' +
       '<td class="col-su1"></td>' +
       '<td class="col-su2"></td>' +
@@ -475,6 +521,8 @@ function buildFaiFamilyHTML(row) {
       '<td class="col-plating"></td>' +
       '<td class="col-op2000-tol"></td>' +
       '<td class="col-out-tol"></td>' +
+      CMM_SEP_TD +
+      cmmTagCell(mi, m) +
       '<td class="col-cmm-tol">' + esc(tolStr(m.plusTol, m.minusTol)) + '</td>' +
       '<td class="col-cmm-nominal">' + formatDualDisplay(buildCmmDualString(m.nominal, planUnits, isAngle)) + '</td>' +
       '<td class="col-measured">' + formatDualDisplay(buildCmmDualString(m.measured, planUnits, isAngle)) + '</td>' +
@@ -552,7 +600,7 @@ function setupFaiRetagEditing() {
     var originalHtml = td.innerHTML;
     var input = document.createElement('input');
     input.type = 'text';
-    input.value = td.textContent.replace(/REF$/, '').trim();
+    input.value = td.getAttribute('data-retag-current') || '';
     input.className = 'inline-edit-input';
     td.innerHTML = '';
     td.appendChild(input);

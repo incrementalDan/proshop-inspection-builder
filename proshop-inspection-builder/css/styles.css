@@ -2245,7 +2245,7 @@ td.edit-flash {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 160px;
+  max-height: 260px;
   overflow-y: auto;
 }
 .cmm-run-row {
@@ -3147,4 +3147,67 @@ tr.row-flash {
 /* FAI view: measurement dim tag cells can be double-clicked to re-tag */
 #data-table td[data-retag-row] {
   cursor: text;
+}
+
+/* CMM runs list: unmatched rows under each run */
+.cmm-run-unmatched {
+  margin: 0 0 4px 24px;
+  font-size: 12px;
+}
+.cmm-run-unmatched summary {
+  cursor: pointer;
+  color: var(--text-secondary, inherit);
+}
+.cmm-run-unmatched .cmm-unmatched-ul {
+  max-height: none;
+  margin: 4px 0 0;
+}
+
+/* FAI view: thin bar between Print Data and CMM Data — click to show/hide the CMM Tag column */
+#data-table .col-cmm-sep {
+  width: 12px;
+  min-width: 12px;
+  max-width: 12px;
+  padding: 0 !important;
+  background: #6b3c18 !important;
+  cursor: pointer !important;
+  border-left: 1px solid #8a4e20;
+  border-right: 1px solid #8a4e20;
+  transition: background 0.12s;
+}
+#data-table thead th.th-cmm-sep {
+  color: #ffd2a8 !important;
+  font-size: 16px !important;
+  font-weight: 700;
+  text-align: center !important;
+  vertical-align: middle;
+  line-height: 1;
+}
+#data-table .col-cmm-sep:hover,
+#data-table thead th.th-cmm-sep:hover {
+  background: #ff8c42 !important;
+}
+
+/* CMM Tag column */
+#data-table td.col-cmm-tag {
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(255, 140, 66, 0.06);
+}
+#data-table thead th.col-cmm-tag { white-space: nowrap; }
+.cmm-tag-num { font-weight: 600; }
+.cmm-tag-old {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+.cmm-tag-new {
+  color: var(--accent-orange);
+  font-weight: 700;
+}
+.cmm-tag-name {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
