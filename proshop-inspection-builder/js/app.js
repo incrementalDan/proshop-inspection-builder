@@ -1663,10 +1663,7 @@ function handleFaiRetag(fromRowId, measurementIndex, newTag) {
  */
 function assignUnmatchedCmmRow(runId, unmatchedIndex, newTag) {
   newTag = String(newTag).replace(/^#/, '').trim();
-  var run = null;
-  for (var i = 0; i < (state.faiRuns || []).length; i++) {
-    if (state.faiRuns[i].id === runId) { run = state.faiRuns[i]; break; }
-  }
+  var run = findFaiRun(runId);
   if (!run || !run.unmatchedRows || !run.unmatchedRows[unmatchedIndex]) return false;
   var toRow = findRowByDimTag(newTag);
   if (!toRow) {
@@ -1795,44 +1792,62 @@ function showCmmImportSummary(runId, totalParsed, matchedCount, unmatchedRows) {
   PSB.openModal('modal-cmm-summary');
 }
 
-/**
- * Unmatched CMM rows, each with a dim tag box: type a tag + Enter to assign it.
- * Re-renders after each assign (indexes shift as rows leave the list).
- */
-function renderCmmUnmatchedList(runId) {
-  var listEl = document.getElementById('cmm-summary-unmatched-list');
-  var run = null;
+function findFaiRun(runId) {
   for (var i = 0; i < (state.faiRuns || []).length; i++) {
-    if (state.faiRuns[i].id === runId) { run = state.faiRuns[i]; break; }
+    if (state.faiRuns[i].id === runId) return state.faiRuns[i];
   }
-  var rows = (run && run.unmatchedRows) || [];
-  document.getElementById('cmm-summary-matched').textContent = run ? run.matchedCount : 0;
-  document.getElementById('cmm-summary-unmatched').textContent = rows.length;
-  if (rows.length === 0) { listEl.innerHTML = ''; return; }
+  return null;
+}
 
+/**
+ * HTML list of a run's unmatched CMM rows, each with a dim tag box.
+ * Pair with bindCmmAssignInputs() after inserting it.
+ */
+function buildCmmUnmatchedHtml(run) {
+  var rows = (run && run.unmatchedRows) || [];
   var items = '';
   for (var u = 0; u < rows.length; u++) {
     var row = rows[u];
     items += '<li class="cmm-unmatched-item">' +
-      '<input type="text" class="cmm-assign-tag" data-index="' + u + '" placeholder="#" title="Type a dim tag and press Enter" size="4"' +
+      '<input type="text" class="cmm-assign-tag" data-run-id="' + PSB.esc(run.id) + '" data-index="' + u + '" placeholder="#" title="Type a dim tag and press Enter" size="4"' +
         (row.dimTag != null ? ' value="' + PSB.esc(String(row.dimTag)) + '"' : '') + '> ' +
       PSB.esc(row.cmmName || '(no name)') + ' — ' + (row.measured != null ? row.measured : '?') + '</li>';
   }
-  listEl.innerHTML = '<p><strong>Unmatched rows</strong> — type the dim tag and press Enter to assign:</p>' +
-    '<ul class="cmm-unmatched-ul">' + items + '</ul>';
+  return '<ul class="cmm-unmatched-ul">' + items + '</ul>';
+}
 
-  var inputs = listEl.querySelectorAll('input.cmm-assign-tag');
+/** Enter in a tag box assigns that unmatched row, then calls onAssigned(). */
+function bindCmmAssignInputs(container, onAssigned) {
+  var inputs = container.querySelectorAll('input.cmm-assign-tag');
   for (var k = 0; k < inputs.length; k++) {
     inputs[k].addEventListener('keydown', function(e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
       var tag = e.target.value.trim();
       if (!tag) return;
+      var runId = e.target.getAttribute('data-run-id');
       if (assignUnmatchedCmmRow(runId, parseInt(e.target.getAttribute('data-index'), 10), tag)) {
-        renderCmmUnmatchedList(runId);
+        onAssigned();
       }
     });
   }
+}
+
+/**
+ * Import summary: unmatched CMM rows with tag boxes.
+ * Re-renders after each assign (indexes shift as rows leave the list).
+ */
+function renderCmmUnmatchedList(runId) {
+  var listEl = document.getElementById('cmm-summary-unmatched-list');
+  var run = findFaiRun(runId);
+  var rows = (run && run.unmatchedRows) || [];
+  document.getElementById('cmm-summary-matched').textContent = run ? run.matchedCount : 0;
+  document.getElementById('cmm-summary-unmatched').textContent = rows.length;
+  if (rows.length === 0) { listEl.innerHTML = ''; return; }
+
+  listEl.innerHTML = '<p><strong>Unmatched rows</strong> — type the dim tag and press Enter to assign:</p>' +
+    buildCmmUnmatchedHtml(run);
+  bindCmmAssignInputs(listEl, function() { renderCmmUnmatchedList(runId); });
 }
 
 function bindFaiControls() {
@@ -2007,8 +2022,26 @@ function refreshCmmRunsList() {
       '<span class="cmm-run-label">' + PSB.esc(run.label || run.fileName) + '</span>' +
       '<span class="cmm-run-meta">' + PSB.esc(run.matchedCount + ' dims' + unitsLabel + (date ? ' · ' + date : '')) + '</span>' +
       '</label>';
+    var unmatchedCount = (run.unmatchedRows || []).length;
+    if (unmatchedCount > 0) {
+      html += '<details class="cmm-run-unmatched">' +
+        '<summary>' + unmatchedCount + ' unmatched — assign a dim tag</summary>' +
+        buildCmmUnmatchedHtml(run) +
+        '</details>';
+    }
   }
   list.innerHTML = html;
+  bindCmmAssignInputs(list, function() {
+    // Keep the run that was just edited open after re-render
+    var open = {};
+    var det = list.querySelectorAll('details.cmm-run-unmatched[open] input.cmm-assign-tag');
+    for (var d = 0; d < det.length; d++) open[det[d].getAttribute('data-run-id')] = true;
+    refreshCmmRunsList();
+    var inputs = list.querySelectorAll('input.cmm-assign-tag');
+    for (var j = 0; j < inputs.length; j++) {
+      if (open[inputs[j].getAttribute('data-run-id')]) inputs[j].closest('details').open = true;
+    }
+  });
   updateDeleteSelectedBtn();
 }
 
