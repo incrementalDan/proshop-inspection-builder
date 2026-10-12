@@ -92,6 +92,7 @@ function initUI(callbacks) {
   setupDragDrop();
   setupFaiRetagEditing();
   setupCmmSepToggle();
+  setupSu1Expand();
   setupSidebarResizer();
   setupSetupPanelResizer();
   setupThemeToggle();
@@ -304,6 +305,49 @@ function setupCmmSepToggle() {
   });
 }
 
+// ── SU1 column: collapsed to a few characters (ProShop notes live here) ──
+// Short values (Ø, ⌴, 2X) show in full. Longer text is clipped with "…";
+// click it to open that cell, or the ⇔ button in the header to open all.
+var SU1_ALL_OPEN_KEY = 'psb_su1_all_open';
+var SU1_TOGGLE_BTN = ' <button type="button" class="su1-toggle-all" title="Show / hide full SU1 text">⇔</button>';
+var SU1_SHORT_MAX = 4;
+
+function su1CellHTML(text) {
+  text = text == null ? '' : String(text);
+  if (text.length <= SU1_SHORT_MAX) return esc(text);
+  return '<span class="su1-long" title="' + esc(text) + '\n(click to expand)">' + esc(text) + '</span>';
+}
+
+function applySu1AllOpen() {
+  var table = document.getElementById('data-table');
+  if (!table) return;
+  var open = false;
+  try { open = localStorage.getItem(SU1_ALL_OPEN_KEY) === '1'; } catch (e) {}
+  table.classList.toggle('su1-all-open', open);
+}
+
+function setupSu1Expand() {
+  var table = document.getElementById('data-table');
+  if (!table) return;
+  applySu1AllOpen();
+  table.addEventListener('click', function(e) {
+    if (!e.target.closest) return;
+    if (e.target.closest('.su1-toggle-all')) {
+      e.stopPropagation();  // don't sort the column
+      var open = !table.classList.contains('su1-all-open');
+      try { localStorage.setItem(SU1_ALL_OPEN_KEY, open ? '1' : '0'); } catch (err) {}
+      applySu1AllOpen();
+      return;
+    }
+    var long = e.target.closest('.su1-long');
+    if (long) {
+      e.stopPropagation();  // don't select the row
+      var td = long.closest('td');
+      if (td) td.classList.toggle('su1-open');
+    }
+  }, true);
+}
+
 /**
  * Update table header cells based on the active view.
  */
@@ -323,7 +367,7 @@ function updateTableHeaders(isFaiView) {
         '<th class="col-fai-status">Status</th>' +
         '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
         '<th class="col-drawing-spec">Drawing Spec</th>' +
-        '<th class="col-su1">SU1</th>' +
+        '<th class="col-su1">SU1' + SU1_TOGGLE_BTN + '</th>' +
         '<th class="col-su2">SU2</th>' +
         '<th class="col-su3">SU3</th>' +
         '<th class="col-plating">Plating</th>' +
@@ -341,7 +385,7 @@ function updateTableHeaders(isFaiView) {
       '<tr>' +
         '<th data-col="status" class="col-status">Status</th>' +
         '<th data-col="dimTag" class="col-dimtag">Dim Tag</th>' +
-        '<th data-col="specUnit1" class="col-su1">SU1</th>' +
+        '<th data-col="specUnit1" class="col-su1">SU1' + SU1_TOGGLE_BTN + '</th>' +
         '<th data-col="outDrawingSpec" class="col-drawspec">OUT Drawing Spec</th>' +
         '<th data-col="op2000Spec" class="col-inputspec">OP2000 Spec</th>' +
         '<th data-col="specUnit2" class="col-su2">SU2</th>' +
@@ -400,7 +444,7 @@ function buildFaiFamilyHTML(row) {
     '<td class="col-fai-status">{STATUS}</td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + refBadgeHTML(row) + '</td>' +
     '<td class="col-drawing-spec">' + specHtml + '</td>' +
-    '<td class="col-su1">' + esc(c.specUnit1 || '') + '</td>' +
+    '<td class="col-su1">' + su1CellHTML(c.specUnit1) + '</td>' +
     '<td class="col-su2">' + esc(c.specUnit2 || '') + '</td>' +
     '<td class="col-su3">' + esc(c.specUnit3 || '') + '</td>' +
     '<td class="col-plating">' + esc(platingLabel) + '</td>' +
@@ -658,7 +702,7 @@ function buildRowHTML(row) {
   return '' +
     '<td class="col-status"><span class="status-dot ' + statusClass + '"></span><button class="delete-row-btn" title="Delete row">&times;</button></td>' +
     '<td class="col-dimtag">' + esc(c.dimTag) + refBadgeHTML(row) + '</td>' +
-    '<td class="col-su1 editable">' + esc(c.specUnit1) + '</td>' +
+    '<td class="col-su1 editable">' + su1CellHTML(c.specUnit1) + '</td>' +
     '<td class="col-drawspec editable' + (ov.outputSpec !== null ? ' has-override' : '') + '">' + formatDualDisplay(c.outDrawingSpec) +
       (row.user.gdt
         ? ' <span class="gdt-info-badge" data-gdt-char="' + esc(row.user.gdt.characteristic) + '" tabindex="0" aria-label="GD&T info">ℹ</span>'
@@ -1669,6 +1713,11 @@ function setupSingleEdit(td, row, originalHTML) {
   input.type = 'text';
   input.value = originalValue;
   td.textContent = '';
+  // SU1 holds ProShop notes — give the editor room instead of the narrow cell
+  if (td.classList.contains('col-su1')) {
+    input.className = 'su1-wide-input';
+    td.classList.add('su1-editing');
+  }
   td.appendChild(input);
   input.focus();
   input.select();
