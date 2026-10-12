@@ -46,7 +46,9 @@ function buildCmmRow(name, nums) {
     measured: parseFloat(nums[0]),
     nominal: parseFloat(nums[1]),
     plusTol: parseFloat(nums[2]),
-    minusTol: Math.abs(parseFloat(nums[3])),
+    // -Tol column is the signed lower deviation. minusTol = how far BELOW nominal
+    // the lower limit sits, so a unilateral "+0.005" lower tol → minusTol -0.005.
+    minusTol: -parseFloat(nums[3]) || 0,
     deviation: parseFloat(nums[4]),
   };
 }
@@ -134,9 +136,10 @@ var CMM_HEADER_LABEL_RE = /^\d*\s*(Part\s+name|Order\s+number|Part\s+ident|Opera
 function cmmHeaderValueAfter(lines, i) {
   for (var j = i + 1; j < lines.length; j++) {
     if (CMM_HEADER_LABEL_RE.test(lines[j])) continue;
-    // A date here means the part name was blank
+    // Blank values are skipped in the report, so this line may belong to a
+    // later field (operator, date…). Part numbers have digits — trust only those.
     if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(lines[j])) return '';
-    return lines[j];
+    return /\d/.test(lines[j]) ? lines[j] : '';
   }
   return '';
 }

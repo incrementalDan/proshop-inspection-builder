@@ -231,7 +231,7 @@ function parseCmmText(rawText) {
     var measured  = parseFloat(m[2]);
     var nominal   = parseFloat(m[3]);
     var plusTol   = parseFloat(m[4]);
-    var minusTol  = Math.abs(parseFloat(m[5])); // stored as positive magnitude
+    var minusTol  = Math.abs(parseFloat(m[5])); // OUTDATED — now signed, see RULES.md §11
     var deviation = parseFloat(m[6]);
 
     rows.push({
@@ -438,7 +438,7 @@ Reserve these export considerations for when the spec is known:
 - Do NOT render FAI columns in Setup View — use the view config, not CSS hide
 - Do NOT modify `row.raw` or `row.user.overrides` from FAI import
 - Do NOT skip unmatched CMM rows — save them to `faiRun.unmatchedRows` for user review
-- `minusTol` from CMM is stored as a **positive magnitude** — the CMM may report it as negative
+- ~~`minusTol` stored as a positive magnitude~~ — now signed (unilateral tols). See RULES.md §11
 - Child measurement detection is a placeholder — do not hardcode grouping logic yet, wait for real CMM examples
 - FAI view sidebar is hidden, not destroyed — Setup View sidebar state must survive a round-trip through FAI view and back
 

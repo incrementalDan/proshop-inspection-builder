@@ -27,6 +27,34 @@ TEST.runCmmTests = function(log) {
   assertEq('Header: blank part name stays blank',
     PSB.parseCmmHeader('Part name\nOrder number\nTime/Date\n10/1/2026 9:07 AM\n').partName, '');
 
+  assertEq('Header: blank part name not filled by the operator',
+    PSB.parseCmmHeader('Part name\nOrder number\nOperator\nTime/Date\nMaster\n10/1/2026 9:07 AM\n').partName, '');
+  assertEq('Header: unknown label not taken as part name',
+    PSB.parseCmmHeader('Part name\nCustomer\nPART-1\n').partName, '');
+
+  // ── Unilateral tolerance ────────────────────────────────
+  var uni = PSB.parseCmmText('#4 Diameter_Bore 10.00700 10.00000 0.01000 0.00500 0.00700\n')[0];
+  assertEq('Unilateral: +Tol kept', uni.plusTol, 0.01);
+  assertEq('Unilateral: positive -Tol → lower limit above nominal', uni.minusTol, -0.005);
+  assertEq('Unilateral: inside zone passes', PSB.computeFaiStatus(10.007, 10, 0.01, -0.005), 'pass');
+  assertEq('Unilateral: at nominal fails (below lower limit)', PSB.computeFaiStatus(10.0, 10, 0.01, -0.005), 'fail');
+  assertEq('Symmetric -Tol still a positive magnitude',
+    PSB.parseCmmText('#4 X 1.00000 1.00000 0.00500 -0.00500 0.00000\n')[0].minusTol, 0.005);
+
+  // ── Print units change after import ─────────────────────
+  var urow = { computed: { isAngle: false }, fai: { measurements: [
+    { cmmName: '#1 Diameter', measured: 1, nominal: 1, deviation: 0, plusTol: 0.01, minusTol: 0.01, units: 'inch' },
+    { cmmName: '#1 Cone Angle', measured: 90, nominal: 90, deviation: 0, plusTol: 0.5, minusTol: 0.5, units: 'inch' },
+    { cmmName: '#1 Old', measured: 2, nominal: 2, deviation: 0, plusTol: 0.1, minusTol: 0.1 },
+  ] } };
+  PSB.syncFaiUnits(urow, 'mm');
+  var um = urow.fai.measurements;
+  assertEq('Units change: measurement converted inch → mm', um[0].measured.toFixed(3) + '/' + um[0].plusTol.toFixed(3), '25.400/0.254');
+  assertEq('Units change: angle not converted', um[1].measured, 90);
+  assertEq('Units change: old measurement assumed print units', um[2].measured + ' ' + um[2].units, '2 mm');
+  PSB.syncFaiUnits(urow, 'inch');
+  assertEq('Units change: back again', um[0].measured.toFixed(5), '1.00000');
+
   // ── Parsing ─────────────────────────────────────────────
   var rows = PSB.parseCmmText(TEST.CMM_CALYPSO_SAMPLE);
   assertEq('Parse: every measured value becomes a row', rows.length, 27);

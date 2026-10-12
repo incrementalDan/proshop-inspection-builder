@@ -190,7 +190,10 @@ function markClean() {
  * Restore app state from an undo/redo snapshot.
  */
 function restoreSnapshot(snapshot) {
+  // Export options aren't undoable edits — keep the current ones
+  var faiExport = state.globals.faiExport;
   state.globals = snapshot.globals;
+  if (faiExport) state.globals.faiExport = faiExport;
   state.rows = snapshot.rows.map(function(r) {
     // Balloon-created rows keep mutable raw; CSV rows stay frozen.
     var rawCopy = Object.assign({}, r.raw);
@@ -1506,8 +1509,10 @@ function handleDeleteRow(rowId) {
 // RECOMPUTE ALL ROWS
 // ═══════════════════════════════════════════════════════════
 function recomputeAll() {
+  var printUnits = PSB.getPrintUnits(state.globals);
   for (var i = 0; i < state.rows.length; i++) {
     PSB.recompute(state.rows[i], state.globals);
+    PSB.syncFaiUnits(state.rows[i], printUnits);
     PSB.refreshFaiStatus(state.rows[i], state.globals.faiWarnThreshold);
   }
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
@@ -1613,6 +1618,7 @@ function buildCmmMeasurement(cmmRow, planRow, runId, cmmUnits, planUnits) {
     deviation: parseFloat(deviation.toFixed(5)),
     plusTol:   parseFloat(plusTol.toFixed(5)),
     minusTol:  parseFloat(minusTol.toFixed(5)),
+    units: planUnits,             // units these values are in (kept = print units)
     status: null,
     equipment: '',
     notes: '',
@@ -2144,31 +2150,46 @@ function renderFaiExportPreview() {
   }
   document.getElementById('fai-exp-preview').innerHTML = preview;
 
+  // Options changed → start the save list over
+  faiPendingFiles = null;
   var count = res.files.length;
   btn.disabled = !confirmed || count === 0;
-  btn.textContent = count > 1 ? 'Download ' + count + ' CSVs' : 'Download CSV';
+  updateFaiDownloadButton(count);
+}
+
+// Files still to save. Browsers only open a save dialog right after a click,
+// so with many files each click saves the next one.
+var faiPendingFiles = null;
+
+function updateFaiDownloadButton(fileCount) {
+  var btn = document.getElementById('btn-fai-export-download');
+  if (faiPendingFiles) {
+    var total = faiPendingFiles.total;
+    btn.textContent = 'Save file ' + (total - faiPendingFiles.files.length + 1) + ' of ' + total;
+  } else {
+    btn.textContent = fileCount > 1 ? 'Download ' + fileCount + ' CSVs' : 'Download CSV';
+  }
 }
 
 function downloadFaiExport() {
   if (!state.globals.printUnitsConfirmed) return;
-  var res = PSB.buildFaiExport(state, faiExportSettings);
-  if (res.files.length === 0) return;
-  var handle = PSB.getProjectFileHandle();
-  var saved = 0;
-  // One save at a time — browsers only allow one file picker open
-  var chain = Promise.resolve(true);
-  res.files.forEach(function(f) {
-    chain = chain.then(function(ok) {
-      if (!ok) return false;
-      return PSB.downloadCSV(f.csv, f.fileName, handle).then(function(done) {
-        if (done) saved++;
-        return done;
-      });
-    });
-  });
-  chain.then(function() {
-    if (saved === 0) return; // cancelled — keep the dialog open
-    PSB.showToast('FAI exported (' + saved + ' file' + (saved > 1 ? 's' : '') + ').', 'success');
+  if (!faiPendingFiles) {
+    var res = PSB.buildFaiExport(state, faiExportSettings);
+    if (res.files.length === 0) return;
+    faiPendingFiles = { files: res.files.slice(), total: res.files.length };
+  }
+  var f = faiPendingFiles.files[0];
+  PSB.downloadCSV(f.csv, f.fileName, PSB.getProjectFileHandle()).then(function(saved) {
+    if (!saved) return; // cancelled — same file stays next
+    faiPendingFiles.files.shift();
+    if (faiPendingFiles.files.length > 0) {
+      updateFaiDownloadButton();
+      PSB.showToast('Saved ' + f.fileName + '. Click to save the next file.', 'info');
+      return;
+    }
+    var total = faiPendingFiles.total;
+    faiPendingFiles = null;
+    PSB.showToast('FAI exported (' + total + ' file' + (total > 1 ? 's' : '') + ').', 'success');
     PSB.closeModal('modal-fai-export');
   }).catch(function() {
     PSB.showToast('FAI export failed.', 'error');
