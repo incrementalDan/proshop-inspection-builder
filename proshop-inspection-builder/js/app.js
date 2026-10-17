@@ -28,6 +28,7 @@ function ensureProjectId() {
   if (!state.globals.projectId) {
     state.globals.projectId = generateUUID();
     PSB.setPdfProjectId(state.globals.projectId);
+    PSB.cachePdfForProject();
   }
 }
 
@@ -162,8 +163,11 @@ var importedFileName = null;
 // ═══════════════════════════════════════════════════════════
 var isDirty = false;
 
+var editCount = 0; // bumps on every edit; a save only marks clean if it saved the latest
+
 function markDirty() {
   isDirty = true;
+  editCount++;
   updateUndoRedoButtons(); // every edit can add an undo step
   if (!document.title.startsWith('* ')) {
     document.title = '* ' + document.title;
@@ -174,6 +178,56 @@ function markDirty() {
   }
   var saveBtn = document.getElementById('btn-save');
   if (saveBtn) saveBtn.classList.add('btn-dirty');
+  saveSessionMeta();
+}
+
+// Filename + unsaved flag for this tab, so a page refresh shows the same
+// header and still warns before closing with unsaved work.
+var SESSION_META_KEY = 'psb_session_meta';
+function saveSessionMeta() {
+  try {
+    sessionStorage.setItem(SESSION_META_KEY, JSON.stringify({ fileName: importedFileName, dirty: isDirty }));
+  } catch (e) { /* storage blocked — not critical */ }
+}
+function readSessionMeta() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_META_KEY) || 'null'); } catch (e) { return null; }
+}
+
+// ── Link to the project file on disk ──────────────────────
+// After a refresh the browser may want a click before we can write to the
+// file again. Until then auto-save to disk waits and the header says so.
+var needsReconnect = false;
+
+function setNeedsReconnect(on) {
+  needsReconnect = on;
+  var banner = document.getElementById('filename-banner');
+  if (banner) {
+    banner.classList.toggle('needs-reconnect', on);
+    banner.title = on ? 'Click to reconnect auto-save to this file' : '';
+  }
+}
+
+/** Forget the disk file (new data that doesn't belong in it). */
+function dropFileLink() {
+  PSB.clearProjectFileHandle();
+  setNeedsReconnect(false);
+}
+
+/** Re-attach the remembered file. `fromClick` lets the browser ask permission. */
+function reconnectFile(fromClick) {
+  return PSB.reconnectProjectHandle(state.globals.projectId, fromClick).then(function(result) {
+    if (result === 'connected') {
+      setNeedsReconnect(false);
+      importedFileName = PSB.getProjectFileName();
+      setFilename(importedFileName);
+      if (isDirty) { markDirty(); scheduleAutoSave(); }
+      if (fromClick) PSB.showToast('Auto-save reconnected to ' + importedFileName, 'success');
+    } else if (result === 'needs-click') {
+      setNeedsReconnect(true);
+      if (!fromClick) PSB.showToast('Click the file name or Save to reconnect auto-save.', 'info');
+    }
+    return result;
+  });
 }
 
 function markClean() {
@@ -183,6 +237,7 @@ function markClean() {
   if (fnEl) fnEl.textContent = fnEl.textContent.replace(/ \u2022$/, '');
   var saveBtn = document.getElementById('btn-save');
   if (saveBtn) saveBtn.classList.remove('btn-dirty');
+  saveSessionMeta();
 }
 
 /**
@@ -202,9 +257,17 @@ function applyLoadedState(loaded) {
  */
 function applySnapshot(snapshot) {
   // Export options aren't undoable edits — keep the current ones
-  var faiExport = state.globals.faiExport;
+  // Not undoable: export options and which project/PDF this is.
+  // (Undoing past the first save must not wipe the project id or PDF link.)
+  var keep = {
+    faiExport: state.globals.faiExport,
+    projectId: state.globals.projectId,
+    pdfFileName: state.globals.pdfFileName,
+  };
   state.globals = snapshot.globals;
-  if (faiExport) state.globals.faiExport = faiExport;
+  Object.keys(keep).forEach(function(k) {
+    if (keep[k] !== undefined) state.globals[k] = keep[k];
+  });
   state.rows = snapshot.rows.map(function(r) {
     // Balloon-created rows keep mutable raw; CSV rows stay frozen.
     var rawCopy = Object.assign({}, r.raw);
@@ -328,6 +391,10 @@ function setupUndoRedoDropdowns() {
   document.addEventListener('click', function() { closeAll(); });
 }
 
+window.addEventListener('pagehide', function() {
+  if (state.rows.length > 0) PSB.autoSave(state);
+});
+
 window.addEventListener('beforeunload', function(e) {
   if (isDirty && state.rows.length > 0) {
     e.preventDefault();
@@ -347,6 +414,8 @@ document.addEventListener('DOMContentLoaded', function() {
       var saved = PSB.autoLoad();
       if (saved) {
         applyLoadedState(saved);
+        var meta = readSessionMeta();
+        if (meta) importedFileName = meta.fileName || null;
         // deserializeState already normalizes user/overrides fields
         recomputeAll();
         console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
@@ -506,6 +575,12 @@ document.addEventListener('DOMContentLoaded', function() {
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
     PSB.renderTable(state, VIEW_CONFIGS[currentView]);
     updateCmmPartBadge(state.globals.cmmPartName);
+    if (state.rows.length > 0) {
+      var sessionMeta = readSessionMeta();
+      if (sessionMeta && sessionMeta.dirty) markDirty();
+      setFilename(importedFileName);
+      reconnectFile(false);
+    }
     // Set version from single source
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
@@ -591,7 +666,7 @@ function bindNewButton() {
   document.getElementById('btn-new').addEventListener('click', function() {
     var doNew = function() {
       PSB.clearAutoSave();
-      PSB.clearProjectFileHandle();
+      dropFileLink();
       PSB.clearUndoRedo();
       // closePdf() clears in-memory state; IDB byte cache is intentionally preserved
       // so re-loading this project later still finds the PDF automatically.
@@ -679,7 +754,7 @@ function bindGlobalControls() {
   document.getElementById('plating-thickness').addEventListener('input', function(e) {
     var oldVal = state.globals.platingThickness;
     var newVal = parseFloat(e.target.value) || 0;
-    PSB.pushUndo(state, 'Plating thickness: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'Plating thickness → ' + newVal, 'platingThickness');
     state.globals.platingThickness = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Plating thickness: ' + oldVal + ' → ' + newVal, details: [{ field: 'platingThickness', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -712,7 +787,7 @@ function bindGlobalControls() {
   document.getElementById('inch-precision').addEventListener('input', function(e) {
     var oldVal = state.globals.inchPrecision;
     var newVal = parseInt(e.target.value) || 4;
-    PSB.pushUndo(state, 'Inch precision: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'Inch precision → ' + newVal, 'inchPrecision');
     state.globals.inchPrecision = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Inch precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'inchPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -723,7 +798,7 @@ function bindGlobalControls() {
   document.getElementById('mm-precision').addEventListener('input', function(e) {
     var oldVal = state.globals.mmPrecision;
     var newVal = parseInt(e.target.value) || 3;
-    PSB.pushUndo(state, 'MM precision: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'MM precision → ' + newVal, 'mmPrecision');
     state.globals.mmPrecision = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'MM precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'mmPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -735,7 +810,7 @@ function bindGlobalControls() {
     var oldVal = state.globals.angleDecimals;
     var newVal = parseInt(e.target.value, 10);
     if (isNaN(newVal) || newVal < 0) newVal = 3;
-    PSB.pushUndo(state, 'Angle decimals: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'Angle decimals → ' + newVal, 'angleDecimals');
     state.globals.angleDecimals = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Angle decimals: ' + oldVal + ' → ' + newVal, details: [{ field: 'angleDecimals', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -929,7 +1004,7 @@ function applyUnitColors(unit) {
 
 function setPdfFileName(name) {
   state.globals.pdfFileName = name || null;
-  if (name) markDirty();
+  if (name) { markDirty(); scheduleAutoSave(); }
 }
 PSB.setPdfFileName = setPdfFileName;
 
@@ -950,25 +1025,33 @@ function setFilename(name) {
     el.textContent = 'No file loaded';
     el.classList.remove('has-file');
   }
+  if (isDirty) el.textContent += ' \u2022';
+  saveSessionMeta();
 }
 
 /**
  * The one way a project file gets into the app (Load button, file input,
- * drag-drop). `ownHandle` = true only when storage.js already holds a file
- * handle for THIS file (Load button). Otherwise disk auto-save is switched
+ * drag-drop). `fileHandle` is passed only by the Load button (the picked file);
+ * it is attached only after the file parses. Otherwise disk auto-save is switched
  * off until the user picks Save, so a dropped file can never overwrite the
  * project that was open before it.
  */
-function openProject(jsonString, fileName, ownHandle) {
+function openProject(jsonString, fileName, fileHandle) {
   var loaded;
   try {
     loaded = PSB.loadProject(jsonString);
   } catch (err) {
+    // Nothing changes — the open project and its file link stay as they were
     PSB.showToast('Failed to load project file: ' + err.message, 'error');
     return false;
   }
-  if (!ownHandle) PSB.clearProjectFileHandle();
+  dropFileLink();
+  if (fileHandle) PSB.useProjectFileHandle(fileHandle);
   applyLoadedState(loaded);
+  if (fileHandle) {
+    ensureProjectId(); // remembered link is keyed by project id
+    PSB.rememberProjectHandle(state.globals.projectId);
+  }
   importedFileName = fileName;
   PSB.clearUndoRedo();
   recomputeAll();
@@ -1042,20 +1125,27 @@ function bindFileButtons() {
   // Save project
   document.getElementById('btn-save').addEventListener('click', function() {
     ensureProjectId(); // generate UUID if this project doesn't have one yet
-    var result = PSB.saveProject(state, { suggestedName: getSuggestedSaveName() });
-    if (result && result.then) {
-      result.then(function(ok) {
-        if (ok) {
-          markClean();
-          var fname = PSB.getProjectFileName();
-          if (fname) setFilename(fname);
-          PSB.showToast('Project saved.', 'success');
-        }
-      });
-    } else {
-      markClean();
+    // After a refresh: reconnect to the same file first instead of "Save As"
+    var ready = needsReconnect ? reconnectFile(true) : Promise.resolve();
+    var savedAt = editCount;
+    ready.then(function() {
+      return PSB.saveProject(state, { suggestedName: getSuggestedSaveName() });
+    }).then(function(ok) {
+      if (!ok) return;
+      setNeedsReconnect(false);
+      PSB.rememberProjectHandle(state.globals.projectId);
+      var fname = PSB.getProjectFileName();
+      if (fname) importedFileName = fname;
+      diskSaveWarned = false;
+      if (editCount === savedAt) markClean();
+      if (fname) setFilename(fname);
       PSB.showToast('Project saved.', 'success');
-    }
+    });
+  });
+
+  // Click the file name to reconnect auto-save after a refresh
+  document.getElementById('filename-banner').addEventListener('click', function() {
+    if (needsReconnect) reconnectFile(true);
   });
 
   // Load project button — uses File System Access API to get a handle
@@ -1069,7 +1159,7 @@ function bindFileButtons() {
       }
       PSB.openProjectWithHandle().then(function(result) {
         // null = user cancelled, do nothing
-        if (result) openProject(result.jsonString, result.fileName, true);
+        if (result) openProject(result.jsonString, result.fileName, result.handle);
       });
     });
   });
@@ -1353,8 +1443,11 @@ function handleFileImport(content, fileName) {
 
       PSB.clearUndoRedo();
       PSB.resetIdCounter();
-      // New data → don't auto-save over the previously opened project file
-      PSB.clearProjectFileHandle();
+      // New data = new project: don't auto-save over the previously opened
+      // file, and get a fresh id so it never shares links/caches with it.
+      dropFileLink();
+      state.globals.projectId = null;
+      ensureProjectId();
       state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
       state.auditLog = [];
       // CMM results belonged to the old rows — drop them so no orphan runs remain
@@ -2298,6 +2391,8 @@ function updateDeleteSelectedBtn() {
 // ═══════════════════════════════════════════════════════════
 var autoSaveTimer = null;
 var diskSaveTimer = null;
+var diskSaveWarned = false;
+var sessionSaveWarned = false;
 var platingToastTimer = null;
 
 // Called by ui.js after an edit it makes directly (e.g. FAI notes)
@@ -2310,7 +2405,11 @@ function scheduleAutoSave() {
   // Quick save to sessionStorage (1s debounce)
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(function() {
-    PSB.autoSave(state);
+    // H: browser storage full → refresh would lose work, so say so once
+    if (!PSB.autoSave(state) && !sessionSaveWarned) {
+      sessionSaveWarned = true;
+      PSB.showToast('Browser backup is full. Save the project to a file.', 'error');
+    }
   }, 1000);
 
   // Persist to disk if file handle exists (3s debounce)
@@ -2318,8 +2417,16 @@ function scheduleAutoSave() {
   diskSaveTimer = setTimeout(function() {
     if (PSB.hasFileHandle()) {
       ensureProjectId(); // make sure projectId is set before writing to disk
+      var savedAt = editCount;
       PSB.autoSaveToDisk(state).then(function(ok) {
-        if (ok) markClean();
+        if (ok) {
+          diskSaveWarned = false;
+          if (editCount === savedAt) markClean();
+        } else if (!diskSaveWarned) {
+          // File moved, locked or permission lost — don't fail silently
+          diskSaveWarned = true;
+          PSB.showToast('Auto-save to file failed. Click Save to save your work.', 'error');
+        }
       });
     }
   }, 3000);

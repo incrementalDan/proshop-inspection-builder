@@ -69,5 +69,37 @@ TEST.runHistoryTests = function(log) {
   assertEq('Redo after jump: step forward', st.globals.platingThickness, 2);
   PSB.clearUndoRedo();
 
+  // ── Typing in one box = one undo step ───────────────────
+  st = makeState();
+  st.globals.platingThickness = 0;
+  ['0', '0.', '0.0', '0.00', '0.0005'].forEach(function(v) {
+    PSB.pushUndo(st, 'Plating thickness → ' + v, 'platingThickness');
+    st.globals.platingThickness = parseFloat(v) || 0;
+  });
+  assertEq('Grouped typing: one undo step', PSB.getUndoDescriptions().length, 1);
+  assertEq('Grouped typing: label shows last value', PSB.getUndoDescriptions()[0], 'Plating thickness → 0.0005');
+  assertEq('Grouped typing: undo goes back to before typing', PSB.undo(st, '').globals.platingThickness, 0);
+
+  // A different field breaks the group
+  PSB.clearUndoRedo();
+  PSB.pushUndo(st, 'a', 'platingThickness');
+  PSB.pushUndo(st, 'b', 'inchPrecision');
+  PSB.pushUndo(st, 'c', 'platingThickness');
+  assertEq('Different fields: separate steps', PSB.getUndoDescriptions().length, 3);
+
+  // Ungrouped pushes are never merged
+  PSB.clearUndoRedo();
+  PSB.pushUndo(st, 'x'); PSB.pushUndo(st, 'y');
+  assertEq('Ungrouped: separate steps', PSB.getUndoDescriptions().length, 2);
+
+  // After an undo, typing again starts a new step
+  PSB.clearUndoRedo();
+  PSB.pushUndo(st, 'p1', 'platingThickness');
+  PSB.undo(st, '');
+  PSB.pushUndo(st, 'p2', 'platingThickness');
+  assertEq('After undo: new step, not merged', PSB.getUndoDescriptions().length, 1);
+  assertEq('After undo: redo cleared', PSB.canRedo(), false);
+  PSB.clearUndoRedo();
+
   return { passed: passed, failed: failed };
 };

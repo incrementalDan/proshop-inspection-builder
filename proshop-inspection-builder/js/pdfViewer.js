@@ -695,6 +695,17 @@ function setPdfProjectId(id) {
   currentProjectId = id || null;
 }
 
+/**
+ * The project that is open just got its id (first save, or new data).
+ * Cache the PDF already on screen under that id so it re-opens by itself.
+ * Only call for the SAME project — never while switching projects.
+ */
+function cachePdfForProject() {
+  if (!currentProjectId || !pdfArrayBuffer || !pdfFileName) return;
+  savePdfBytesToIDB(pdfArrayBuffer, pdfFileName);
+  if (pdfFileHandle) savePdfHandleToIDB(pdfFileHandle);
+}
+
 // ── Public API ───────────────────────────────────────────
 function hasPdf() { return pdfDoc !== null; }
 function getPdfFileName() { return pdfFileName; }
@@ -748,6 +759,7 @@ PSB.loadPdfFromDirHandle = loadPdfFromDirHandle;
 PSB.hasPdf = hasPdf;
 PSB.getPdfFileName = getPdfFileName;
 PSB.setPdfProjectId = setPdfProjectId;
+PSB.cachePdfForProject = cachePdfForProject;
 PSB.getPdfDoc = getPdfDoc;
 PSB.getPdfCurrentPage = getCurrentPage;
 PSB.getPdfTotalPages = getTotalPages;

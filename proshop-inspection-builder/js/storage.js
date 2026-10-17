@@ -19,8 +19,10 @@ function autoSave(state) {
   try {
     var serialized = serializeState(state);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+    return true;
   } catch (e) {
     console.warn('Auto-save failed:', e);
+    return false;
   }
 }
 
@@ -183,9 +185,89 @@ function getProjectFileName() {
 
 /**
  * Clear the stored file handle (e.g. on New File).
+ * Also forgets the remembered link, so a page refresh can't reconnect it.
  */
+function useProjectFileHandle(handle) {
+  projectFileHandle = handle || null;
+}
+
 function clearProjectFileHandle() {
   projectFileHandle = null;
+  forgetProjectHandle();
+}
+
+// ── Remembered file link (survives page refresh) ──────────
+//
+// A file handle can't go in sessionStorage, but IndexedDB can hold it.
+// Keyed by projectId, so two tabs with different projects never swap files.
+var HANDLE_DB = 'psb_project_store';
+var HANDLE_STORE = 'handles';
+var rememberedKey = null; // IDB key of the link for the open project
+
+function openHandleDB() {
+  return new Promise(function(resolve, reject) {
+    if (!window.indexedDB) { reject(new Error('No IndexedDB')); return; }
+    var req = indexedDB.open(HANDLE_DB, 1);
+    req.onupgradeneeded = function(e) { e.target.result.createObjectStore(HANDLE_STORE); };
+    req.onsuccess = function(e) { resolve(e.target.result); };
+    req.onerror = function() { reject(req.error); };
+  });
+}
+
+function handleTx(mode, fn) {
+  return openHandleDB().then(function(db) {
+    return new Promise(function(resolve) {
+      var tx = db.transaction(HANDLE_STORE, mode);
+      var req = fn(tx.objectStore(HANDLE_STORE));
+      tx.oncomplete = function() { resolve(req && req.result); };
+      tx.onerror = function() { resolve(null); };
+    });
+  }).catch(function() { return null; });
+}
+
+/** Remember the current file link for this project. */
+function rememberProjectHandle(projectId) {
+  if (!projectFileHandle || !projectId) return Promise.resolve();
+  var key = 'project:' + projectId;
+  var handle = projectFileHandle;
+  if (rememberedKey && rememberedKey !== key) forgetProjectHandle();
+  rememberedKey = key;
+  return handleTx('readwrite', function(store) { return store.put(handle, key); });
+}
+
+function forgetProjectHandle() {
+  if (!rememberedKey) return;
+  var key = rememberedKey;
+  rememberedKey = null;
+  handleTx('readwrite', function(store) { return store.delete(key); });
+}
+
+/**
+ * After a page refresh: find this project's file link and re-attach it.
+ * Browsers may ask permission again; that needs a click, so
+ * `askPermission` is only true when called from a button.
+ * @returns {Promise<'connected'|'needs-click'|'none'>}
+ */
+function reconnectProjectHandle(projectId, askPermission) {
+  if (!projectId) return Promise.resolve('none');
+  var key = 'project:' + projectId;
+  return handleTx('readonly', function(store) { return store.get(key); }).then(function(handle) {
+    if (!handle || !handle.queryPermission) return 'none';
+    return handle.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+      if (perm === 'granted') return perm;
+      if (!askPermission) return 'needs-click';
+      return handle.requestPermission({ mode: 'readwrite' });
+    }).then(function(perm) {
+      if (perm === 'needs-click') return perm;
+      if (perm !== 'granted') return 'needs-click';
+      projectFileHandle = handle;
+      rememberedKey = key;
+      return 'connected';
+    });
+  }).catch(function(err) {
+    console.warn('[PSB] Reconnect file failed:', err);
+    return 'none';
+  });
 }
 
 /**
@@ -204,12 +286,13 @@ function openProjectWithHandle() {
     }],
     multiple: false,
   }).then(function(handles) {
+    // Not attached yet — app.js attaches it only once the file loads OK,
+    // so a broken file never becomes the auto-save target.
     var handle = handles[0];
-    projectFileHandle = handle;
-    return handle.getFile();
-  }).then(function(file) {
-    return file.text().then(function(text) {
-      return { jsonString: text, fileName: file.name };
+    return handle.getFile().then(function(file) {
+      return file.text().then(function(text) {
+        return { jsonString: text, fileName: file.name, handle: handle };
+      });
     });
   }).catch(function(err) {
     if (err.name === 'AbortError') {
@@ -323,5 +406,8 @@ PSB.clearProjectFileHandle = clearProjectFileHandle;
 PSB.autoSaveToDisk = autoSaveToDisk;
 PSB.hasFileHandle = hasFileHandle;
 PSB.getProjectFileName = getProjectFileName;
+PSB.rememberProjectHandle = rememberProjectHandle;
+PSB.useProjectFileHandle = useProjectFileHandle;
+PSB.reconnectProjectHandle = reconnectProjectHandle;
 PSB.getProjectFileHandle = function() { return projectFileHandle; };
 PSB.openProjectWithHandle = openProjectWithHandle;

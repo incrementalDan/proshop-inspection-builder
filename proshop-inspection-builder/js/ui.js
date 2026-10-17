@@ -1149,8 +1149,14 @@ function setupDragDrop() {
 }
 
 function readFile(file) {
-  if (file.name.toLowerCase().endsWith('.pdf')) {
+  var name = file.name.toLowerCase();
+  if (name.endsWith('.pdf')) {
     if (PSB.loadPdfFromFile) PSB.loadPdfFromFile(file);
+    return;
+  }
+  // Anything else would be read as a CSV and could replace the plan
+  if (!name.endsWith('.csv') && !name.endsWith('.json')) {
+    showToast('Can\'t open ' + file.name + '. Drop a CSV, project (.json) or PDF.', 'error');
     return;
   }
   var reader = new FileReader();

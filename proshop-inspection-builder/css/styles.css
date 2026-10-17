@@ -173,6 +173,18 @@ html, body {
   background: rgba(74, 158, 255, 0.06);
 }
 
+/* After a refresh: file known, but auto-save needs a click to reconnect */
+.filename-banner.needs-reconnect .filename-text {
+  cursor: pointer;
+  border-style: dashed;
+  border-color: var(--accent-orange);
+}
+.filename-banner.needs-reconnect .filename-text::after {
+  content: '  ⟳ reconnect';
+  color: var(--accent-orange);
+  font-weight: 500;
+}
+
 .control-group {
   display: flex;
   align-items: center;

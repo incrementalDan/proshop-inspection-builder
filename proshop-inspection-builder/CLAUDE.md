@@ -116,10 +116,12 @@ test/faiExport.test.js  — FAI export tests
 - `autoSave(state)` → saves to localStorage only
 - `openProjectWithHandle()` → File System Access API picker, stores handle for silent re-saves
 - Every project load goes through `openProject()` in app.js. Only the Load button keeps a disk handle; drag-drop, file-input and CSV import clear it so auto-save never writes into a different project's file.
+- The disk file link is remembered in IndexedDB (`psb_project_store`, key `project:{projectId}`) so a page refresh reconnects auto-save. If the browser wants permission again, the header file name shows "reconnect" — one click (or Save) fixes it.
+- CSV import = new project: new `projectId`, file link dropped. Undo never changes `projectId` or `pdfFileName`.
 - `autoSaveToDisk(state)` → silently writes to stored file handle (no prompt)
 
 ### history.js
-- `pushUndo(state, description)` → snapshot current state before mutation
+- `pushUndo(state, description, groupKey?)` → snapshot current state before mutation. Same `groupKey` within 1.5s = one undo step (typing in a box, arrow-key nudges)
 - `undo(state, desc)` / `redo(state, desc)` → pop/push between stacks, return snapshot
 - `canUndo()` / `canRedo()` → boolean checks
 - `getUndoDescriptions()` / `getRedoDescriptions()` → arrays for dropdown menus
