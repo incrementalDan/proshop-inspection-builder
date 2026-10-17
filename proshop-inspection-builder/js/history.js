@@ -34,6 +34,7 @@ function cloneStateForSnapshot(state) {
       };
     }),
     faiRuns: JSON.parse(JSON.stringify(state.faiRuns || [])),
+    datumRefs: JSON.parse(JSON.stringify(state.datumRefs || [])),
   };
 }
 

@@ -36,7 +36,6 @@ var VIEW_CONFIGS = {
   setup: {
     id: 'setup',
     label: 'Setup View',
-    columns: ['status','dimTag','outDrawingSpec','op2000Spec','su2','su3','pinGage','op2000Tol','outTol','plating','ops'],
     sidebarEnabled: true,
     faiControlsVisible: false,
     setupControlsVisible: true,
@@ -44,7 +43,6 @@ var VIEW_CONFIGS = {
   fai: {
     id: 'fai',
     label: 'FAI View',
-    columns: ['faiStatus','dimTag','drawingSpec','su1','su2','nominal','tolerance','measured','deviation','notes','run'],
     sidebarEnabled: false,
     faiControlsVisible: true,
     setupControlsVisible: false,
@@ -166,6 +164,7 @@ var isDirty = false;
 
 function markDirty() {
   isDirty = true;
+  updateUndoRedoButtons(); // every edit can add an undo step
   if (!document.title.startsWith('* ')) {
     document.title = '* ' + document.title;
   }
@@ -187,9 +186,21 @@ function markClean() {
 }
 
 /**
+ * Put a loaded project (file, drag-drop or auto-save) into app state.
+ * One place, so every load path restores the same fields.
+ */
+function applyLoadedState(loaded) {
+  state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
+  state.rows = loaded.rows;
+  state.auditLog = loaded.auditLog || [];
+  state.faiRuns = loaded.faiRuns || [];
+  state.datumRefs = loaded.datumRefs || [];
+}
+
+/**
  * Restore app state from an undo/redo snapshot.
  */
-function restoreSnapshot(snapshot) {
+function applySnapshot(snapshot) {
   // Export options aren't undoable edits — keep the current ones
   var faiExport = state.globals.faiExport;
   state.globals = snapshot.globals;
@@ -207,12 +218,43 @@ function restoreSnapshot(snapshot) {
     };
   });
   if (snapshot.faiRuns) state.faiRuns = snapshot.faiRuns;
+  if (snapshot.datumRefs) state.datumRefs = snapshot.datumRefs;
+}
+
+function refreshAfterRestore() {
   recomputeAll();
+  if (PSB.renderBalloonOverlay) PSB.renderBalloonOverlay();
   syncGlobalsToUI();
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
   updateUndoRedoButtons();
   markDirty();
   scheduleAutoSave();
+}
+
+/**
+ * Undo or redo `steps` changes in a row (the history menus can jump back
+ * several at once). Each step restores state before the next, so the
+ * opposite stack gets the right snapshots.
+ */
+function stepHistory(direction, steps) {
+  var isUndo = direction === 'undo';
+  var done = 0;
+  var lastDesc = '';
+  for (var i = 0; i < (steps || 1); i++) {
+    var descs = isUndo ? PSB.getUndoDescriptions() : PSB.getRedoDescriptions();
+    var desc = descs.length > 0 ? descs[0] : '';
+    var snap = isUndo ? PSB.undo(state, desc) : PSB.redo(state, desc);
+    if (!snap) break;
+    applySnapshot(snap);
+    lastDesc = snap._desc || 'Change';
+    done++;
+  }
+  if (done > 0) {
+    refreshAfterRestore();
+    var label = isUndo ? 'Undo: ' : 'Redo: ';
+    PSB.showToast(label + (done > 1 ? done + ' changes' : lastDesc), 'info');
+  }
+  updateUndoRedoButtons();
 }
 
 function updateUndoRedoButtons() {
@@ -273,22 +315,14 @@ function setupUndoRedoDropdowns() {
     var item = e.target.closest('.undo-redo-item');
     if (!item) return;
     closeAll();
-    var descs = PSB.getUndoDescriptions();
-    var desc = descs.length > 0 ? descs[0] : '';
-    var snap = PSB.undo(state, desc);
-    if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
-    updateUndoRedoButtons();
+    stepHistory('undo', parseInt(item.dataset.index, 10) + 1);
   });
 
   redoDropdown.addEventListener('click', function(e) {
     var item = e.target.closest('.undo-redo-item');
     if (!item) return;
     closeAll();
-    var descs = PSB.getRedoDescriptions();
-    var desc = descs.length > 0 ? descs[0] : '';
-    var snap = PSB.redo(state, desc);
-    if (snap) { restoreSnapshot(snap); PSB.showToast('Redo: ' + (snap._desc || 'Change'), 'info'); }
-    updateUndoRedoButtons();
+    stepHistory('redo', parseInt(item.dataset.index, 10) + 1);
   });
 
   document.addEventListener('click', function() { closeAll(); });
@@ -312,10 +346,7 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       var saved = PSB.autoLoad();
       if (saved) {
-        state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
-        state.rows = saved.rows;
-        state.auditLog = saved.auditLog || [];
-        state.faiRuns = saved.faiRuns || [];
+        applyLoadedState(saved);
         // deserializeState already normalizes user/overrides fields
         recomputeAll();
         console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
@@ -360,20 +391,8 @@ document.addEventListener('DOMContentLoaded', function() {
     })();
 
     // Undo / Redo buttons
-    document.getElementById('btn-undo').addEventListener('click', function() {
-      var descs = PSB.getUndoDescriptions();
-      var desc = descs.length > 0 ? descs[0] : '';
-      var snap = PSB.undo(state, desc);
-      if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
-      updateUndoRedoButtons();
-    });
-    document.getElementById('btn-redo').addEventListener('click', function() {
-      var descs = PSB.getRedoDescriptions();
-      var desc = descs.length > 0 ? descs[0] : '';
-      var snap = PSB.redo(state, desc);
-      if (snap) { restoreSnapshot(snap); PSB.showToast('Redo: ' + (snap._desc || 'Change'), 'info'); }
-      updateUndoRedoButtons();
-    });
+    document.getElementById('btn-undo').addEventListener('click', function() { stepHistory('undo', 1); });
+    document.getElementById('btn-redo').addEventListener('click', function() { stepHistory('redo', 1); });
 
     // Undo/Redo dropdown arrows
     setupUndoRedoDropdowns();
@@ -415,19 +434,11 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        var uDescs = PSB.getUndoDescriptions();
-        var uDesc = uDescs.length > 0 ? uDescs[0] : '';
-        var snap = PSB.undo(state, uDesc);
-        if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
-        updateUndoRedoButtons();
+        stepHistory('undo', 1);
       }
       if (mod && (e.key === 'Z' || (e.key === 'z' && e.shiftKey) || e.key === 'y')) {
         e.preventDefault();
-        var rDescs = PSB.getRedoDescriptions();
-        var rDesc = rDescs.length > 0 ? rDescs[0] : '';
-        var snapR = PSB.redo(state, rDesc);
-        if (snapR) { restoreSnapshot(snapR); PSB.showToast('Redo: ' + (snapR._desc || 'Change'), 'info'); }
-        updateUndoRedoButtons();
+        stepHistory('redo', 1);
       }
       if (mod && e.key === '1') { e.preventDefault(); switchView('setup'); }
       if (mod && e.key === '2') { e.preventDefault(); switchView('fai'); }
@@ -593,6 +604,7 @@ function bindNewButton() {
       state.globals = PSB.defaultGlobals();
       state.auditLog = [];
       state.faiRuns = [];
+      state.datumRefs = [];
       importedFileName = null;
       PSB.setPdfProjectId(null);
       syncGlobalsToUI();
@@ -600,6 +612,8 @@ function bindNewButton() {
       PSB.renderTable(state, VIEW_CONFIGS[currentView]);
       PSB.closeSidebar();
       setFilename(null);
+      updateCmmPartBadge(null);
+      updateFaiTabBadge();
       markClean();
       console.log('[PSB] New file — state cleared');
     };
@@ -945,10 +959,7 @@ function setFilename(name) {
 function applyLoadedProject(jsonString, fileName) {
   try {
     var loaded = PSB.loadProject(jsonString);
-    state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-    state.rows = loaded.rows;
-    state.auditLog = loaded.auditLog || [];
-    state.faiRuns = loaded.faiRuns || [];
+    applyLoadedState(loaded);
     importedFileName = fileName;
     PSB.clearUndoRedo();
     recomputeAll();
@@ -1300,10 +1311,7 @@ function handleFileImport(content, fileName) {
       if (fileName.endsWith('.json')) {
         try {
           var loaded = PSB.loadProject(content);
-          state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-          state.rows = loaded.rows;
-          state.auditLog = loaded.auditLog || [];
-          state.faiRuns = loaded.faiRuns || [];
+          applyLoadedState(loaded);
           importedFileName = fileName;
           PSB.clearUndoRedo();
           recomputeAll();
@@ -1320,6 +1328,7 @@ function handleFileImport(content, fileName) {
           } else {
             PSB.closePdf();
           }
+          updateCmmPartBadge(state.globals.cmmPartName);
         } catch (err) {
           PSB.showToast('Failed to load project: ' + err.message, 'error');
         }
@@ -1338,6 +1347,10 @@ function handleFileImport(content, fileName) {
       PSB.resetIdCounter();
       state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
       state.auditLog = [];
+      // CMM results belonged to the old rows — drop them so no orphan runs remain
+      state.faiRuns = [];
+      state.globals.cmmPartName = null;
+      updateCmmPartBadge(null);
       // Guess print units from the values; user must confirm before export
       var unitGuess = PSB.detectPrintUnits(PSB.unitSamplesFromRows(state.rows));
       if (unitGuess.units) state.globals.importUnits = unitGuess.units;
@@ -1359,7 +1372,8 @@ function handleFileImport(content, fileName) {
   if (state.rows.length > 0) {
     PSB.showConfirmModal({
       title: 'Replace Existing Data?',
-      message: 'You have <strong>' + state.rows.length + '</strong> rows with edits. Importing will replace all data.',
+      message: 'You have <strong>' + state.rows.length + '</strong> rows with edits. Importing will replace all data' +
+        ((state.faiRuns && state.faiRuns.length) ? ', including <strong>' + state.faiRuns.length + '</strong> CMM run' + (state.faiRuns.length > 1 ? 's' : '') : '') + '.',
       confirmLabel: 'Replace',
       confirmClass: 'btn-danger',
       onConfirm: doImport
@@ -1572,7 +1586,7 @@ function deleteFaiRuns(runIds) {
   }
 
   state.faiRuns = (state.faiRuns || []).filter(function(r) { return !idSet[r.id]; });
-  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  scheduleAutoSave();
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   markDirty();
 }
@@ -1709,7 +1723,7 @@ function assignUnmatchedCmmRow(runId, unmatchedIndex, newTag) {
 }
 
 function afterFaiChange() {
-  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  scheduleAutoSave();
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   updateFaiTabBadge();
   updateUndoRedoButtons();
@@ -1793,7 +1807,7 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   });
 
   PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'CMM import: ' + fileName });
-  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  scheduleAutoSave();
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   updateCmmPartBadge(state.globals.cmmPartName);
   updateFaiTabBadge();
@@ -2275,6 +2289,12 @@ function updateDeleteSelectedBtn() {
 var autoSaveTimer = null;
 var diskSaveTimer = null;
 var platingToastTimer = null;
+
+// Called by ui.js after an edit it makes directly (e.g. FAI notes)
+PSB.onProjectEdited = function() {
+  markDirty();
+  scheduleAutoSave();
+};
 
 function scheduleAutoSave() {
   // Quick save to sessionStorage (1s debounce)
