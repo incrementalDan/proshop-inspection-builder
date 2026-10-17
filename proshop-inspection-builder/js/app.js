@@ -510,13 +510,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
 
-    // Try to restore PDF — set project ID first so IDB byte cache is keyed correctly
-    if (state.globals.pdfFileName) {
-      PSB.setPdfProjectId(state.globals.projectId);
-      PSB.tryRestorePdf(state.globals.pdfFileName).then(function(ok) {
-        if (!ok) PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
-      });
-    }
+    // Try to restore PDF (no file picker on page load — needs a click)
+    PSB.setPdfProjectId(state.globals.projectId);
+    if (state.globals.pdfFileName) restoreProjectPdf(false);
 
     console.log('[PSB] Init complete');
 
@@ -956,39 +952,72 @@ function setFilename(name) {
   }
 }
 
-function applyLoadedProject(jsonString, fileName) {
+/**
+ * The one way a project file gets into the app (Load button, file input,
+ * drag-drop). `ownHandle` = true only when storage.js already holds a file
+ * handle for THIS file (Load button). Otherwise disk auto-save is switched
+ * off until the user picks Save, so a dropped file can never overwrite the
+ * project that was open before it.
+ */
+function openProject(jsonString, fileName, ownHandle) {
+  var loaded;
   try {
-    var loaded = PSB.loadProject(jsonString);
-    applyLoadedState(loaded);
-    importedFileName = fileName;
-    PSB.clearUndoRedo();
-    recomputeAll();
-    syncGlobalsToUI();
-    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-    PSB.closeSidebar();
-    setFilename(fileName);
-    markClean();
-
-    // Restore PDF — inject project ID so IDB byte cache is keyed correctly
-    PSB.setPdfProjectId(state.globals.projectId);
-    if (state.globals.pdfFileName) {
-      var pdfName = state.globals.pdfFileName;
-      PSB.tryRestorePdf(pdfName).then(function(ok) {
-        if (ok) return;
-        // All IDB layers missed — prompt user to locate the PDF once.
-        // startIn opens in the project's folder (if project was opened via FSA).
-        PSB.showToast('Select ' + pdfName + ' (one-time — remembered after this)', 'info');
-        return PSB.promptForPdf(pdfName);
-      });
-    } else {
-      PSB.closePdf();
-    }
-
-    updateCmmPartBadge(state.globals.cmmPartName);
-    console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
+    loaded = PSB.loadProject(jsonString);
   } catch (err) {
     PSB.showToast('Failed to load project file: ' + err.message, 'error');
+    return false;
   }
+  if (!ownHandle) PSB.clearProjectFileHandle();
+  applyLoadedState(loaded);
+  importedFileName = fileName;
+  PSB.clearUndoRedo();
+  recomputeAll();
+  syncGlobalsToUI();
+  PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+  PSB.closeSidebar();
+  setFilename(fileName);
+  updateCmmPartBadge(state.globals.cmmPartName);
+  updateUndoRedoButtons();
+  markClean();
+  restoreProjectPdf(true);
+  console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
+  return true;
+}
+
+/**
+ * Re-open the project's PDF. Order: browser cache → saved file handle →
+ * (if allowed) ask the user to pick it once.
+ */
+function restoreProjectPdf(promptIfMissing) {
+  PSB.setPdfProjectId(state.globals.projectId); // IDB cache is keyed by project
+  var pdfName = state.globals.pdfFileName;
+  if (!pdfName) {
+    PSB.closePdf();
+    return;
+  }
+  PSB.tryRestorePdf(pdfName).then(function(ok) {
+    if (ok) return;
+    if (!promptIfMissing) {
+      PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
+      return;
+    }
+    PSB.showToast('Select ' + pdfName + ' (one-time — remembered after this)', 'info');
+    return PSB.promptForPdf(pdfName).then(function(picked) {
+      if (!picked) PSB.showToast('PDF not loaded. Click "PDF" to select ' + pdfName + '.', 'info');
+    });
+  });
+}
+
+/** Ask before throwing away unsaved work; runs `fn` straight away if nothing is unsaved. */
+function confirmDiscardChanges(fn) {
+  if (!isDirty || state.rows.length === 0) { fn(); return; }
+  PSB.showConfirmModal({
+    title: 'Discard Unsaved Changes?',
+    message: 'This project has unsaved changes. Opening another file will lose them.',
+    confirmLabel: 'Discard & Open',
+    confirmClass: 'btn-danger',
+    onConfirm: fn,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1032,14 +1061,16 @@ function bindFileButtons() {
   // Load project button — uses File System Access API to get a handle
   // so subsequent saves overwrite the same file without prompting.
   document.getElementById('btn-load').addEventListener('click', function() {
-    PSB.openProjectWithHandle().then(function(result) {
-      if (result) {
-        applyLoadedProject(result.jsonString, result.fileName);
-      } else if (!window.showOpenFilePicker) {
+    confirmDiscardChanges(function() {
+      if (!window.showOpenFilePicker) {
         // Fallback for browsers without File System Access API
         document.getElementById('file-load-project').click();
+        return;
       }
-      // null with API = user cancelled, do nothing
+      PSB.openProjectWithHandle().then(function(result) {
+        // null = user cancelled, do nothing
+        if (result) openProject(result.jsonString, result.fileName, true);
+      });
     });
   });
 
@@ -1049,7 +1080,7 @@ function bindFileButtons() {
     var reader = new FileReader();
     var loadFileName = file.name;
     reader.onload = function(ev) {
-      applyLoadedProject(ev.target.result, loadFileName);
+      openProject(ev.target.result, loadFileName, false);
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -1305,37 +1336,14 @@ function bindTitleBlockDefaults() {
 // FILE IMPORT HANDLER
 // ═══════════════════════════════════════════════════════════
 function handleFileImport(content, fileName) {
+  if (fileName.toLowerCase().endsWith('.json')) {
+    confirmDiscardChanges(function() { openProject(content, fileName, false); });
+    return;
+  }
+
   var doImport = function() {
     PSB.showLoading('Importing...');
     setTimeout(function() {
-      if (fileName.endsWith('.json')) {
-        try {
-          var loaded = PSB.loadProject(content);
-          applyLoadedState(loaded);
-          importedFileName = fileName;
-          PSB.clearUndoRedo();
-          recomputeAll();
-          syncGlobalsToUI();
-          PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-          PSB.closeSidebar();
-          setFilename(fileName);
-          markClean();
-
-          // Restore PDF — inject project ID so IDB byte cache is keyed correctly
-          PSB.setPdfProjectId(state.globals.projectId);
-          if (state.globals.pdfFileName) {
-            PSB.restoreOrPromptPdf(state.globals.pdfFileName, true);
-          } else {
-            PSB.closePdf();
-          }
-          updateCmmPartBadge(state.globals.cmmPartName);
-        } catch (err) {
-          PSB.showToast('Failed to load project: ' + err.message, 'error');
-        }
-        PSB.hideLoading();
-        return;
-      }
-
       var rawRows = PSB.parseCSV(content);
       if (rawRows.length === 0) {
         PSB.showToast('No valid data found in CSV.', 'error');
@@ -1345,6 +1353,8 @@ function handleFileImport(content, fileName) {
 
       PSB.clearUndoRedo();
       PSB.resetIdCounter();
+      // New data → don't auto-save over the previously opened project file
+      PSB.clearProjectFileHandle();
       state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
       state.auditLog = [];
       // CMM results belonged to the old rows — drop them so no orphan runs remain

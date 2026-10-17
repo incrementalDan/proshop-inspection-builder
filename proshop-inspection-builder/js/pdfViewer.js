@@ -660,21 +660,6 @@ function promptForPdf(suggestedName) {
   });
 }
 
-/**
- * Try IDB restore first; if that fails and promptIfMissing is true,
- * open a file picker so the user can locate the PDF.
- */
-function restoreOrPromptPdf(expectedFileName, promptIfMissing) {
-  return tryRestorePdf(expectedFileName).then(function(ok) {
-    if (ok) return true;
-    if (promptIfMissing) {
-      PSB.showToast('Select ' + expectedFileName + ' (one-time — remembered after this)', 'info');
-      return promptForPdf(expectedFileName);
-    }
-    return false;
-  });
-}
-
 // ── Load PDF from Directory Handle ───────────────────────
 function loadPdfFromDirHandle(dirHandle, targetName) {
   if (!dirHandle || !targetName) return Promise.resolve(false);
@@ -758,7 +743,6 @@ PSB.initPdfViewer = initPdfViewer;
 PSB.loadPdfFromFile = loadPdfFromFile;
 PSB.closePdf = closePdf;
 PSB.tryRestorePdf = tryRestorePdf;
-PSB.restoreOrPromptPdf = restoreOrPromptPdf;
 PSB.promptForPdf = promptForPdf;
 PSB.loadPdfFromDirHandle = loadPdfFromDirHandle;
 PSB.hasPdf = hasPdf;

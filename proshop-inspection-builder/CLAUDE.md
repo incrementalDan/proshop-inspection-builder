@@ -115,6 +115,7 @@ test/faiExport.test.js  — FAI export tests
 - `loadProject(jsonString)` → returns full app state
 - `autoSave(state)` → saves to localStorage only
 - `openProjectWithHandle()` → File System Access API picker, stores handle for silent re-saves
+- Every project load goes through `openProject()` in app.js. Only the Load button keeps a disk handle; drag-drop, file-input and CSV import clear it so auto-save never writes into a different project's file.
 - `autoSaveToDisk(state)` → silently writes to stored file handle (no prompt)
 
 ### history.js
@@ -130,7 +131,6 @@ test/faiExport.test.js  — FAI export tests
 - `loadPdfFromFile(file)` → read File as ArrayBuffer, render via pdf.js
 - `closePdf()` → clear all state, hide viewer, remove IDB handle
 - `tryRestorePdf(expectedFileName)` → restore from IndexedDB handle (validates filename match)
-- `restoreOrPromptPdf(fileName, promptIfMissing)` → try IDB, then file picker fallback
 - `promptForPdf(suggestedName)` → open file picker (uses startIn for same-folder hint)
 - `hasPdf()` / `getPdfFileName()` → state queries
 
