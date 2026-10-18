@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=2.0.0">
+  <link rel="stylesheet" href="css/styles.css?v=2.0.2">
 </head>
 <body>
 
@@ -152,7 +152,7 @@
         </div>
       </div>
 
-      <!-- Print units banner (unconfirmed / mismatch) — filled by app.js -->
+      <!-- Print units banner (unconfirmed / mismatch) — filled by planSettings.js -->
       <div id="units-banner" class="units-banner hidden" role="status"></div>
 
       <!-- Data Table -->
@@ -181,7 +181,7 @@
             </tr>
           </thead>
           <tbody id="table-body">
-            <!-- Rows rendered by ui.js -->
+            <!-- Rows rendered by table.js -->
           </tbody>
         </table>
       </div>
@@ -316,7 +316,7 @@
           <div class="control-row">
             <label>Equipment</label>
             <select id="sidebar-equipment">
-              <!-- Populated by app.js from equipment list -->
+              <!-- Populated by sidebar.js from equipment list -->
             </select>
           </div>
 
@@ -792,24 +792,31 @@
   </script>
 
   <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
-  <script src="lib/pdf-lib.min.js?v=2.0.0"></script>
-  <script src="js/mathEngine.js?v=2.0.0"></script>
-  <script src="js/parser.js?v=2.0.0"></script>
-  <script src="js/units.js?v=2.0.0"></script>
-  <script src="js/dataModel.js?v=2.0.0"></script>
-  <script src="js/exportEngine.js?v=2.0.0"></script>
-  <script src="js/storage.js?v=2.0.0"></script>
-  <script src="js/history.js?v=2.0.0"></script>
-  <script src="js/pdfViewer.js?v=2.0.0"></script>
-  <script src="js/cmmParser.js?v=2.0.0"></script>
-  <script src="js/faiExport.js?v=2.0.0"></script>
-  <script src="js/gdtParser.js?v=2.0.0"></script>
-  <script src="js/ocrEngine.js?v=2.0.0"></script>
-  <script src="js/tolModeInput.js?v=2.0.0"></script>
-  <script src="js/balloonManager.js?v=2.0.0"></script>
-  <script src="js/pdfExport.js?v=2.0.0"></script>
-  <script src="js/ui.js?v=2.0.0"></script>
-  <script src="js/app.js?v=2.0.0"></script>
+  <script src="lib/pdf-lib.min.js?v=2.0.2"></script>
+  <script src="js/mathEngine.js?v=2.0.2"></script>
+  <script src="js/parser.js?v=2.0.2"></script>
+  <script src="js/units.js?v=2.0.2"></script>
+  <script src="js/dataModel.js?v=2.0.2"></script>
+  <script src="js/exportEngine.js?v=2.0.2"></script>
+  <script src="js/storage.js?v=2.0.2"></script>
+  <script src="js/history.js?v=2.0.2"></script>
+  <script src="js/pdfViewer.js?v=2.0.2"></script>
+  <script src="js/cmmParser.js?v=2.0.2"></script>
+  <script src="js/faiExport.js?v=2.0.2"></script>
+  <script src="js/gdtParser.js?v=2.0.2"></script>
+  <script src="js/ocrEngine.js?v=2.0.2"></script>
+  <script src="js/tolModeInput.js?v=2.0.2"></script>
+  <script src="js/balloonManager.js?v=2.0.2"></script>
+  <script src="js/pdfExport.js?v=2.0.2"></script>
+  <script src="js/ui.js?v=2.0.2"></script>
+  <script src="js/table.js?v=2.0.2"></script>
+  <script src="js/sidebar.js?v=2.0.2"></script>
+  <script src="js/inlineEdit.js?v=2.0.2"></script>
+  <script src="js/project.js?v=2.0.2"></script>
+  <script src="js/steps.js?v=2.0.2"></script>
+  <script src="js/planSettings.js?v=2.0.2"></script>
+  <script src="js/inspect.js?v=2.0.2"></script>
+  <script src="js/app.js?v=2.0.2"></script>
 
 </body>
 </html>

@@ -5,7 +5,7 @@
  * `globals.importUnits` is the print's unit label. Changing it RELABELS —
  * nothing is converted unless the user asks to convert values they typed.
  *
- * Pure functions only — no DOM. UI lives in app.js.
+ * Pure functions only — no DOM. UI lives in planSettings.js.
  */
 
 window.PSB = window.PSB || {};

@@ -52,12 +52,19 @@ A browser-based, local-first tool that turns inspection data into a ProShop-read
 ```
 index.html              — Entry point, loads all modules
 css/styles.css          — All styling, dark/light themes, CSS variables
-js/app.js               — App initialization, wires modules together, global state
+js/app.js               — App state, startup (binds everything), shortcuts, undo/redo, row edits. Loads last.
+js/project.js           — New / open / save / CSV import, unsaved flag, auto-save, reconnect
+js/steps.js             — Drawing / Plan / Inspect steps: switchView, step status, setup panel per step
+js/planSettings.js      — OPs, print units, plating, precision, title block, settings + CSV export modals
+js/inspect.js           — CMM import + runs, compare switch, FAI export modal
 js/dataModel.js         — Row creation, recompute pipeline, state management
 js/parser.js            — CSV import, dimension text parsing, feature detection
 js/units.js             — Print units: detection, live title-block tol, safe unit change
 js/mathEngine.js        — Nominal centering, plating, unit conversion, precision
-js/ui.js                — Table rendering, sidebar, inline editing, theme toggle
+js/ui.js                — Shared UI state, toasts, pop-ups/modals, theme, drag & drop. Loads first of the UI files.
+js/table.js             — Table drawing (Plan + FAI rows), headers, sorting
+js/sidebar.js           — Row sidebar
+js/inlineEdit.js        — Editing table cells in place, Tab navigation
 js/exportEngine.js      — ProShop CSV export generation
 js/storage.js           — Save/load full project state as JSON
 js/history.js           — Undo/redo snapshot stack, audit log with coalescing
@@ -115,7 +122,7 @@ test/faiExport.test.js  — FAI export tests
 - `loadProject(jsonString)` → returns full app state
 - `autoSave(state)` → saves to localStorage only
 - `openProjectWithHandle()` → File System Access API picker, stores handle for silent re-saves
-- Every project load goes through `openProject()` in app.js. Only the Load button keeps a disk handle; drag-drop, file-input and CSV import clear it so auto-save never writes into a different project's file.
+- Every project load goes through `openProject()` in project.js. Only the Load button keeps a disk handle; drag-drop, file-input and CSV import clear it so auto-save never writes into a different project's file.
 - The disk file link is remembered in IndexedDB (`psb_project_store`, key `project:{projectId}`) so a page refresh reconnects auto-save. If the browser wants permission again, the header file name shows "reconnect" — one click (or Save) fixes it.
 - CSV import = new project: new `projectId`, file link dropped. Undo never changes `projectId` or `pdfFileName`.
 - `autoSaveToDisk(state)` → silently writes to stored file handle (no prompt)
@@ -267,6 +274,7 @@ Persistence across sessions uses the **File System Access API** (Chromium):
 - `.hidden { display: none !important }` blocks CSS transitions — sidebar uses `sidebar-closed` class instead. PDF viewer uses `.hidden` class since it doesn't need transitions.
 - `showDirectoryPicker` is confusing UX (files appear grayed out) — use `showOpenFilePicker` for file selection.
 - All modules export to `window.PSB` namespace. ES5-style code (var, function declarations, no import/export, no build step).
+- The UI + app files share one global scope (plain `<script>` tags, no wrappers). Load order in `index.html`: ui → table → sidebar → inlineEdit → project → steps → planSettings → inspect → app. Code that runs at load time (not inside a function) must only use files above it. Keep each `PSB.x = fn` line in the same file as `fn`.
 
 
 ## Feature build specs (historical)

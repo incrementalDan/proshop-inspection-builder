@@ -10,7 +10,7 @@
  *   2. Per-project FSA file handle in IDB — permission re-grant on new session
  *   3. Legacy single-slot handle           — backward-compat with v1 projects
  *
- * The active project ID is injected by app.js via PSB.setPdfProjectId().
+ * The active project ID is injected by app.js / project.js via PSB.setPdfProjectId().
  */
 
 window.PSB = window.PSB || {};
@@ -25,7 +25,7 @@ var pdfArrayBuffer = null;
 var pdfFileHandle = null;
 var pdfRenderTask = null;
 var loadGeneration = 0;
-var currentProjectId = null;   // set by setPdfProjectId() from app.js
+var currentProjectId = null;   // set by setPdfProjectId() from app.js / project.js
 var currentViewport = null;    // last computed pdf.js viewport (for overlay/coord conversion)
 var balloonModeActive = false; // true → pan disabled, balloonManager owns the canvas mouse
 var datumModeActive = false;   // true → pan disabled, balloonManager owns the canvas mouse (datum draw)
@@ -690,7 +690,7 @@ function loadPdfFromDirHandle(dirHandle, targetName) {
   });
 }
 
-// ── Project ID injection (called by app.js on project change) ──
+// ── Project ID injection (called by app.js / project.js on project change) ──
 function setPdfProjectId(id) {
   currentProjectId = id || null;
 }
