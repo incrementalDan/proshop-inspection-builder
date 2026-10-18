@@ -11,7 +11,10 @@
  * Owns the app state: { rows[], globals }
  */
 
-var APP_VERSION = 'v1.2';
+// ONE version for the app: shown top-left AND used as ?v= on every file in
+// index.html (so browsers reload new files). Bump both together — see
+// CLAUDE.md "Versioning". test/run-node.js fails if they don't match.
+var APP_VERSION = 'v2.0.0';
 
 console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
 

@@ -236,6 +236,15 @@ Persistence across sessions uses the **File System Access API** (Chromium):
 - **Render task cancellation**: `closePdf()` and `loadPdfFromArrayBuffer()` cancel in-flight render tasks and call `pdfDoc.destroy()` to release pdf.js worker resources
 - **Filename validation**: `tryRestorePdf(expectedFileName)` checks that the IDB handle points to the correct file — prevents wrong PDF from loading after project switch
 
+## Versioning
+- One version, `APP_VERSION` in `js/app.js` (shown top-left), format `vMAJOR.MINOR.PATCH`.
+- The same number is the `?v=` on every file in `index.html` (makes browsers load the new files).
+- **Bump it in every change that goes to main**, both places at once:
+  - Bug fix → PATCH (`v2.0.0` → `v2.0.1`)
+  - New feature → MINOR (`v2.0.1` → `v2.1.0`)
+  - Big change to how the app works → MAJOR (`v2.1.0` → `v3.0.0`)
+- `node test/run-node.js` fails if the label and `?v=` don't match.
+
 ## Git Workflow
 - Commit after each working feature
 - Use descriptive commit messages: `feat: add tolerance parsing`, `fix: OP2000 bypass`
