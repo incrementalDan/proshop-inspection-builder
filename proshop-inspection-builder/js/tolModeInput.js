@@ -10,7 +10,7 @@
  *                              (validates min ≤ nominal ≤ max)
  *
  * Used by:
- *   - ui.js setupSidebarTolEdit (OP2000 + OUT sidebar editors)
+ *   - sidebar.js setupSidebarTolEdit (OP2000 + OUT sidebar editors)
  *   - balloonManager.js showPopover/confirmPopover (new-balloon popover)
  *
  * Math downstream (recompute → mathEngine → exportEngine) is unchanged.

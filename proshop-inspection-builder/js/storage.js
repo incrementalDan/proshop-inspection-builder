@@ -286,7 +286,7 @@ function openProjectWithHandle() {
     }],
     multiple: false,
   }).then(function(handles) {
-    // Not attached yet — app.js attaches it only once the file loads OK,
+    // Not attached yet — project.js attaches it only once the file loads OK,
     // so a broken file never becomes the auto-save target.
     var handle = handles[0];
     return handle.getFile().then(function(file) {

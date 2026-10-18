@@ -122,7 +122,7 @@ test/faiExport.test.js  — FAI export tests
 - `loadProject(jsonString)` → returns full app state
 - `autoSave(state)` → saves to localStorage only
 - `openProjectWithHandle()` → File System Access API picker, stores handle for silent re-saves
-- Every project load goes through `openProject()` in app.js. Only the Load button keeps a disk handle; drag-drop, file-input and CSV import clear it so auto-save never writes into a different project's file.
+- Every project load goes through `openProject()` in project.js. Only the Load button keeps a disk handle; drag-drop, file-input and CSV import clear it so auto-save never writes into a different project's file.
 - The disk file link is remembered in IndexedDB (`psb_project_store`, key `project:{projectId}`) so a page refresh reconnects auto-save. If the browser wants permission again, the header file name shows "reconnect" — one click (or Save) fixes it.
 - CSV import = new project: new `projectId`, file link dropped. Undo never changes `projectId` or `pdfFileName`.
 - `autoSaveToDisk(state)` → silently writes to stored file handle (no prompt)

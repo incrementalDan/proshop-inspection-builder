@@ -477,7 +477,7 @@ var diskSaveTimer = null;
 var diskSaveWarned = false;
 var sessionSaveWarned = false;
 
-// Called by ui.js after an edit it makes directly (e.g. FAI notes)
+// Called by table.js after an edit it makes directly (e.g. FAI notes)
 PSB.onProjectEdited = function() {
   markDirty();
   scheduleAutoSave();

@@ -2,7 +2,7 @@
  * gdtParser.js — GD&T (Geometric Dimensioning & Tolerancing) constants + helpers.
  *
  * Pure data + pure functions. No DOM, no fetch, no app state. The OCR engine
- * (ocrEngine.js) and the popover/Datum-Mode UI (balloonManager.js + ui.js)
+ * (ocrEngine.js) and the popover/Datum-Mode UI (balloonManager.js, ui.js tooltip, sidebar.js panel)
  * consume the exports.
  *
  * GD&T rows are balloon-created rows with raw._source='balloon' and

@@ -1480,7 +1480,7 @@ function deleteBalloon(rowId) {
   renderOverlay(PSB.getPdfViewport());
 }
 
-// ── Targeted insert API (called from ui.js + buttons) ───
+// ── Targeted insert API (called from table.js + buttons) ───
 function setPendingInsertAt(dimTag) {
   pendingInsertAt = dimTag;
 }
@@ -1884,7 +1884,7 @@ function bindLeaderHandle(handleEl, row) {
   });
 }
 
-// ── Hover sync (called by ui.js) ─────────────────────────
+// ── Hover sync (called by table.js) ──────────────────────
 // Toggle a .hovered class on the matching balloon group instead of re-rendering
 // the entire overlay — avoids dozens of SVG rebuilds per second on hover.
 // For GD&T rows, also pulse the matching datum circles so the inspector can
