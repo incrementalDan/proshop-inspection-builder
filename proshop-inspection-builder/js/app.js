@@ -16,7 +16,7 @@
 // ONE version for the app: shown top-left AND used as ?v= on every file in
 // index.html (so browsers reload new files). Bump both together — see
 // CLAUDE.md "Versioning". test/run-node.js fails if they don't match.
-var APP_VERSION = 'v2.0.1';
+var APP_VERSION = 'v2.0.2';
 
 console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
 
@@ -178,6 +178,18 @@ document.addEventListener('DOMContentLoaded', function() {
   try {
     console.log('[PSB] DOMContentLoaded fired, initializing...');
 
+    // Initialize UI — before the auto-save restore below, which draws the
+    // table (drawing needs getAppState from initUI)
+    PSB.initUI({
+      onRowUserChange: handleRowUserChange,
+      onFileImport: handleFileImport,
+      onAddRow: handleAddRow,
+      onDeleteRow: handleDeleteRow,
+      onFaiRetag: handleFaiRetag,
+      getAppState: function() { return state; },
+    });
+    console.log('[PSB] UI initialized');
+
     // Clear any corrupt auto-save from old ES module version
     try {
       var saved = PSB.autoLoad();
@@ -193,17 +205,6 @@ document.addEventListener('DOMContentLoaded', function() {
       console.warn('[PSB] Auto-load failed, clearing:', e);
       PSB.clearAutoSave();
     }
-
-    // Initialize UI
-    PSB.initUI({
-      onRowUserChange: handleRowUserChange,
-      onFileImport: handleFileImport,
-      onAddRow: handleAddRow,
-      onDeleteRow: handleDeleteRow,
-      onFaiRetag: handleFaiRetag,
-      getAppState: function() { return state; },
-    });
-    console.log('[PSB] UI initialized');
 
     // Bind header controls
     bindGlobalControls();
