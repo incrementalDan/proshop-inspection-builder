@@ -115,10 +115,13 @@ test/faiExport.test.js  — FAI export tests
 - `loadProject(jsonString)` → returns full app state
 - `autoSave(state)` → saves to localStorage only
 - `openProjectWithHandle()` → File System Access API picker, stores handle for silent re-saves
+- Every project load goes through `openProject()` in app.js. Only the Load button keeps a disk handle; drag-drop, file-input and CSV import clear it so auto-save never writes into a different project's file.
+- The disk file link is remembered in IndexedDB (`psb_project_store`, key `project:{projectId}`) so a page refresh reconnects auto-save. If the browser wants permission again, the header file name shows "reconnect" — one click (or Save) fixes it.
+- CSV import = new project: new `projectId`, file link dropped. Undo never changes `projectId` or `pdfFileName`.
 - `autoSaveToDisk(state)` → silently writes to stored file handle (no prompt)
 
 ### history.js
-- `pushUndo(state, description)` → snapshot current state before mutation
+- `pushUndo(state, description, groupKey?)` → snapshot current state before mutation. Same `groupKey` within 1.5s = one undo step (typing in a box, arrow-key nudges)
 - `undo(state, desc)` / `redo(state, desc)` → pop/push between stacks, return snapshot
 - `canUndo()` / `canRedo()` → boolean checks
 - `getUndoDescriptions()` / `getRedoDescriptions()` → arrays for dropdown menus
@@ -130,7 +133,6 @@ test/faiExport.test.js  — FAI export tests
 - `loadPdfFromFile(file)` → read File as ArrayBuffer, render via pdf.js
 - `closePdf()` → clear all state, hide viewer, remove IDB handle
 - `tryRestorePdf(expectedFileName)` → restore from IndexedDB handle (validates filename match)
-- `restoreOrPromptPdf(fileName, promptIfMissing)` → try IDB, then file picker fallback
 - `promptForPdf(suggestedName)` → open file picker (uses startIn for same-folder hint)
 - `hasPdf()` / `getPdfFileName()` → state queries
 
@@ -181,7 +183,10 @@ Override architecture for Spec/Tol:
 - PDF Filename: stored as `pdfFileName` in globals (just the name, e.g. `"drawing.pdf"`, not a path)
 
 ## UI Layout
-- **Header bar**: Global settings (always visible), includes PDF upload button
+- **Left nav rail = workflow steps**: ① Drawing (`drawing`) → ② Plan (`setup`, the original Setup view) → ③ Inspect (`fai`). Ctrl+1/2/3. Each shows a small status (dims, done/total, fail count).
+- **Per-step controls**: header buttons carry `data-steps="drawing setup fai"`; untagged ones show on every step. Setup panel default per step (Drawing closed, Plan open, Inspect closed) and remembers your toggle per step.
+- **Header bar** (one row; the old op-bar row is merged in): grouped icon buttons — History (undo/redo/history) │ File (New ▾ Blank/Sample, Open, Save with yellow unsaved dot) │ Bring in (Import CSV, PDF, Import CMM, ⚙ Setup) │ the step's Export (only orange button). Icons are inline SVG (`.ico`), no library.
+- **Inspect toolbar** (`#fai-toolbar`) above the table: OP2000 / Compensated compare switch.
 - **Main area**: `#left-panel` (vertical flex) + `#sidebar-resizer` + `#sidebar`
   - **Without PDF**: `#left-panel` contains only `#table-container` (full height)
   - **With PDF loaded**: `#left-panel` splits vertically — `#pdf-viewer` (flex:2, ~2/3) + `#pdf-resizer` (draggable) + `#table-container` (flex:1, ~1/3)

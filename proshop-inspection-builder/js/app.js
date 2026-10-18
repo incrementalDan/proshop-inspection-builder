@@ -28,26 +28,31 @@ function ensureProjectId() {
   if (!state.globals.projectId) {
     state.globals.projectId = generateUUID();
     PSB.setPdfProjectId(state.globals.projectId);
+    PSB.cachePdfForProject();
   }
 }
 
 // ── View Configuration ────────────────────────────────────
 var VIEW_CONFIGS = {
+  // ① Drawing — same table as Plan; PDF in focus, Setup panel closed by default
+  drawing: {
+    id: 'drawing',
+    label: 'Drawing',
+    sidebarEnabled: true,
+    setupPanelDefault: false,
+  },
+  // ② Plan — the original Setup view (id kept as 'setup')
   setup: {
     id: 'setup',
-    label: 'Setup View',
-    columns: ['status','dimTag','outDrawingSpec','op2000Spec','su2','su3','pinGage','op2000Tol','outTol','plating','ops'],
+    label: 'Plan',
+    setupPanelDefault: true,
     sidebarEnabled: true,
-    faiControlsVisible: false,
-    setupControlsVisible: true,
   },
   fai: {
     id: 'fai',
-    label: 'FAI View',
-    columns: ['faiStatus','dimTag','drawingSpec','su1','su2','nominal','tolerance','measured','deviation','notes','run'],
+    label: 'Inspect',
+    setupPanelDefault: false, // CMM table needs the width; ⚙ Setup still opens it
     sidebarEnabled: false,
-    faiControlsVisible: true,
-    setupControlsVisible: false,
     compareMode: 'op2000',   // 'op2000' | 'compensated' — which plan values to compare CMM against
   },
 };
@@ -63,7 +68,15 @@ function setFaiCompareMode(mode) {
   if (currentView === 'fai') PSB.renderTable(state, VIEW_CONFIGS.fai);
 }
 
+var setupPanelByStep = {}; // step id → was the Setup panel open when you left it
+
 function switchView(viewId) {
+  if (!VIEW_CONFIGS[viewId]) viewId = 'setup';
+  // Remember the Setup panel state of the step we're leaving
+  var panel = document.getElementById('setup-panel');
+  if (panel && VIEW_CONFIGS[currentView] && VIEW_CONFIGS[currentView].setupPanelDefault !== undefined) {
+    setupPanelByStep[currentView] = !panel.classList.contains('panel-closed');
+  }
   currentView = viewId;
   var config = VIEW_CONFIGS[viewId];
 
@@ -80,23 +93,23 @@ function switchView(viewId) {
     }
   }
 
-  // Toggle control visibility
-  var setupControls = document.querySelectorAll('.setup-only');
-  var faiControls = document.querySelectorAll('.fai-only');
-  for (var i = 0; i < setupControls.length; i++) {
-    if (config.setupControlsVisible) {
-      setupControls[i].classList.remove('hidden');
-    } else {
-      setupControls[i].classList.add('hidden');
-    }
+  // Show only the controls tagged for this step (data-steps="drawing setup fai").
+  // Untagged controls (Save, Load, New…) show on every step.
+  var stepped = document.querySelectorAll('[data-steps]');
+  for (var i = 0; i < stepped.length; i++) {
+    var steps = stepped[i].getAttribute('data-steps').split(' ');
+    stepped[i].classList.toggle('hidden', steps.indexOf(viewId) === -1);
   }
-  for (var j = 0; j < faiControls.length; j++) {
-    if (config.faiControlsVisible) {
-      faiControls[j].classList.remove('hidden');
-    } else {
-      faiControls[j].classList.add('hidden');
-    }
+
+  // Setup panel: Drawing starts closed, Plan open; each step remembers
+  // what you last did with it.
+  if (config.setupPanelDefault !== undefined) {
+    var wantOpen = setupPanelByStep[viewId];
+    if (wantOpen === undefined) wantOpen = config.setupPanelDefault;
+    if (wantOpen) PSB.openSetupPanel(); else PSB.closeSetupPanel();
   }
+
+  try { sessionStorage.setItem('psb_step', viewId); } catch (e) { /* not critical */ }
 
   // Activate the matching nav rail tab
   var navTabs = document.querySelectorAll('.nav-tab[data-view]');
@@ -107,7 +120,30 @@ function switchView(viewId) {
   PSB.renderTable(state, config);
 }
 
+/** Small status under ① Drawing and ② Plan in the left bar. */
+function updateStepStatus() {
+  var rows = state.rows || [];
+  var n = rows.length;
+  var dEl = document.getElementById('nav-drawing-status');
+  var pEl = document.getElementById('nav-plan-status');
+  var dTab = document.getElementById('nav-tab-drawing');
+  var pTab = document.getElementById('nav-tab-setup');
+  if (!dEl || !pEl) return;
+
+  var unconfirmed = n > 0 && !state.globals.printUnitsConfirmed;
+  dEl.textContent = n > 0 ? String(n) : '';
+  dEl.className = 'nav-step-status' + (n === 0 ? ' hidden' : unconfirmed ? ' status-warn' : '');
+  if (dTab) dTab.setAttribute('aria-label', 'Step 1, Drawing: ' + n + ' dims' + (unconfirmed ? ', print units not confirmed' : ''));
+
+  var done = 0;
+  for (var i = 0; i < n; i++) if (rows[i].user && rows[i].user.status === 'complete') done++;
+  pEl.textContent = n > 0 ? done + '/' + n : '';
+  pEl.className = 'nav-step-status' + (n === 0 ? ' hidden' : done === n ? ' status-done' : '');
+  if (pTab) pTab.setAttribute('aria-label', 'Step 2, Plan: ' + done + ' of ' + n + ' complete');
+}
+
 function updateFaiTabBadge() {
+  updateStepStatus();
   var badge = document.getElementById('nav-fai-badge');
   if (!badge) return;
   var fails = 0, warns = 0;
@@ -164,8 +200,12 @@ var importedFileName = null;
 // ═══════════════════════════════════════════════════════════
 var isDirty = false;
 
+var editCount = 0; // bumps on every edit; a save only marks clean if it saved the latest
+
 function markDirty() {
   isDirty = true;
+  editCount++;
+  updateUndoRedoButtons(); // every edit can add an undo step
   if (!document.title.startsWith('* ')) {
     document.title = '* ' + document.title;
   }
@@ -175,6 +215,56 @@ function markDirty() {
   }
   var saveBtn = document.getElementById('btn-save');
   if (saveBtn) saveBtn.classList.add('btn-dirty');
+  saveSessionMeta();
+}
+
+// Filename + unsaved flag for this tab, so a page refresh shows the same
+// header and still warns before closing with unsaved work.
+var SESSION_META_KEY = 'psb_session_meta';
+function saveSessionMeta() {
+  try {
+    sessionStorage.setItem(SESSION_META_KEY, JSON.stringify({ fileName: importedFileName, dirty: isDirty }));
+  } catch (e) { /* storage blocked — not critical */ }
+}
+function readSessionMeta() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_META_KEY) || 'null'); } catch (e) { return null; }
+}
+
+// ── Link to the project file on disk ──────────────────────
+// After a refresh the browser may want a click before we can write to the
+// file again. Until then auto-save to disk waits and the header says so.
+var needsReconnect = false;
+
+function setNeedsReconnect(on) {
+  needsReconnect = on;
+  var banner = document.getElementById('filename-banner');
+  if (banner) {
+    banner.classList.toggle('needs-reconnect', on);
+    banner.title = on ? 'Click to reconnect auto-save to this file' : '';
+  }
+}
+
+/** Forget the disk file (new data that doesn't belong in it). */
+function dropFileLink() {
+  PSB.clearProjectFileHandle();
+  setNeedsReconnect(false);
+}
+
+/** Re-attach the remembered file. `fromClick` lets the browser ask permission. */
+function reconnectFile(fromClick) {
+  return PSB.reconnectProjectHandle(state.globals.projectId, fromClick).then(function(result) {
+    if (result === 'connected') {
+      setNeedsReconnect(false);
+      importedFileName = PSB.getProjectFileName();
+      setFilename(importedFileName);
+      if (isDirty) { markDirty(); scheduleAutoSave(); }
+      if (fromClick) PSB.showToast('Auto-save reconnected to ' + importedFileName, 'success');
+    } else if (result === 'needs-click') {
+      setNeedsReconnect(true);
+      if (!fromClick) PSB.showToast('Click the file name or Save to reconnect auto-save.', 'info');
+    }
+    return result;
+  });
 }
 
 function markClean() {
@@ -184,16 +274,37 @@ function markClean() {
   if (fnEl) fnEl.textContent = fnEl.textContent.replace(/ \u2022$/, '');
   var saveBtn = document.getElementById('btn-save');
   if (saveBtn) saveBtn.classList.remove('btn-dirty');
+  saveSessionMeta();
+}
+
+/**
+ * Put a loaded project (file, drag-drop or auto-save) into app state.
+ * One place, so every load path restores the same fields.
+ */
+function applyLoadedState(loaded) {
+  state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
+  state.rows = loaded.rows;
+  state.auditLog = loaded.auditLog || [];
+  state.faiRuns = loaded.faiRuns || [];
+  state.datumRefs = loaded.datumRefs || [];
 }
 
 /**
  * Restore app state from an undo/redo snapshot.
  */
-function restoreSnapshot(snapshot) {
+function applySnapshot(snapshot) {
   // Export options aren't undoable edits — keep the current ones
-  var faiExport = state.globals.faiExport;
+  // Not undoable: export options and which project/PDF this is.
+  // (Undoing past the first save must not wipe the project id or PDF link.)
+  var keep = {
+    faiExport: state.globals.faiExport,
+    projectId: state.globals.projectId,
+    pdfFileName: state.globals.pdfFileName,
+  };
   state.globals = snapshot.globals;
-  if (faiExport) state.globals.faiExport = faiExport;
+  Object.keys(keep).forEach(function(k) {
+    if (keep[k] !== undefined) state.globals[k] = keep[k];
+  });
   state.rows = snapshot.rows.map(function(r) {
     // Balloon-created rows keep mutable raw; CSV rows stay frozen.
     var rawCopy = Object.assign({}, r.raw);
@@ -207,12 +318,43 @@ function restoreSnapshot(snapshot) {
     };
   });
   if (snapshot.faiRuns) state.faiRuns = snapshot.faiRuns;
+  if (snapshot.datumRefs) state.datumRefs = snapshot.datumRefs;
+}
+
+function refreshAfterRestore() {
   recomputeAll();
+  if (PSB.renderBalloonOverlay) PSB.renderBalloonOverlay();
   syncGlobalsToUI();
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
   updateUndoRedoButtons();
   markDirty();
   scheduleAutoSave();
+}
+
+/**
+ * Undo or redo `steps` changes in a row (the history menus can jump back
+ * several at once). Each step restores state before the next, so the
+ * opposite stack gets the right snapshots.
+ */
+function stepHistory(direction, steps) {
+  var isUndo = direction === 'undo';
+  var done = 0;
+  var lastDesc = '';
+  for (var i = 0; i < (steps || 1); i++) {
+    var descs = isUndo ? PSB.getUndoDescriptions() : PSB.getRedoDescriptions();
+    var desc = descs.length > 0 ? descs[0] : '';
+    var snap = isUndo ? PSB.undo(state, desc) : PSB.redo(state, desc);
+    if (!snap) break;
+    applySnapshot(snap);
+    lastDesc = snap._desc || 'Change';
+    done++;
+  }
+  if (done > 0) {
+    refreshAfterRestore();
+    var label = isUndo ? 'Undo: ' : 'Redo: ';
+    PSB.showToast(label + (done > 1 ? done + ' changes' : lastDesc), 'info');
+  }
+  updateUndoRedoButtons();
 }
 
 function updateUndoRedoButtons() {
@@ -273,26 +415,22 @@ function setupUndoRedoDropdowns() {
     var item = e.target.closest('.undo-redo-item');
     if (!item) return;
     closeAll();
-    var descs = PSB.getUndoDescriptions();
-    var desc = descs.length > 0 ? descs[0] : '';
-    var snap = PSB.undo(state, desc);
-    if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
-    updateUndoRedoButtons();
+    stepHistory('undo', parseInt(item.dataset.index, 10) + 1);
   });
 
   redoDropdown.addEventListener('click', function(e) {
     var item = e.target.closest('.undo-redo-item');
     if (!item) return;
     closeAll();
-    var descs = PSB.getRedoDescriptions();
-    var desc = descs.length > 0 ? descs[0] : '';
-    var snap = PSB.redo(state, desc);
-    if (snap) { restoreSnapshot(snap); PSB.showToast('Redo: ' + (snap._desc || 'Change'), 'info'); }
-    updateUndoRedoButtons();
+    stepHistory('redo', parseInt(item.dataset.index, 10) + 1);
   });
 
   document.addEventListener('click', function() { closeAll(); });
 }
+
+window.addEventListener('pagehide', function() {
+  if (state.rows.length > 0) PSB.autoSave(state);
+});
 
 window.addEventListener('beforeunload', function(e) {
   if (isDirty && state.rows.length > 0) {
@@ -312,10 +450,9 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       var saved = PSB.autoLoad();
       if (saved) {
-        state.globals = Object.assign(PSB.defaultGlobals(), saved.globals);
-        state.rows = saved.rows;
-        state.auditLog = saved.auditLog || [];
-        state.faiRuns = saved.faiRuns || [];
+        applyLoadedState(saved);
+        var meta = readSessionMeta();
+        if (meta) importedFileName = meta.fileName || null;
         // deserializeState already normalizes user/overrides fields
         recomputeAll();
         console.log('[PSB] Restored ' + state.rows.length + ' rows from auto-save');
@@ -339,6 +476,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Bind header controls
     bindGlobalControls();
     bindFileButtons();
+    bindNewMenu();
     bindNewButton();
     bindSampleButton();
     bindOpBar();
@@ -360,20 +498,8 @@ document.addEventListener('DOMContentLoaded', function() {
     })();
 
     // Undo / Redo buttons
-    document.getElementById('btn-undo').addEventListener('click', function() {
-      var descs = PSB.getUndoDescriptions();
-      var desc = descs.length > 0 ? descs[0] : '';
-      var snap = PSB.undo(state, desc);
-      if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
-      updateUndoRedoButtons();
-    });
-    document.getElementById('btn-redo').addEventListener('click', function() {
-      var descs = PSB.getRedoDescriptions();
-      var desc = descs.length > 0 ? descs[0] : '';
-      var snap = PSB.redo(state, desc);
-      if (snap) { restoreSnapshot(snap); PSB.showToast('Redo: ' + (snap._desc || 'Change'), 'info'); }
-      updateUndoRedoButtons();
-    });
+    document.getElementById('btn-undo').addEventListener('click', function() { stepHistory('undo', 1); });
+    document.getElementById('btn-redo').addEventListener('click', function() { stepHistory('redo', 1); });
 
     // Undo/Redo dropdown arrows
     setupUndoRedoDropdowns();
@@ -415,22 +541,15 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        var uDescs = PSB.getUndoDescriptions();
-        var uDesc = uDescs.length > 0 ? uDescs[0] : '';
-        var snap = PSB.undo(state, uDesc);
-        if (snap) { restoreSnapshot(snap); PSB.showToast('Undo: ' + (snap._desc || 'Change'), 'info'); }
-        updateUndoRedoButtons();
+        stepHistory('undo', 1);
       }
       if (mod && (e.key === 'Z' || (e.key === 'z' && e.shiftKey) || e.key === 'y')) {
         e.preventDefault();
-        var rDescs = PSB.getRedoDescriptions();
-        var rDesc = rDescs.length > 0 ? rDescs[0] : '';
-        var snapR = PSB.redo(state, rDesc);
-        if (snapR) { restoreSnapshot(snapR); PSB.showToast('Redo: ' + (snapR._desc || 'Change'), 'info'); }
-        updateUndoRedoButtons();
+        stepHistory('redo', 1);
       }
-      if (mod && e.key === '1') { e.preventDefault(); switchView('setup'); }
-      if (mod && e.key === '2') { e.preventDefault(); switchView('fai'); }
+      if (mod && e.key === '1') { e.preventDefault(); switchView('drawing'); }
+      if (mod && e.key === '2') { e.preventDefault(); switchView('setup'); }
+      if (mod && e.key === '3') { e.preventDefault(); switchView('fai'); }
 
       // Ballooning shortcuts (skip if user is typing in an input/textarea)
       var inField = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
@@ -493,19 +612,25 @@ document.addEventListener('DOMContentLoaded', function() {
     syncGlobalsToUI();
     applyUnitColors(state.globals.importUnits);
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-    PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+    // Start on the step you were on (refresh), else Drawing when empty, Plan when not
+    var savedStep = null;
+    try { savedStep = sessionStorage.getItem('psb_step'); } catch (e) { /* ignore */ }
+    switchView(savedStep || (state.rows.length > 0 ? 'setup' : 'drawing'));
+    updateFaiTabBadge();
     updateCmmPartBadge(state.globals.cmmPartName);
+    if (state.rows.length > 0) {
+      var sessionMeta = readSessionMeta();
+      if (sessionMeta && sessionMeta.dirty) markDirty();
+      setFilename(importedFileName);
+      reconnectFile(false);
+    }
     // Set version from single source
     var versionEl = document.querySelector('.app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
 
-    // Try to restore PDF — set project ID first so IDB byte cache is keyed correctly
-    if (state.globals.pdfFileName) {
-      PSB.setPdfProjectId(state.globals.projectId);
-      PSB.tryRestorePdf(state.globals.pdfFileName).then(function(ok) {
-        if (!ok) PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
-      });
-    }
+    // Try to restore PDF (no file picker on page load — needs a click)
+    PSB.setPdfProjectId(state.globals.projectId);
+    if (state.globals.pdfFileName) restoreProjectPdf(false);
 
     console.log('[PSB] Init complete');
 
@@ -580,11 +705,29 @@ function bindBalloonSizeControl() {
 // ═══════════════════════════════════════════════════════════
 // NEW FILE BUTTON
 // ═══════════════════════════════════════════════════════════
+// "New ▾" menu: Blank project / Sample data
+function bindNewMenu() {
+  var btn = document.getElementById('btn-new-menu');
+  var menu = document.getElementById('new-menu');
+  if (!btn || !menu) return;
+  function setOpen(open) {
+    menu.classList.toggle('hidden', !open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    setOpen(menu.classList.contains('hidden'));
+  });
+  menu.addEventListener('click', function() { setOpen(false); }); // item picked
+  document.addEventListener('click', function() { setOpen(false); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') setOpen(false); });
+}
+
 function bindNewButton() {
   document.getElementById('btn-new').addEventListener('click', function() {
     var doNew = function() {
       PSB.clearAutoSave();
-      PSB.clearProjectFileHandle();
+      dropFileLink();
       PSB.clearUndoRedo();
       // closePdf() clears in-memory state; IDB byte cache is intentionally preserved
       // so re-loading this project later still finds the PDF automatically.
@@ -593,6 +736,7 @@ function bindNewButton() {
       state.globals = PSB.defaultGlobals();
       state.auditLog = [];
       state.faiRuns = [];
+      state.datumRefs = [];
       importedFileName = null;
       PSB.setPdfProjectId(null);
       syncGlobalsToUI();
@@ -600,6 +744,8 @@ function bindNewButton() {
       PSB.renderTable(state, VIEW_CONFIGS[currentView]);
       PSB.closeSidebar();
       setFilename(null);
+      updateCmmPartBadge(null);
+      updateFaiTabBadge();
       markClean();
       console.log('[PSB] New file — state cleared');
     };
@@ -669,7 +815,7 @@ function bindGlobalControls() {
   document.getElementById('plating-thickness').addEventListener('input', function(e) {
     var oldVal = state.globals.platingThickness;
     var newVal = parseFloat(e.target.value) || 0;
-    PSB.pushUndo(state, 'Plating thickness: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'Plating thickness → ' + newVal, 'platingThickness');
     state.globals.platingThickness = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Plating thickness: ' + oldVal + ' → ' + newVal, details: [{ field: 'platingThickness', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -702,7 +848,7 @@ function bindGlobalControls() {
   document.getElementById('inch-precision').addEventListener('input', function(e) {
     var oldVal = state.globals.inchPrecision;
     var newVal = parseInt(e.target.value) || 4;
-    PSB.pushUndo(state, 'Inch precision: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'Inch precision → ' + newVal, 'inchPrecision');
     state.globals.inchPrecision = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Inch precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'inchPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -713,7 +859,7 @@ function bindGlobalControls() {
   document.getElementById('mm-precision').addEventListener('input', function(e) {
     var oldVal = state.globals.mmPrecision;
     var newVal = parseInt(e.target.value) || 3;
-    PSB.pushUndo(state, 'MM precision: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'MM precision → ' + newVal, 'mmPrecision');
     state.globals.mmPrecision = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'MM precision: ' + oldVal + ' → ' + newVal, details: [{ field: 'mmPrecision', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -725,7 +871,7 @@ function bindGlobalControls() {
     var oldVal = state.globals.angleDecimals;
     var newVal = parseInt(e.target.value, 10);
     if (isNaN(newVal) || newVal < 0) newVal = 3;
-    PSB.pushUndo(state, 'Angle decimals: ' + oldVal + ' → ' + newVal);
+    PSB.pushUndo(state, 'Angle decimals → ' + newVal, 'angleDecimals');
     state.globals.angleDecimals = newVal;
     PSB.logChange(state.auditLog, { type: 'global', rowId: null, description: 'Angle decimals: ' + oldVal + ' → ' + newVal, details: [{ field: 'angleDecimals', from: String(oldVal), to: String(newVal) }] });
     recomputeAll();
@@ -803,6 +949,7 @@ function unitButtonsHtml(primary, detected) {
 
 function refreshPrintUnitsUI() {
   loadPdfTitleText();
+  updateStepStatus(); // ① shows a warning until units are confirmed
   var g = state.globals;
   var cur = PSB.getPrintUnits(g);
   var status = document.getElementById('print-units-status');
@@ -919,7 +1066,7 @@ function applyUnitColors(unit) {
 
 function setPdfFileName(name) {
   state.globals.pdfFileName = name || null;
-  if (name) markDirty();
+  if (name) { markDirty(); scheduleAutoSave(); }
 }
 PSB.setPdfFileName = setPdfFileName;
 
@@ -940,44 +1087,82 @@ function setFilename(name) {
     el.textContent = 'No file loaded';
     el.classList.remove('has-file');
   }
+  if (isDirty) el.textContent += ' \u2022';
+  saveSessionMeta();
 }
 
-function applyLoadedProject(jsonString, fileName) {
+/**
+ * The one way a project file gets into the app (Load button, file input,
+ * drag-drop). `fileHandle` is passed only by the Load button (the picked file);
+ * it is attached only after the file parses. Otherwise disk auto-save is switched
+ * off until the user picks Save, so a dropped file can never overwrite the
+ * project that was open before it.
+ */
+function openProject(jsonString, fileName, fileHandle) {
+  var loaded;
   try {
-    var loaded = PSB.loadProject(jsonString);
-    state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-    state.rows = loaded.rows;
-    state.auditLog = loaded.auditLog || [];
-    state.faiRuns = loaded.faiRuns || [];
-    importedFileName = fileName;
-    PSB.clearUndoRedo();
-    recomputeAll();
-    syncGlobalsToUI();
-    PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-    PSB.closeSidebar();
-    setFilename(fileName);
-    markClean();
-
-    // Restore PDF — inject project ID so IDB byte cache is keyed correctly
-    PSB.setPdfProjectId(state.globals.projectId);
-    if (state.globals.pdfFileName) {
-      var pdfName = state.globals.pdfFileName;
-      PSB.tryRestorePdf(pdfName).then(function(ok) {
-        if (ok) return;
-        // All IDB layers missed — prompt user to locate the PDF once.
-        // startIn opens in the project's folder (if project was opened via FSA).
-        PSB.showToast('Select ' + pdfName + ' (one-time — remembered after this)', 'info');
-        return PSB.promptForPdf(pdfName);
-      });
-    } else {
-      PSB.closePdf();
-    }
-
-    updateCmmPartBadge(state.globals.cmmPartName);
-    console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
+    loaded = PSB.loadProject(jsonString);
   } catch (err) {
+    // Nothing changes — the open project and its file link stay as they were
     PSB.showToast('Failed to load project file: ' + err.message, 'error');
+    return false;
   }
+  dropFileLink();
+  if (fileHandle) PSB.useProjectFileHandle(fileHandle);
+  applyLoadedState(loaded);
+  if (fileHandle) {
+    ensureProjectId(); // remembered link is keyed by project id
+    PSB.rememberProjectHandle(state.globals.projectId);
+  }
+  importedFileName = fileName;
+  PSB.clearUndoRedo();
+  recomputeAll();
+  syncGlobalsToUI();
+  PSB.renderOpBar(state.globals.ops, handleRemoveOp);
+  PSB.closeSidebar();
+  setFilename(fileName);
+  updateCmmPartBadge(state.globals.cmmPartName);
+  updateUndoRedoButtons();
+  markClean();
+  restoreProjectPdf(true);
+  console.log('[PSB] Loaded project with ' + state.rows.length + ' rows');
+  return true;
+}
+
+/**
+ * Re-open the project's PDF. Order: browser cache → saved file handle →
+ * (if allowed) ask the user to pick it once.
+ */
+function restoreProjectPdf(promptIfMissing) {
+  PSB.setPdfProjectId(state.globals.projectId); // IDB cache is keyed by project
+  var pdfName = state.globals.pdfFileName;
+  if (!pdfName) {
+    PSB.closePdf();
+    return;
+  }
+  PSB.tryRestorePdf(pdfName).then(function(ok) {
+    if (ok) return;
+    if (!promptIfMissing) {
+      PSB.showToast('PDF not found. Click "PDF" to re-select.', 'info');
+      return;
+    }
+    PSB.showToast('Select ' + pdfName + ' (one-time — remembered after this)', 'info');
+    return PSB.promptForPdf(pdfName).then(function(picked) {
+      if (!picked) PSB.showToast('PDF not loaded. Click "PDF" to select ' + pdfName + '.', 'info');
+    });
+  });
+}
+
+/** Ask before throwing away unsaved work; runs `fn` straight away if nothing is unsaved. */
+function confirmDiscardChanges(fn) {
+  if (!isDirty || state.rows.length === 0) { fn(); return; }
+  PSB.showConfirmModal({
+    title: 'Discard Unsaved Changes?',
+    message: 'This project has unsaved changes. Opening another file will lose them.',
+    confirmLabel: 'Discard & Open',
+    confirmClass: 'btn-danger',
+    onConfirm: fn,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1002,33 +1187,42 @@ function bindFileButtons() {
   // Save project
   document.getElementById('btn-save').addEventListener('click', function() {
     ensureProjectId(); // generate UUID if this project doesn't have one yet
-    var result = PSB.saveProject(state, { suggestedName: getSuggestedSaveName() });
-    if (result && result.then) {
-      result.then(function(ok) {
-        if (ok) {
-          markClean();
-          var fname = PSB.getProjectFileName();
-          if (fname) setFilename(fname);
-          PSB.showToast('Project saved.', 'success');
-        }
-      });
-    } else {
-      markClean();
+    // After a refresh: reconnect to the same file first instead of "Save As"
+    var ready = needsReconnect ? reconnectFile(true) : Promise.resolve();
+    var savedAt = editCount;
+    ready.then(function() {
+      return PSB.saveProject(state, { suggestedName: getSuggestedSaveName() });
+    }).then(function(ok) {
+      if (!ok) return;
+      setNeedsReconnect(false);
+      PSB.rememberProjectHandle(state.globals.projectId);
+      var fname = PSB.getProjectFileName();
+      if (fname) importedFileName = fname;
+      diskSaveWarned = false;
+      if (editCount === savedAt) markClean();
+      if (fname) setFilename(fname);
       PSB.showToast('Project saved.', 'success');
-    }
+    });
+  });
+
+  // Click the file name to reconnect auto-save after a refresh
+  document.getElementById('filename-banner').addEventListener('click', function() {
+    if (needsReconnect) reconnectFile(true);
   });
 
   // Load project button — uses File System Access API to get a handle
   // so subsequent saves overwrite the same file without prompting.
   document.getElementById('btn-load').addEventListener('click', function() {
-    PSB.openProjectWithHandle().then(function(result) {
-      if (result) {
-        applyLoadedProject(result.jsonString, result.fileName);
-      } else if (!window.showOpenFilePicker) {
+    confirmDiscardChanges(function() {
+      if (!window.showOpenFilePicker) {
         // Fallback for browsers without File System Access API
         document.getElementById('file-load-project').click();
+        return;
       }
-      // null with API = user cancelled, do nothing
+      PSB.openProjectWithHandle().then(function(result) {
+        // null = user cancelled, do nothing
+        if (result) openProject(result.jsonString, result.fileName, result.handle);
+      });
     });
   });
 
@@ -1038,7 +1232,7 @@ function bindFileButtons() {
     var reader = new FileReader();
     var loadFileName = file.name;
     reader.onload = function(ev) {
-      applyLoadedProject(ev.target.result, loadFileName);
+      openProject(ev.target.result, loadFileName, false);
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -1238,7 +1432,7 @@ function bindSettingsModal() {
 // SETUP PANEL — toggle + title block live-save
 // ═══════════════════════════════════════════════════════════
 function bindSetupPanel() {
-  // Toggle button (always visible in op-bar)
+  // Toggle button (in the header)
   var toggleBtn = document.getElementById('btn-setup-panel');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', function() {
@@ -1294,39 +1488,14 @@ function bindTitleBlockDefaults() {
 // FILE IMPORT HANDLER
 // ═══════════════════════════════════════════════════════════
 function handleFileImport(content, fileName) {
+  if (fileName.toLowerCase().endsWith('.json')) {
+    confirmDiscardChanges(function() { openProject(content, fileName, false); });
+    return;
+  }
+
   var doImport = function() {
     PSB.showLoading('Importing...');
     setTimeout(function() {
-      if (fileName.endsWith('.json')) {
-        try {
-          var loaded = PSB.loadProject(content);
-          state.globals = Object.assign(PSB.defaultGlobals(), loaded.globals);
-          state.rows = loaded.rows;
-          state.auditLog = loaded.auditLog || [];
-          state.faiRuns = loaded.faiRuns || [];
-          importedFileName = fileName;
-          PSB.clearUndoRedo();
-          recomputeAll();
-          syncGlobalsToUI();
-          PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-          PSB.closeSidebar();
-          setFilename(fileName);
-          markClean();
-
-          // Restore PDF — inject project ID so IDB byte cache is keyed correctly
-          PSB.setPdfProjectId(state.globals.projectId);
-          if (state.globals.pdfFileName) {
-            PSB.restoreOrPromptPdf(state.globals.pdfFileName, true);
-          } else {
-            PSB.closePdf();
-          }
-        } catch (err) {
-          PSB.showToast('Failed to load project: ' + err.message, 'error');
-        }
-        PSB.hideLoading();
-        return;
-      }
-
       var rawRows = PSB.parseCSV(content);
       if (rawRows.length === 0) {
         PSB.showToast('No valid data found in CSV.', 'error');
@@ -1336,8 +1505,17 @@ function handleFileImport(content, fileName) {
 
       PSB.clearUndoRedo();
       PSB.resetIdCounter();
+      // New data = new project: don't auto-save over the previously opened
+      // file, and get a fresh id so it never shares links/caches with it.
+      dropFileLink();
+      state.globals.projectId = null;
+      ensureProjectId();
       state.rows = rawRows.map(function(raw) { return PSB.createRow(raw); });
       state.auditLog = [];
+      // CMM results belonged to the old rows — drop them so no orphan runs remain
+      state.faiRuns = [];
+      state.globals.cmmPartName = null;
+      updateCmmPartBadge(null);
       // Guess print units from the values; user must confirm before export
       var unitGuess = PSB.detectPrintUnits(PSB.unitSamplesFromRows(state.rows));
       if (unitGuess.units) state.globals.importUnits = unitGuess.units;
@@ -1359,7 +1537,8 @@ function handleFileImport(content, fileName) {
   if (state.rows.length > 0) {
     PSB.showConfirmModal({
       title: 'Replace Existing Data?',
-      message: 'You have <strong>' + state.rows.length + '</strong> rows with edits. Importing will replace all data.',
+      message: 'You have <strong>' + state.rows.length + '</strong> rows with edits. Importing will replace all data' +
+        ((state.faiRuns && state.faiRuns.length) ? ', including <strong>' + state.faiRuns.length + '</strong> CMM run' + (state.faiRuns.length > 1 ? 's' : '') : '') + '.',
       confirmLabel: 'Replace',
       confirmClass: 'btn-danger',
       onConfirm: doImport
@@ -1572,7 +1751,7 @@ function deleteFaiRuns(runIds) {
   }
 
   state.faiRuns = (state.faiRuns || []).filter(function(r) { return !idSet[r.id]; });
-  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  scheduleAutoSave();
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   markDirty();
 }
@@ -1709,7 +1888,7 @@ function assignUnmatchedCmmRow(runId, unmatchedIndex, newTag) {
 }
 
 function afterFaiChange() {
-  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  scheduleAutoSave();
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   updateFaiTabBadge();
   updateUndoRedoButtons();
@@ -1793,7 +1972,7 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
   });
 
   PSB.logChange(state.auditLog, { type: 'import', rowId: null, description: 'CMM import: ' + fileName });
-  PSB.autoSave({ rows: state.rows, globals: state.globals, auditLog: state.auditLog, faiRuns: state.faiRuns });
+  scheduleAutoSave();
   PSB.renderTable(state, VIEW_CONFIGS[currentView]);
   updateCmmPartBadge(state.globals.cmmPartName);
   updateFaiTabBadge();
@@ -2274,13 +2453,25 @@ function updateDeleteSelectedBtn() {
 // ═══════════════════════════════════════════════════════════
 var autoSaveTimer = null;
 var diskSaveTimer = null;
+var diskSaveWarned = false;
+var sessionSaveWarned = false;
 var platingToastTimer = null;
+
+// Called by ui.js after an edit it makes directly (e.g. FAI notes)
+PSB.onProjectEdited = function() {
+  markDirty();
+  scheduleAutoSave();
+};
 
 function scheduleAutoSave() {
   // Quick save to sessionStorage (1s debounce)
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(function() {
-    PSB.autoSave(state);
+    // H: browser storage full → refresh would lose work, so say so once
+    if (!PSB.autoSave(state) && !sessionSaveWarned) {
+      sessionSaveWarned = true;
+      PSB.showToast('Browser backup is full. Save the project to a file.', 'error');
+    }
   }, 1000);
 
   // Persist to disk if file handle exists (3s debounce)
@@ -2288,8 +2479,16 @@ function scheduleAutoSave() {
   diskSaveTimer = setTimeout(function() {
     if (PSB.hasFileHandle()) {
       ensureProjectId(); // make sure projectId is set before writing to disk
+      var savedAt = editCount;
       PSB.autoSaveToDisk(state).then(function(ok) {
-        if (ok) markClean();
+        if (ok) {
+          diskSaveWarned = false;
+          if (editCount === savedAt) markClean();
+        } else if (!diskSaveWarned) {
+          // File moved, locked or permission lost — don't fail silently
+          diskSaveWarned = true;
+          PSB.showToast('Auto-save to file failed. Click Save to save your work.', 'error');
+        }
       });
     }
   }, 3000);

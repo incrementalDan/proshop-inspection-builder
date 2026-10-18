@@ -1988,7 +1988,7 @@ function nudgeSelected(dx, dy) {
   var row = null;
   for (var i = 0; i < state.rows.length; i++) if (state.rows[i].id === selectedRowId) { row = state.rows[i]; break; }
   if (!row || !row.user.balloon) return;
-  PSB.pushUndo(state, 'Nudge balloon #' + row.user.balloon.dimTag);
+  PSB.pushUndo(state, 'Nudge balloon #' + row.user.balloon.dimTag, 'nudge:' + row.id);
   row.user.balloon.balloonOffset.dx += dx;
   row.user.balloon.balloonOffset.dy += dy;
   PSB.logChange(state.auditLog, {

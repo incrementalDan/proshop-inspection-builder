@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=44">
+  <link rel="stylesheet" href="css/styles.css?v=47">
 </head>
 <body>
 
@@ -23,20 +23,47 @@
       <span id="cmm-part-name-text"></span>
     </div>
     <div class="header-actions">
-      <button id="btn-new" class="btn btn-secondary setup-only" title="Clear all data and start fresh">New</button>
-      <button id="btn-sample" class="btn btn-secondary setup-only" title="Load sample data for testing">Sample</button>
-      <button id="btn-import" class="btn btn-primary setup-only">Import CSV</button>
-      <button id="btn-export" class="btn btn-accent setup-only">Export CSV</button>
-      <button id="btn-save" class="btn btn-secondary">Save Project</button>
-      <button id="btn-load" class="btn btn-secondary">Load Project</button>
-      <button id="btn-all-history" class="btn btn-secondary setup-only" title="View full change history">History</button>
-      <button id="btn-upload-pdf" class="btn btn-secondary setup-only" title="Upload PDF">PDF</button>
-      <button id="btn-import-cmm" class="btn btn-primary fai-only hidden">Import CMM Data</button>
-      <div class="fai-only btn-group hidden" id="fai-compare-toggle">
-        <button id="btn-fai-compare-op2000" class="btn btn-toggle active" title="Compare CMM against OP2000 drawing spec">OP2000</button>
-        <button id="btn-fai-compare-comp" class="btn btn-toggle" title="Compare CMM against compensated (plated) spec">Compensated</button>
+      <!-- History -->
+      <div class="hdr-group undo-redo-btns">
+        <div class="undo-redo-group">
+          <button id="btn-undo" class="btn btn-icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+          <button id="btn-undo-arrow" class="btn btn-icon undo-redo-arrow" title="Undo history" aria-label="Undo history" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+          <div id="undo-dropdown" class="undo-redo-dropdown hidden"></div>
+        </div>
+        <div class="undo-redo-group">
+          <button id="btn-redo" class="btn btn-icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+          <button id="btn-redo-arrow" class="btn btn-icon undo-redo-arrow" title="Redo history" aria-label="Redo history" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+          <div id="redo-dropdown" class="undo-redo-dropdown hidden"></div>
+        </div>
+        <button id="btn-all-history" class="btn btn-icon btn-ghost" data-steps="drawing setup" title="Change history" aria-label="Change history"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
       </div>
-      <button id="btn-export-fai" class="btn btn-secondary fai-only hidden">Export FAI</button>
+      <span class="hdr-sep" aria-hidden="true"></span>
+
+      <!-- File -->
+      <div class="hdr-group">
+        <div class="menu-wrap">
+          <button id="btn-new-menu" class="btn btn-ghost" title="New project" aria-haspopup="true" aria-expanded="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/></svg><span>New</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+          <div id="new-menu" class="hdr-menu hidden" role="menu">
+            <button id="btn-new" class="hdr-menu-item" role="menuitem" title="Clear all data and start fresh">Blank project</button>
+            <button id="btn-sample" class="hdr-menu-item" role="menuitem" title="Load sample data for testing">Sample data</button>
+          </div>
+        </div>
+        <button id="btn-load" class="btn btn-icon btn-ghost" title="Open project" aria-label="Open project"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H7.5a2 2 0 0 0-1.9 1.4L3 19z"/><path d="M3 19 5.6 11.4A2 2 0 0 1 7.5 10H22l-2.6 7.6a2 2 0 0 1-1.9 1.4H3z"/></svg></button>
+        <button id="btn-save" class="btn btn-icon btn-ghost" title="Save project (Ctrl+S)" aria-label="Save project"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg><span class="save-dot" aria-hidden="true"></span></button>
+      </div>
+      <span class="hdr-sep" aria-hidden="true"></span>
+
+      <!-- Bring in -->
+      <div class="hdr-group">
+        <button id="btn-import" class="btn btn-ghost" data-steps="drawing setup" title="Import a Ground Control CSV"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v7M9 15l3 3 3-3"/></svg><span>Import CSV</span></button>
+        <button id="btn-upload-pdf" class="btn btn-ghost" data-steps="drawing setup" title="Open the drawing PDF"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span>PDF</span></button>
+        <button id="btn-import-cmm" class="btn btn-ghost hidden" data-steps="fai" title="Import a CMM report"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span>Import CMM</span></button>
+        <button id="btn-setup-panel" class="btn btn-ghost btn-setup-toggle active" title="Show / hide the Project Setup panel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Setup</span></button>
+      </div>
+
+      <!-- Send out: the step's main export -->
+      <button id="btn-export" class="btn btn-accent btn-export" data-steps="setup" title="Export ProShop CSV (Ctrl+E)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg><span>Export CSV</span></button>
+      <button id="btn-export-fai" class="btn btn-accent btn-export hidden" data-steps="fai" title="Export FAI results"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg><span>Export FAI</span></button>
     </div>
     <!-- Hidden inputs -->
     <input type="file" id="file-import-csv" accept=".csv" hidden>
@@ -47,27 +74,6 @@
       <option value="inch">inch</option>
     </select>
   </header>
-
-  <!-- ═══════════════════════════════════════════════════ -->
-  <!-- OP BAR — undo/redo + setup panel toggle            -->
-  <!-- ═══════════════════════════════════════════════════ -->
-  <div id="op-bar">
-    <div class="undo-redo-btns">
-      <div class="undo-redo-group">
-        <button id="btn-undo" class="btn btn-icon" title="Undo (Ctrl+Z)" disabled>↩</button>
-        <button id="btn-undo-arrow" class="btn btn-icon undo-redo-arrow" title="Undo history" disabled>▾</button>
-        <div id="undo-dropdown" class="undo-redo-dropdown hidden"></div>
-      </div>
-      <div class="undo-redo-group">
-        <button id="btn-redo" class="btn btn-icon" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
-        <button id="btn-redo-arrow" class="btn btn-icon undo-redo-arrow" title="Redo history" disabled>▾</button>
-        <div id="redo-dropdown" class="undo-redo-dropdown hidden"></div>
-      </div>
-    </div>
-    <button id="btn-setup-panel" class="btn btn-secondary btn-setup-toggle active" title="Toggle Project Setup panel">
-      ⚙ Setup
-    </button>
-  </div>
 
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- MAIN CONTENT — Table + Sidebar                     -->
@@ -83,17 +89,26 @@
     </div>
 
     <nav id="nav-rail">
-      <div class="nav-tabs">
-        <button class="nav-tab active" id="nav-tab-setup" data-view="setup" title="Setup View (Ctrl+1)">
-          <span class="nav-tab-label">Setup</span>
+      <!-- Workflow steps: ① Drawing → ② Plan → ③ Inspect -->
+      <div class="nav-tabs nav-steps">
+        <button class="nav-tab nav-step" id="nav-tab-drawing" data-view="drawing" title="① Drawing — get the dims in: Ground Control CSV or balloon the PDF (Ctrl+1)">
+          <span class="nav-step-num">1</span>
+          <span class="nav-tab-label">Drawing</span>
+          <span class="nav-step-status hidden" id="nav-drawing-status"></span>
         </button>
-        <button class="nav-tab" id="nav-tab-fai" data-view="fai" title="FAI View (Ctrl+2)">
-          <span class="nav-tab-label">FAI</span>
+        <button class="nav-tab nav-step active" id="nav-tab-setup" data-view="setup" title="② Plan — OPs, plating, inspection settings, ProShop export (Ctrl+2)">
+          <span class="nav-step-num">2</span>
+          <span class="nav-tab-label">Plan</span>
+          <span class="nav-step-status hidden" id="nav-plan-status"></span>
+        </button>
+        <button class="nav-tab nav-step" id="nav-tab-fai" data-view="fai" title="③ Inspect — CMM results, FAI export (Ctrl+3)">
+          <span class="nav-step-num">3</span>
+          <span class="nav-tab-label">Inspect</span>
           <span class="nav-tab-badge hidden" id="nav-fai-badge"></span>
         </button>
       </div>
       <div class="nav-rail-bottom">
-        <button id="btn-settings" class="nav-icon-btn setup-only" title="Settings (Setup only)">&#9881;</button>
+        <button id="btn-settings" class="nav-icon-btn" data-steps="drawing setup" title="Settings">&#9881;</button>
         <button id="btn-theme" class="nav-icon-btn" title="Toggle Theme">&#9681;</button>
       </div>
     </nav>
@@ -127,6 +142,15 @@
         </div>
       </div>
       <div id="pdf-resizer" class="hidden"></div>
+
+      <!-- Inspect: what the CMM values are graded against (view setting) -->
+      <div id="fai-toolbar" class="fai-toolbar hidden" data-steps="fai">
+        <span class="fai-toolbar-label">Compare CMM against</span>
+        <div class="btn-group" id="fai-compare-toggle" role="group" aria-label="Compare CMM against">
+          <button id="btn-fai-compare-op2000" class="btn btn-toggle active" title="Compare CMM against OP2000 drawing spec">OP2000</button>
+          <button id="btn-fai-compare-comp" class="btn btn-toggle" title="Compare CMM against compensated (plated) spec">Compensated</button>
+        </div>
+      </div>
 
       <!-- Print units banner (unconfirmed / mismatch) — filled by app.js -->
       <div id="units-banner" class="units-banner hidden" role="status"></div>
@@ -768,26 +792,24 @@
   </script>
 
   <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
-  <script src="lib/pdf-lib.min.js"></script>
-
-  <script src="lib/pdf-lib.min.js?v=44"></script>
-  <script src="js/mathEngine.js?v=44"></script>
-  <script src="js/parser.js?v=44"></script>
-  <script src="js/units.js?v=44"></script>
-  <script src="js/dataModel.js?v=44"></script>
-  <script src="js/exportEngine.js?v=44"></script>
-  <script src="js/storage.js?v=44"></script>
-  <script src="js/history.js?v=44"></script>
-  <script src="js/pdfViewer.js?v=44"></script>
-  <script src="js/cmmParser.js?v=44"></script>
-  <script src="js/faiExport.js?v=44"></script>
-  <script src="js/gdtParser.js?v=44"></script>
-  <script src="js/ocrEngine.js?v=44"></script>
-  <script src="js/tolModeInput.js?v=44"></script>
-  <script src="js/balloonManager.js?v=44"></script>
-  <script src="js/pdfExport.js?v=44"></script>
-  <script src="js/ui.js?v=44"></script>
-  <script src="js/app.js?v=44"></script>
+  <script src="lib/pdf-lib.min.js?v=47"></script>
+  <script src="js/mathEngine.js?v=47"></script>
+  <script src="js/parser.js?v=47"></script>
+  <script src="js/units.js?v=47"></script>
+  <script src="js/dataModel.js?v=47"></script>
+  <script src="js/exportEngine.js?v=47"></script>
+  <script src="js/storage.js?v=47"></script>
+  <script src="js/history.js?v=47"></script>
+  <script src="js/pdfViewer.js?v=47"></script>
+  <script src="js/cmmParser.js?v=47"></script>
+  <script src="js/faiExport.js?v=47"></script>
+  <script src="js/gdtParser.js?v=47"></script>
+  <script src="js/ocrEngine.js?v=47"></script>
+  <script src="js/tolModeInput.js?v=47"></script>
+  <script src="js/balloonManager.js?v=47"></script>
+  <script src="js/pdfExport.js?v=47"></script>
+  <script src="js/ui.js?v=47"></script>
+  <script src="js/app.js?v=47"></script>
 
 </body>
 </html>

@@ -22,6 +22,8 @@ var FILES = [
   'js/exportEngine.js',
   'js/cmmParser.js',
   'js/faiExport.js',
+  'js/storage.js',
+  'js/history.js',
   'test/testData.js',
   'test/parser.test.js',
   'test/mathEngine.test.js',
@@ -33,6 +35,7 @@ var FILES = [
   'test/fixtures/cmmCalypsoSample.js',
   'test/cmm.test.js',
   'test/faiExport.test.js',
+  'test/history.test.js',
 ];
 
 var ctx = { console: console };
@@ -51,6 +54,7 @@ var SUITES = [
   ['Units', 'runUnitsTests'],
   ['CMM', 'runCmmTests'],
   ['FAI Export', 'runFaiExportTests'],
+  ['History', 'runHistoryTests'],
 ];
 
 function stripHtml(s) {

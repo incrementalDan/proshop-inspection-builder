@@ -13,6 +13,8 @@ window.PSB = window.PSB || {};
 var undoStack = [];
 var redoStack = [];
 var MAX_UNDO = 10;
+var GROUP_MS = 1500;   // edits to one field closer than this = one undo step
+var lastGroup = null;  // { key, time } of the newest undo step, if grouped
 
 /**
  * Deep-clone the parts of state needed for undo/redo.
@@ -34,6 +36,7 @@ function cloneStateForSnapshot(state) {
       };
     }),
     faiRuns: JSON.parse(JSON.stringify(state.faiRuns || [])),
+    datumRefs: JSON.parse(JSON.stringify(state.datumRefs || [])),
   };
 }
 
@@ -44,12 +47,24 @@ function cloneStateForSnapshot(state) {
  * @param {Object} state — current { rows, globals }
  * @param {string} [description] — human-readable description of the action about to happen
  */
-function pushUndo(state, description) {
+function pushUndo(state, description, groupKey) {
+  var now = Date.now();
+  // Same field changed again quickly (typing, arrow-key nudges) → keep the
+  // first snapshot (state before it started), just refresh the label.
+  // One undo then reverts the whole burst.
+  if (groupKey && lastGroup && lastGroup.key === groupKey &&
+      now - lastGroup.time < GROUP_MS && undoStack.length > 0 && redoStack.length === 0) {
+    lastGroup.time = now;
+    if (description) undoStack[undoStack.length - 1]._desc = description;
+    return false;
+  }
+  lastGroup = groupKey ? { key: groupKey, time: now } : null;
   var snap = cloneStateForSnapshot(state);
   snap._desc = description || '';
   undoStack.push(snap);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   redoStack.length = 0;
+  return true;
 }
 
 /**
@@ -60,6 +75,7 @@ function pushUndo(state, description) {
  */
 function undo(state, desc) {
   if (undoStack.length === 0) return null;
+  lastGroup = null;
   var snap = cloneStateForSnapshot(state);
   snap._desc = desc || '';
   redoStack.push(snap);
@@ -74,6 +90,7 @@ function undo(state, desc) {
  */
 function redo(state, desc) {
   if (redoStack.length === 0) return null;
+  lastGroup = null;
   var snap = cloneStateForSnapshot(state);
   snap._desc = desc || '';
   undoStack.push(snap);
@@ -105,6 +122,7 @@ function getRedoDescriptions() {
 function clearUndoRedo() {
   undoStack.length = 0;
   redoStack.length = 0;
+  lastGroup = null;
 }
 
 

@@ -611,10 +611,7 @@ function setupFaiNotesEditing(tr, row) {
       // Update the last measurement's notes
       if (row.fai && row.fai.measurements && row.fai.measurements.length > 0) {
         row.fai.measurements[row.fai.measurements.length - 1].notes = newValue;
-        var appState = getAppState();
-        if (appState) {
-          PSB.autoSave({ rows: appState.rows, globals: appState.globals, auditLog: appState.auditLog, faiRuns: appState.faiRuns });
-        }
+        if (PSB.onProjectEdited) PSB.onProjectEdited();
       }
     };
 
@@ -1152,8 +1149,14 @@ function setupDragDrop() {
 }
 
 function readFile(file) {
-  if (file.name.toLowerCase().endsWith('.pdf')) {
+  var name = file.name.toLowerCase();
+  if (name.endsWith('.pdf')) {
     if (PSB.loadPdfFromFile) PSB.loadPdfFromFile(file);
+    return;
+  }
+  // Anything else would be read as a CSV and could replace the plan
+  if (!name.endsWith('.csv') && !name.endsWith('.json')) {
+    showToast('Can\'t open ' + file.name + '. Drop a CSV, project (.json) or PDF.', 'error');
     return;
   }
   var reader = new FileReader();
