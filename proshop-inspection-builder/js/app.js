@@ -11,7 +11,10 @@
  * Owns the app state: { rows[], globals }
  */
 
-var APP_VERSION = 'v1.2';
+// ONE version for the app: shown top-left AND used as ?v= on every file in
+// index.html (so browsers reload new files). Bump both together — see
+// CLAUDE.md "Versioning". test/run-node.js fails if they don't match.
+var APP_VERSION = 'v2.0.0';
 
 console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
 
@@ -257,7 +260,7 @@ function reconnectFile(fromClick) {
       setNeedsReconnect(false);
       importedFileName = PSB.getProjectFileName();
       setFilename(importedFileName);
-      if (isDirty) { markDirty(); scheduleAutoSave(); }
+      if (isDirty) scheduleAutoSave(); // write the unsaved work to the file
       if (fromClick) PSB.showToast('Auto-save reconnected to ' + importedFileName, 'success');
     } else if (result === 'needs-click') {
       setNeedsReconnect(true);
@@ -323,6 +326,7 @@ function applySnapshot(snapshot) {
 
 function refreshAfterRestore() {
   recomputeAll();
+  updateCmmPartBadge(state.globals.cmmPartName);
   if (PSB.renderBalloonOverlay) PSB.renderBalloonOverlay();
   syncGlobalsToUI();
   PSB.renderOpBar(state.globals.ops, handleRemoveOp);
@@ -1111,7 +1115,9 @@ function openProject(jsonString, fileName, fileHandle) {
   if (fileHandle) PSB.useProjectFileHandle(fileHandle);
   applyLoadedState(loaded);
   if (fileHandle) {
-    ensureProjectId(); // remembered link is keyed by project id
+    // Remembered link is keyed by project id. Not ensureProjectId(): that
+    // caches the PDF on screen, which still belongs to the previous project.
+    if (!state.globals.projectId) state.globals.projectId = generateUUID();
     PSB.rememberProjectHandle(state.globals.projectId);
   }
   importedFileName = fileName;
@@ -1189,8 +1195,9 @@ function bindFileButtons() {
     ensureProjectId(); // generate UUID if this project doesn't have one yet
     // After a refresh: reconnect to the same file first instead of "Save As"
     var ready = needsReconnect ? reconnectFile(true) : Promise.resolve();
-    var savedAt = editCount;
+    var savedAt;
     ready.then(function() {
+      savedAt = editCount; // what this save writes
       return PSB.saveProject(state, { suggestedName: getSuggestedSaveName() });
     }).then(function(ok) {
       if (!ok) return;
@@ -1902,6 +1909,10 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
     return;
   }
 
+  // Undo point BEFORE anything changes (part name, clearing old runs),
+  // so one undo puts it all back.
+  PSB.pushUndo(state, 'Import CMM run: ' + fileName);
+
   var cmmHeader  = PSB.parseCmmHeader(rawText);
   var runLabel   = cmmHeader.dateStr || fileName.replace(/\.[^.]+$/, '');
   var runPartName = cmmHeader.partName || '';
@@ -1916,8 +1927,6 @@ function handleCmmImport(rawText, fileName, cmmUnits, clearFirst) {
     var allIds = state.faiRuns.map(function(r) { return r.id; });
     deleteFaiRuns(allIds);
   }
-
-  PSB.pushUndo(state, 'Import CMM run: ' + fileName);
 
   var planUnits = PSB.getPrintUnits(state.globals);
 

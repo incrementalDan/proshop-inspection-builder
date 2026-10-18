@@ -73,5 +73,23 @@ SUITES.forEach(function(s) {
   totalPass += res.passed;
   totalFail += res.failed;
 });
+// ── Version: label and every ?v= in index.html must be the same ──
+(function checkVersion() {
+  var appJs = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
+  var html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  var m = appJs.match(/var APP_VERSION = 'v(\d+\.\d+\.\d+)';/);
+  var tags = html.match(/\?v=[^"']+/g) || [];
+  var bad = tags.filter(function(t) { return !m || t !== '?v=' + m[1]; });
+  var ok = m && tags.length > 0 && bad.length === 0;
+  if (ok) {
+    totalPass++;
+    console.log('Version: v' + m[1] + ' on label + ' + tags.length + ' files');
+  } else {
+    totalFail++;
+    console.log('Version: FAIL — APP_VERSION in js/app.js must look like v1.2.3 and match every ?v= in index.html' +
+      (bad.length ? ' (found ' + bad.slice(0, 3).join(', ') + ')' : ''));
+  }
+})();
+
 console.log('\nTOTAL: ' + totalPass + ' passed, ' + totalFail + ' failed');
 process.exit(totalFail ? 1 : 0);
