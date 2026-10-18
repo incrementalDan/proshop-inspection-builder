@@ -476,6 +476,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Bind header controls
     bindGlobalControls();
     bindFileButtons();
+    bindNewMenu();
     bindNewButton();
     bindSampleButton();
     bindOpBar();
@@ -704,6 +705,24 @@ function bindBalloonSizeControl() {
 // ═══════════════════════════════════════════════════════════
 // NEW FILE BUTTON
 // ═══════════════════════════════════════════════════════════
+// "New ▾" menu: Blank project / Sample data
+function bindNewMenu() {
+  var btn = document.getElementById('btn-new-menu');
+  var menu = document.getElementById('new-menu');
+  if (!btn || !menu) return;
+  function setOpen(open) {
+    menu.classList.toggle('hidden', !open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    setOpen(menu.classList.contains('hidden'));
+  });
+  menu.addEventListener('click', function() { setOpen(false); }); // item picked
+  document.addEventListener('click', function() { setOpen(false); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') setOpen(false); });
+}
+
 function bindNewButton() {
   document.getElementById('btn-new').addEventListener('click', function() {
     var doNew = function() {
@@ -1413,7 +1432,7 @@ function bindSettingsModal() {
 // SETUP PANEL — toggle + title block live-save
 // ═══════════════════════════════════════════════════════════
 function bindSetupPanel() {
-  // Toggle button (always visible in op-bar)
+  // Toggle button (in the header)
   var toggleBtn = document.getElementById('btn-setup-panel');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', function() {

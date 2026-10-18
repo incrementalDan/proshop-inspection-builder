@@ -185,7 +185,8 @@ Override architecture for Spec/Tol:
 ## UI Layout
 - **Left nav rail = workflow steps**: ① Drawing (`drawing`) → ② Plan (`setup`, the original Setup view) → ③ Inspect (`fai`). Ctrl+1/2/3. Each shows a small status (dims, done/total, fail count).
 - **Per-step controls**: header buttons carry `data-steps="drawing setup fai"`; untagged ones show on every step. Setup panel default per step (Drawing closed, Plan open, Inspect closed) and remembers your toggle per step.
-- **Header bar**: Global settings (always visible), includes PDF upload button
+- **Header bar** (one row; the old op-bar row is merged in): grouped icon buttons — History (undo/redo/history) │ File (New ▾ Blank/Sample, Open, Save with yellow unsaved dot) │ Bring in (Import CSV, PDF, Import CMM, ⚙ Setup) │ the step's Export (only orange button). Icons are inline SVG (`.ico`), no library.
+- **Inspect toolbar** (`#fai-toolbar`) above the table: OP2000 / Compensated compare switch.
 - **Main area**: `#left-panel` (vertical flex) + `#sidebar-resizer` + `#sidebar`
   - **Without PDF**: `#left-panel` contains only `#table-container` (full height)
   - **With PDF loaded**: `#left-panel` splits vertically — `#pdf-viewer` (flex:2, ~2/3) + `#pdf-resizer` (draggable) + `#table-container` (flex:1, ~1/3)
