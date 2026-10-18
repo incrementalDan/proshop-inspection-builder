@@ -34,19 +34,25 @@ function ensureProjectId() {
 
 // ── View Configuration ────────────────────────────────────
 var VIEW_CONFIGS = {
+  // ① Drawing — same table as Plan; PDF in focus, Setup panel closed by default
+  drawing: {
+    id: 'drawing',
+    label: 'Drawing',
+    sidebarEnabled: true,
+    setupPanelDefault: false,
+  },
+  // ② Plan — the original Setup view (id kept as 'setup')
   setup: {
     id: 'setup',
-    label: 'Setup View',
+    label: 'Plan',
+    setupPanelDefault: true,
     sidebarEnabled: true,
-    faiControlsVisible: false,
-    setupControlsVisible: true,
   },
   fai: {
     id: 'fai',
-    label: 'FAI View',
+    label: 'Inspect',
+    setupPanelDefault: false, // CMM table needs the width; ⚙ Setup still opens it
     sidebarEnabled: false,
-    faiControlsVisible: true,
-    setupControlsVisible: false,
     compareMode: 'op2000',   // 'op2000' | 'compensated' — which plan values to compare CMM against
   },
 };
@@ -62,7 +68,15 @@ function setFaiCompareMode(mode) {
   if (currentView === 'fai') PSB.renderTable(state, VIEW_CONFIGS.fai);
 }
 
+var setupPanelByStep = {}; // step id → was the Setup panel open when you left it
+
 function switchView(viewId) {
+  if (!VIEW_CONFIGS[viewId]) viewId = 'setup';
+  // Remember the Setup panel state of the step we're leaving
+  var panel = document.getElementById('setup-panel');
+  if (panel && VIEW_CONFIGS[currentView] && VIEW_CONFIGS[currentView].setupPanelDefault !== undefined) {
+    setupPanelByStep[currentView] = !panel.classList.contains('panel-closed');
+  }
   currentView = viewId;
   var config = VIEW_CONFIGS[viewId];
 
@@ -79,23 +93,23 @@ function switchView(viewId) {
     }
   }
 
-  // Toggle control visibility
-  var setupControls = document.querySelectorAll('.setup-only');
-  var faiControls = document.querySelectorAll('.fai-only');
-  for (var i = 0; i < setupControls.length; i++) {
-    if (config.setupControlsVisible) {
-      setupControls[i].classList.remove('hidden');
-    } else {
-      setupControls[i].classList.add('hidden');
-    }
+  // Show only the controls tagged for this step (data-steps="drawing setup fai").
+  // Untagged controls (Save, Load, New…) show on every step.
+  var stepped = document.querySelectorAll('[data-steps]');
+  for (var i = 0; i < stepped.length; i++) {
+    var steps = stepped[i].getAttribute('data-steps').split(' ');
+    stepped[i].classList.toggle('hidden', steps.indexOf(viewId) === -1);
   }
-  for (var j = 0; j < faiControls.length; j++) {
-    if (config.faiControlsVisible) {
-      faiControls[j].classList.remove('hidden');
-    } else {
-      faiControls[j].classList.add('hidden');
-    }
+
+  // Setup panel: Drawing starts closed, Plan open; each step remembers
+  // what you last did with it.
+  if (config.setupPanelDefault !== undefined) {
+    var wantOpen = setupPanelByStep[viewId];
+    if (wantOpen === undefined) wantOpen = config.setupPanelDefault;
+    if (wantOpen) PSB.openSetupPanel(); else PSB.closeSetupPanel();
   }
+
+  try { sessionStorage.setItem('psb_step', viewId); } catch (e) { /* not critical */ }
 
   // Activate the matching nav rail tab
   var navTabs = document.querySelectorAll('.nav-tab[data-view]');
@@ -106,7 +120,30 @@ function switchView(viewId) {
   PSB.renderTable(state, config);
 }
 
+/** Small status under ① Drawing and ② Plan in the left bar. */
+function updateStepStatus() {
+  var rows = state.rows || [];
+  var n = rows.length;
+  var dEl = document.getElementById('nav-drawing-status');
+  var pEl = document.getElementById('nav-plan-status');
+  var dTab = document.getElementById('nav-tab-drawing');
+  var pTab = document.getElementById('nav-tab-setup');
+  if (!dEl || !pEl) return;
+
+  var unconfirmed = n > 0 && !state.globals.printUnitsConfirmed;
+  dEl.textContent = n > 0 ? String(n) : '';
+  dEl.className = 'nav-step-status' + (n === 0 ? ' hidden' : unconfirmed ? ' status-warn' : '');
+  if (dTab) dTab.setAttribute('aria-label', 'Step 1, Drawing: ' + n + ' dims' + (unconfirmed ? ', print units not confirmed' : ''));
+
+  var done = 0;
+  for (var i = 0; i < n; i++) if (rows[i].user && rows[i].user.status === 'complete') done++;
+  pEl.textContent = n > 0 ? done + '/' + n : '';
+  pEl.className = 'nav-step-status' + (n === 0 ? ' hidden' : done === n ? ' status-done' : '');
+  if (pTab) pTab.setAttribute('aria-label', 'Step 2, Plan: ' + done + ' of ' + n + ' complete');
+}
+
 function updateFaiTabBadge() {
+  updateStepStatus();
   var badge = document.getElementById('nav-fai-badge');
   if (!badge) return;
   var fails = 0, warns = 0;
@@ -509,8 +546,9 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         stepHistory('redo', 1);
       }
-      if (mod && e.key === '1') { e.preventDefault(); switchView('setup'); }
-      if (mod && e.key === '2') { e.preventDefault(); switchView('fai'); }
+      if (mod && e.key === '1') { e.preventDefault(); switchView('drawing'); }
+      if (mod && e.key === '2') { e.preventDefault(); switchView('setup'); }
+      if (mod && e.key === '3') { e.preventDefault(); switchView('fai'); }
 
       // Ballooning shortcuts (skip if user is typing in an input/textarea)
       var inField = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
@@ -573,7 +611,11 @@ document.addEventListener('DOMContentLoaded', function() {
     syncGlobalsToUI();
     applyUnitColors(state.globals.importUnits);
     PSB.renderOpBar(state.globals.ops, handleRemoveOp);
-    PSB.renderTable(state, VIEW_CONFIGS[currentView]);
+    // Start on the step you were on (refresh), else Drawing when empty, Plan when not
+    var savedStep = null;
+    try { savedStep = sessionStorage.getItem('psb_step'); } catch (e) { /* ignore */ }
+    switchView(savedStep || (state.rows.length > 0 ? 'setup' : 'drawing'));
+    updateFaiTabBadge();
     updateCmmPartBadge(state.globals.cmmPartName);
     if (state.rows.length > 0) {
       var sessionMeta = readSessionMeta();
@@ -888,6 +930,7 @@ function unitButtonsHtml(primary, detected) {
 
 function refreshPrintUnitsUI() {
   loadPdfTitleText();
+  updateStepStatus(); // ① shows a warning until units are confirmed
   var g = state.globals;
   var cur = PSB.getPrintUnits(g);
   var status = document.getElementById('print-units-status');

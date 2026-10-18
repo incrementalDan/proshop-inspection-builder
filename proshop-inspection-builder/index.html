@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProShop Inspection Builder</title>
-  <link rel="stylesheet" href="css/styles.css?v=45">
+  <link rel="stylesheet" href="css/styles.css?v=46">
 </head>
 <body>
 
@@ -23,20 +23,20 @@
       <span id="cmm-part-name-text"></span>
     </div>
     <div class="header-actions">
-      <button id="btn-new" class="btn btn-secondary setup-only" title="Clear all data and start fresh">New</button>
-      <button id="btn-sample" class="btn btn-secondary setup-only" title="Load sample data for testing">Sample</button>
-      <button id="btn-import" class="btn btn-primary setup-only">Import CSV</button>
-      <button id="btn-export" class="btn btn-accent setup-only">Export CSV</button>
+      <button id="btn-new" class="btn btn-secondary" title="Clear all data and start fresh">New</button>
+      <button id="btn-sample" class="btn btn-secondary" data-steps="drawing setup" title="Load sample data for testing">Sample</button>
+      <button id="btn-import" class="btn btn-primary" data-steps="drawing setup">Import CSV</button>
+      <button id="btn-export" class="btn btn-accent" data-steps="setup">Export CSV</button>
       <button id="btn-save" class="btn btn-secondary">Save Project</button>
       <button id="btn-load" class="btn btn-secondary">Load Project</button>
-      <button id="btn-all-history" class="btn btn-secondary setup-only" title="View full change history">History</button>
-      <button id="btn-upload-pdf" class="btn btn-secondary setup-only" title="Upload PDF">PDF</button>
-      <button id="btn-import-cmm" class="btn btn-primary fai-only hidden">Import CMM Data</button>
-      <div class="fai-only btn-group hidden" id="fai-compare-toggle">
+      <button id="btn-all-history" class="btn btn-secondary" data-steps="drawing setup" title="View full change history">History</button>
+      <button id="btn-upload-pdf" class="btn btn-secondary" data-steps="drawing setup" title="Upload PDF">PDF</button>
+      <button id="btn-import-cmm" class="btn btn-primary hidden" data-steps="fai">Import CMM Data</button>
+      <div class="btn-group hidden" id="fai-compare-toggle" data-steps="fai">
         <button id="btn-fai-compare-op2000" class="btn btn-toggle active" title="Compare CMM against OP2000 drawing spec">OP2000</button>
         <button id="btn-fai-compare-comp" class="btn btn-toggle" title="Compare CMM against compensated (plated) spec">Compensated</button>
       </div>
-      <button id="btn-export-fai" class="btn btn-secondary fai-only hidden">Export FAI</button>
+      <button id="btn-export-fai" class="btn btn-secondary hidden" data-steps="fai">Export FAI</button>
     </div>
     <!-- Hidden inputs -->
     <input type="file" id="file-import-csv" accept=".csv" hidden>
@@ -83,17 +83,26 @@
     </div>
 
     <nav id="nav-rail">
-      <div class="nav-tabs">
-        <button class="nav-tab active" id="nav-tab-setup" data-view="setup" title="Setup View (Ctrl+1)">
-          <span class="nav-tab-label">Setup</span>
+      <!-- Workflow steps: ① Drawing → ② Plan → ③ Inspect -->
+      <div class="nav-tabs nav-steps">
+        <button class="nav-tab nav-step" id="nav-tab-drawing" data-view="drawing" title="① Drawing — get the dims in: Ground Control CSV or balloon the PDF (Ctrl+1)">
+          <span class="nav-step-num">1</span>
+          <span class="nav-tab-label">Drawing</span>
+          <span class="nav-step-status hidden" id="nav-drawing-status"></span>
         </button>
-        <button class="nav-tab" id="nav-tab-fai" data-view="fai" title="FAI View (Ctrl+2)">
-          <span class="nav-tab-label">FAI</span>
+        <button class="nav-tab nav-step active" id="nav-tab-setup" data-view="setup" title="② Plan — OPs, plating, inspection settings, ProShop export (Ctrl+2)">
+          <span class="nav-step-num">2</span>
+          <span class="nav-tab-label">Plan</span>
+          <span class="nav-step-status hidden" id="nav-plan-status"></span>
+        </button>
+        <button class="nav-tab nav-step" id="nav-tab-fai" data-view="fai" title="③ Inspect — CMM results, FAI export (Ctrl+3)">
+          <span class="nav-step-num">3</span>
+          <span class="nav-tab-label">Inspect</span>
           <span class="nav-tab-badge hidden" id="nav-fai-badge"></span>
         </button>
       </div>
       <div class="nav-rail-bottom">
-        <button id="btn-settings" class="nav-icon-btn setup-only" title="Settings (Setup only)">&#9881;</button>
+        <button id="btn-settings" class="nav-icon-btn" data-steps="drawing setup" title="Settings">&#9881;</button>
         <button id="btn-theme" class="nav-icon-btn" title="Toggle Theme">&#9681;</button>
       </div>
     </nav>
@@ -768,24 +777,24 @@
   </script>
 
   <!-- Vendored: pdf-lib (Phase 4 export). Fully offline. -->
-  <script src="lib/pdf-lib.min.js?v=45"></script>
-  <script src="js/mathEngine.js?v=45"></script>
-  <script src="js/parser.js?v=45"></script>
-  <script src="js/units.js?v=45"></script>
-  <script src="js/dataModel.js?v=45"></script>
-  <script src="js/exportEngine.js?v=45"></script>
-  <script src="js/storage.js?v=45"></script>
-  <script src="js/history.js?v=45"></script>
-  <script src="js/pdfViewer.js?v=45"></script>
-  <script src="js/cmmParser.js?v=45"></script>
-  <script src="js/faiExport.js?v=45"></script>
-  <script src="js/gdtParser.js?v=45"></script>
-  <script src="js/ocrEngine.js?v=45"></script>
-  <script src="js/tolModeInput.js?v=45"></script>
-  <script src="js/balloonManager.js?v=45"></script>
-  <script src="js/pdfExport.js?v=45"></script>
-  <script src="js/ui.js?v=45"></script>
-  <script src="js/app.js?v=45"></script>
+  <script src="lib/pdf-lib.min.js?v=46"></script>
+  <script src="js/mathEngine.js?v=46"></script>
+  <script src="js/parser.js?v=46"></script>
+  <script src="js/units.js?v=46"></script>
+  <script src="js/dataModel.js?v=46"></script>
+  <script src="js/exportEngine.js?v=46"></script>
+  <script src="js/storage.js?v=46"></script>
+  <script src="js/history.js?v=46"></script>
+  <script src="js/pdfViewer.js?v=46"></script>
+  <script src="js/cmmParser.js?v=46"></script>
+  <script src="js/faiExport.js?v=46"></script>
+  <script src="js/gdtParser.js?v=46"></script>
+  <script src="js/ocrEngine.js?v=46"></script>
+  <script src="js/tolModeInput.js?v=46"></script>
+  <script src="js/balloonManager.js?v=46"></script>
+  <script src="js/pdfExport.js?v=46"></script>
+  <script src="js/ui.js?v=46"></script>
+  <script src="js/app.js?v=46"></script>
 
 </body>
 </html>

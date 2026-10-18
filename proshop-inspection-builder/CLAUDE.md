@@ -183,6 +183,8 @@ Override architecture for Spec/Tol:
 - PDF Filename: stored as `pdfFileName` in globals (just the name, e.g. `"drawing.pdf"`, not a path)
 
 ## UI Layout
+- **Left nav rail = workflow steps**: ① Drawing (`drawing`) → ② Plan (`setup`, the original Setup view) → ③ Inspect (`fai`). Ctrl+1/2/3. Each shows a small status (dims, done/total, fail count).
+- **Per-step controls**: header buttons carry `data-steps="drawing setup fai"`; untagged ones show on every step. Setup panel default per step (Drawing closed, Plan open, Inspect closed) and remembers your toggle per step.
 - **Header bar**: Global settings (always visible), includes PDF upload button
 - **Main area**: `#left-panel` (vertical flex) + `#sidebar-resizer` + `#sidebar`
   - **Without PDF**: `#left-panel` contains only `#table-container` (full height)
