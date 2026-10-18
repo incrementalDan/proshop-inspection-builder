@@ -1,15 +1,14 @@
 /**
- * ui.js — UI Rendering & Interaction
+ * ui.js — Shared UI pieces (loads first of the UI files)
  *
- * Responsibilities:
- * - Render data table from computed values
- * - Handle row selection → sidebar population
- * - Inline editing for editable cells
- * - Sidebar controls → update user state → trigger recompute
- * - Sorting and filtering
- * - Theme toggle
- * - Sidebar resizing
- * - Drag & drop file handling
+ * - Shared UI state + callbacks set by app.js (initUI)
+ * - Toasts, confirm / history / loading pop-ups, modal open/close
+ * - Theme toggle, setup panel, OP tags, drag & drop, GD&T tooltip
+ *
+ * The rest of the UI lives in:
+ * - table.js      — table drawing, including the FAI rows
+ * - sidebar.js    — the row sidebar
+ * - inlineEdit.js — editing cells in place
  */
 
 window.PSB = window.PSB || {};

@@ -1,20 +1,22 @@
 /**
- * app.js — Main Application Entry Point
+ * app.js — Main Application Entry Point (loads last)
  *
- * Wires together all modules:
- * - parser.js for CSV import
- * - dataModel.js for row creation + recompute
- * - ui.js for rendering + interaction
- * - exportEngine.js for CSV export
- * - storage.js for save/load
+ * - Owns the app state: { rows[], globals }
+ * - Startup (DOMContentLoaded): binds every module, first render
+ * - Keyboard shortcuts, undo / redo
+ * - Row edits from the table / sidebar → recompute → re-render
  *
- * Owns the app state: { rows[], globals }
+ * The rest of the app side lives in:
+ * - project.js      — new, open, save, auto-save, reconnect
+ * - steps.js        — Drawing / Plan / Inspect step switching + status
+ * - planSettings.js — OPs, print units, plating, precision, CSV export modal
+ * - inspect.js      — CMM import, runs, FAI export
  */
 
 // ONE version for the app: shown top-left AND used as ?v= on every file in
 // index.html (so browsers reload new files). Bump both together — see
 // CLAUDE.md "Versioning". test/run-node.js fails if they don't match.
-var APP_VERSION = 'v2.0.0';
+var APP_VERSION = 'v2.0.1';
 
 console.log('[PSB] app.js loaded, PSB namespace:', typeof PSB !== 'undefined' ? Object.keys(PSB).length + ' functions' : 'MISSING');
 
